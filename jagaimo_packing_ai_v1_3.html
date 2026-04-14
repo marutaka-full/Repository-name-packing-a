@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>じゃがいも パッキングAI ver1.3</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Sans','Yu Gothic',sans-serif;background:#f0f4f8;color:#1a1a1a;min-height:100vh;padding:16px;}
+.app{max-width:560px;margin:0 auto;}
+.header{margin-bottom:16px;padding:16px 20px;background:#185FA5;border-radius:12px;}
+.header h1{font-size:20px;font-weight:600;margin-bottom:2px;color:#fff;}
+.header p{font-size:12px;color:#B5D4F4;}
+.card{background:#fff;border:1px solid #e5e5e0;border-radius:12px;padding:16px 20px;margin-bottom:10px;}
+label{font-size:12px;color:#666;display:block;margin-bottom:5px;}
+select,input[type=number]{width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:8px;font-size:14px;background:#fff;color:#1a1a1a;outline:none;}
+select:focus,input:focus{border-color:#185FA5;}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;}
+.type-toggle{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px;}
+.type-btn{border:1px solid #ddd;border-radius:8px;padding:9px 6px;text-align:center;cursor:pointer;font-size:12px;font-weight:500;background:#f9f9f7;color:#888;}
+.type-btn.on{background:#E6F1FB;border-color:#185FA5;color:#042C53;}
+.mode-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:5px;margin-bottom:12px;}
+.mb{border:1px solid #ddd;border-radius:8px;padding:7px 3px;text-align:center;cursor:pointer;font-size:11px;background:#f9f9f7;color:#333;}
+.mb .pct{font-size:15px;font-weight:600;display:block;}
+.mb .mnm{font-size:10px;color:#999;display:block;margin-top:1px;}
+.mb.on10{background:#E6F1FB;border-color:#378ADD;color:#042C53;}
+.mb.on20{background:#EAF3DE;border-color:#639922;color:#173404;}
+.mb.on30{background:#FAEEDA;border-color:#BA7517;color:#412402;}
+.mb.on40{background:#FAECE7;border-color:#D85A30;color:#4A1B0C;}
+.mb.on50{background:#FCEBEB;border-color:#E24B4A;color:#501313;}
+.alert{border-radius:8px;padding:10px 14px;margin-bottom:10px;font-size:13px;line-height:1.5;}
+.alert-warn{background:#FAEEDA;border:1px solid #BA7517;color:#412402;}
+.alert-danger{background:#FCEBEB;border:1px solid #E24B4A;color:#501313;}
+.result-teiban{background:#E6F1FB;border:1px solid #185FA5;border-radius:12px;padding:16px 20px;margin-bottom:10px;}
+.result-tokudai{background:#FCEBEB;border:1px solid #E24B4A;border-radius:12px;padding:16px 20px;margin-bottom:10px;}
+.price-big{font-size:40px;font-weight:700;text-align:center;margin:10px 0;letter-spacing:-1px;}
+.mg4{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-top:10px;}
+.mg4sm{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;}
+.metric{background:#fff;border-radius:8px;padding:10px 12px;}
+.metric-l{font-size:11px;color:#888;margin-bottom:3px;}
+.metric-v{font-size:22px;font-weight:600;}
+.metric-u{font-size:12px;color:#888;font-weight:400;}
+.cost-table{width:100%;border-collapse:collapse;font-size:13px;margin-top:8px;}
+.cost-table td{padding:4px 8px;}
+.cost-table tr:last-child td{border-top:1px solid rgba(0,0,0,0.1);font-weight:600;}
+.cost-table .lbl{color:#888;}
+.cost-table .val{text-align:right;font-weight:500;}
+.rec-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px;}
+.rec-card{border-radius:8px;padding:10px 14px;border:1px solid #e5e5e0;}
+.rec-rank{font-size:11px;color:#888;margin-bottom:3px;}
+.rec-sz{font-size:20px;font-weight:600;}
+.rec-why{font-size:11px;color:#888;margin-top:4px;line-height:1.4;}
+.act-btns{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px;}
+.act-btn{border:1px solid #ddd;border-radius:8px;padding:13px 8px;text-align:center;cursor:pointer;font-size:13px;font-weight:500;background:#f9f9f7;color:#333;line-height:1.5;}
+.act-btn.primary{background:#185FA5;border-color:#185FA5;color:#fff;}
+.act-btn.tokudai{background:#FCEBEB;border-color:#E24B4A;color:#A32D2D;}
+.other-btns{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:8px;}
+.other-btn{border:1px solid #ddd;border-radius:8px;padding:8px 6px;text-align:center;cursor:pointer;font-size:12px;font-weight:500;background:#f9f9f7;color:#333;line-height:1.5;}
+.log-item{display:flex;justify-content:space-between;align-items:flex-start;padding:10px 0;border-bottom:1px solid #f0f0ec;}
+.log-item:last-child{border-bottom:none;}
+.log-date{font-size:11px;color:#aaa;margin-top:3px;}
+.badge{display:inline-block;font-size:11px;padding:3px 9px;border-radius:6px;font-weight:500;}
+.badge-teiban{background:#E6F1FB;color:#042C53;}
+.badge-toku{background:#FAEEDA;color:#412402;}
+.badge-tokudai{background:#FCEBEB;color:#A32D2D;}
+.del-btn{font-size:11px;color:#aaa;cursor:pointer;padding:3px 8px;border:1px solid #e5e5e0;border-radius:6px;white-space:nowrap;margin-left:8px;flex-shrink:0;}
+.tab-bar{display:grid;grid-template-columns:1fr 1fr;border:1px solid #e5e5e0;border-radius:10px;overflow:hidden;margin-bottom:12px;background:#f9f9f7;}
+.tab{padding:10px;text-align:center;cursor:pointer;font-size:13px;color:#888;font-weight:500;}
+.tab.on{background:#fff;color:#1a1a1a;}
+.hidden{display:none;}
+.divider{border:none;border-top:1px solid rgba(0,0,0,0.07);margin:10px 0;}
+.toast{background:#185FA5;color:#fff;border-radius:8px;padding:11px 16px;font-size:13px;margin-bottom:10px;font-weight:500;animation:fadein 0.3s;}
+@keyframes fadein{from{opacity:0;transform:translateY(-6px);}to{opacity:1;transform:translateY(0);}}
+.section-sub{font-size:12px;color:#888;margin:12px 0 6px;}
+.empty{font-size:13px;color:#aaa;text-align:center;padding:20px 0;}
+</style>
+</head>
+<body>
+<div class="app">
+<div class="header">
+  <h1>🥔 じゃがいも パッキングAI</h1>
+  <p>まるたかフルーツ × 味采市場｜ver 1.3</p>
+</div>
+<div class="tab-bar">
+  <div class="tab on" id="tab-main" onclick="showTab('main')">計算・作成</div>
+  <div class="tab" id="tab-log" onclick="showTab('log')">作成記録</div>
+</div>
+<div id="view-main">
+  <div class="card">
+    <label>販売区分</label>
+    <div class="type-toggle">
+      <div class="type-btn on" id="btn-teiban" onclick="setType('teiban')">定番</div>
+      <div class="type-btn" id="btn-hiteiban" onclick="setType('hiteiban')">非定番（徳用）</div>
+      <div class="type-btn" id="btn-tokudai" onclick="setType('tokudai')">特大（1個売り）</div>
+    </div>
+    <div class="row2">
+      <div><label>仕入れ原価（円/kg）</label><input type="number" id="cost" value="150" min="1" oninput="calc()"/></div>
+      <div><label>仕入れ量（kg）</label><input type="number" id="qty" value="10" min="1" oninput="calc()"/></div>
+    </div>
+    <div id="teiban-inputs">
+      <div class="row2" style="margin-bottom:0;">
+        <div><label>定番サイズ</label>
+          <select id="teiban-size" onchange="calc()">
+            <option value="M">M（70〜120g・4〜5個・約400g）</option>
+            <option value="L">L（120〜190g・3〜4個・約400g）</option>
+          </select>
+        </div>
+        <div><label>品質区分</label>
+          <select id="t-quality" onchange="calc()">
+            <option value="A">A品（正品）</option>
+            <option value="B">B品</option>
+          </select>
+        </div>
+      </div>
+    </div>
+    <div id="hiteiban-inputs" class="hidden">
+      <div class="row2">
+        <div><label>サイズ</label>
+          <select id="size" onchange="calc()">
+            <option value="2S">2S（30g未満）</option>
+            <option value="S">S（30〜70g）</option>
+            <option value="M" selected>M（70〜120g）</option>
+            <option value="L">L（120〜190g）</option>
+            <option value="LL">LL（190〜260g）</option>
+            <option value="3L">3L（260〜400g）</option>
+            <option value="混在">混在</option>
+          </select>
+        </div>
+        <div><label>品質区分</label>
+          <select id="quality" onchange="calc()">
+            <option value="A">A品（正品）</option>
+            <option value="B" selected>B品</option>
+            <option value="C">C品</option>
+            <option value="mix">混在</option>
+          </select>
+        </div>
+      </div>
+      <label>利益モード</label>
+      <div class="mode-grid">
+        <div class="mb" id="hm10" onclick="setMode('h',10)"><span class="pct">10%</span><span class="mnm">超特価</span></div>
+        <div class="mb" id="hm20" onclick="setMode('h',20)"><span class="pct">20%</span><span class="mnm">安く売る</span></div>
+        <div class="mb on30" id="hm30" onclick="setMode('h',30)"><span class="pct">30%</span><span class="mnm">標準</span></div>
+        <div class="mb" id="hm40" onclick="setMode('h',40)"><span class="pct">40%</span><span class="mnm">しっかり</span></div>
+        <div class="mb" id="hm50" onclick="setMode('h',50)"><span class="pct">50%</span><span class="mnm">高利益</span></div>
+      </div>
+    </div>
+    <div id="tokudai-inputs" class="hidden">
+      <div class="row2">
+        <div><label>1玉平均重量（g）</label><input type="number" id="tama-weight" value="500" min="400" oninput="calc()"/></div>
+        <div><label>品質区分</label>
+          <select id="td-quality" onchange="calc()">
+            <option value="A">A品</option>
+            <option value="B">B品</option>
+          </select>
+        </div>
+      </div>
+      <label>利益モード</label>
+      <div class="mode-grid">
+        <div class="mb" id="tdm10" onclick="setMode('td',10)"><span class="pct">10%</span><span class="mnm">超特価</span></div>
+        <div class="mb" id="tdm20" onclick="setMode('td',20)"><span class="pct">20%</span><span class="mnm">安く売る</span></div>
+        <div class="mb on30" id="tdm30" onclick="setMode('td',30)"><span class="pct">30%</span><span class="mnm">標準</span></div>
+        <div class="mb" id="tdm40" onclick="setMode('td',40)"><span class="pct">40%</span><span class="mnm">しっかり</span></div>
+        <div class="mb" id="tdm50" onclick="setMode('td',50)"><span class="pct">50%</span><span class="mnm">高利益</span></div>
+      </div>
+      <div style="background:#FAEEDA;border:1px solid #BA7517;border-radius:8px;padding:10px 14px;font-size:12px;color:#412402;margin-top:4px;">⚠ 4L以上（400g〜）の1個売りです。ラベルなし・POP対応でご使用ください。</div>
+    </div>
+  </div>
+  <div id="alert-area"></div>
+  <div id="result-area"></div>
+</div>
+<div id="view-log" class="hidden">
+  <div class="card">
+    <p style="font-size:15px;font-weight:600;margin-bottom:14px;">作成記録（過去7日間）</p>
+    <div id="log-list"></div>
+  </div>
+</div>
+</div>
+<script>
+const PRICES=[49,69,79,89,99,100,129,139,149,159,179,199,200,239,249,259,279,299,300,339,359,379,399,499,599,699,799,899,979,1000];
+const BAG=4,LABEL=2,BASE_SEC=15;
+const SPECS=[500,700,1000,1200,1500];
+function laborCost(sec){return Math.round(1200*sec/3600/0.75);}
+function fixedBySpec(specG,isTeiban){if(isTeiban)return BAG+LABEL+laborCost(BASE_SEC);const idx=SPECS.indexOf(specG);return BAG+LABEL+laborCost(BASE_SEC+(idx<0?0:idx)*5);}
+function secStr(specG,isTeiban){if(isTeiban)return BASE_SEC+'秒/袋';const idx=SPECS.indexOf(specG);return(BASE_SEC+(idx<0?0:idx)*5)+'秒/袋';}
+function laborBySpec(specG,isTeiban){if(isTeiban)return laborCost(BASE_SEC);const idx=SPECS.indexOf(specG);return laborCost(BASE_SEC+(idx<0?0:idx)*5);}
+let modeH=30,modeTD=30,type='teiban';
+const SIZE_REC={'2S':{r1:500,r2:700,reason1:'小粒→500g・お試し価格帯',reason2:'量重視なら700g'},'S':{r1:500,r2:700,reason1:'小粒→500g・家庭用入門',reason2:'量重視なら700g'},'M':{r1:700,r2:1000,reason1:'M玉→使いやすい標準サイズ',reason2:'業務用なら1kg'},'L':{r1:1000,r2:1200,reason1:'L玉→標準業務用',reason2:'重量多めなら1.2kg'},'LL':{r1:1200,r2:1500,reason1:'大粒→重量多めでお得感',reason2:'大容量なら1.5kg'},'3L':{r1:1500,r2:1200,reason1:'大玉→業務用・加工用',reason2:'家庭用なら1.2kg'},'混在':{r1:1000,r2:700,reason1:'混在→標準規格で無難に',reason2:'少量なら700g'}};
+const TOKU_CLASS={500:'小',700:'小',1000:'中',1200:'中',1500:'大'};
+const MS={10:{bg:'#E6F1FB',bd:'#378ADD',tx:'#042C53',nm:'超特価'},20:{bg:'#EAF3DE',bd:'#639922',tx:'#173404',nm:'安く売る'},30:{bg:'#FAEEDA',bd:'#BA7517',tx:'#412402',nm:'標準'},40:{bg:'#FAECE7',bd:'#D85A30',tx:'#4A1B0C',nm:'しっかり'},50:{bg:'#FCEBEB',bd:'#E24B4A',tx:'#501313',nm:'高利益'}};
+const QC={A:{bg:'#EAF3DE',bd:'#639922',tx:'#173404',lb:'A品'},B:{bg:'#FAEEDA',bd:'#BA7517',tx:'#412402',lb:'B品'},C:{bg:'#FAECE7',bd:'#D85A30',tx:'#4A1B0C',lb:'C品'},mix:{bg:'#f1f1ed',bd:'#aaa',tx:'#555',lb:'混在'}};
+function nearestPrice(raw){return PRICES.reduce((p,c)=>Math.abs(c-raw)<Math.abs(p-raw)?c:p);}
+function calcSpec(cpk,qty,specG,mv){const sk=specG/1000,bags=Math.floor(qty/sk),cpb=cpk*sk,fc=fixedBySpec(specG,false),tc=cpb+fc;const price=nearestPrice(tc/(1-mv/100));const margin=Math.round((1-tc/price)*100),pb=Math.round(price-tc);return{specG,bags,cpb:Math.round(cpb),fc,tc:Math.round(tc),price,margin,pb,pt:Math.round(pb*bags),sec:secStr(specG,false),labor:laborBySpec(specG,false)};}
+function costTable(cpb,fc,labor,sec,color,unit='袋'){return`<table class="cost-table"><tr><td class="lbl">青果原価</td><td class="val" style="color:${color}">${cpb}円／${unit}</td></tr><tr><td class="lbl">袋代</td><td class="val">${BAG}円／${unit}</td></tr><tr><td class="lbl">ラベル代</td><td class="val">${LABEL}円／${unit}</td></tr><tr><td class="lbl">人件費（${sec}）</td><td class="val">${labor}円／${unit}</td></tr><tr><td class="lbl" style="color:${color};font-weight:600;">原価合計</td><td class="val" style="color:${color};font-weight:600;">${cpb+fc}円／${unit}</td></tr></table>`;}
+function getLog(){try{const r=localStorage.getItem('jagaimo_v1');if(!r)return[];return JSON.parse(r).filter(x=>x.ts>Date.now()-7*24*60*60*1000);}catch(e){return[];}}
+function saveLog(e){try{const l=getLog();l.unshift({...e,ts:Date.now(),id:Date.now()});localStorage.setItem('jagaimo_v1',JSON.stringify(l));}catch(e){}}
+function deleteLog(id){try{const r=localStorage.getItem('jagaimo_v1');if(!r)return;localStorage.setItem('jagaimo_v1',JSON.stringify(JSON.parse(r).filter(x=>x.id!==id)));renderLog();}catch(e){}}
+function fmtDate(d){return`${d.getMonth()+1}/${d.getDate()} ${d.getHours()}:${String(d.getMinutes()).padStart(2,'0')}`;}
+function checkAlerts(specG,logType,variant){const log=getLog();const alerts=[];if(logType==='teiban'){const same=log.filter(r=>r.type==='teiban'&&r.variant===variant);if(same.length)alerts.push({level:'warn',msg:`⚠ 定番 ${variant} は ${fmtDate(new Date(same[0].ts))} に作成済みです。在庫を確認してください。`});}else if(logType==='toku'){const tc=TOKU_CLASS[specG];const toku=log.filter(r=>r.type==='toku');const cls=[...new Set(toku.map(r=>TOKU_CLASS[r.specG]))];if(cls.includes(tc)){const d=new Date(toku.find(r=>TOKU_CLASS[r.specG]===tc).ts);alerts.push({level:'danger',msg:`🚫 徳用・${tc}（${specG}g）は ${fmtDate(d)} に作成済みです！規格乱立に注意。`});}else if(toku.length>0)alerts.push({level:'warn',msg:`⚠ 徳用 ${toku.map(r=>r.specG+'g').join('・')} が作成済みです。規格乱立に注意。`});}else if(logType==='tokudai'){const same=log.filter(r=>r.type==='tokudai');if(same.length)alerts.push({level:'warn',msg:`⚠ 特大1個売りは ${fmtDate(new Date(same[0].ts))} に作成済みです。在庫を確認してください。`});}return alerts;}
+function renderAlerts(a){document.getElementById('alert-area').innerHTML=a.map(x=>`<div class="alert alert-${x.level}">${x.msg}</div>`).join('');}
+function recordAction(specG,price,bags,logType,variant,quality,tamaW){const cpk=parseFloat(document.getElementById('cost').value)||0;const qty=parseFloat(document.getElementById('qty').value)||0;saveLog({specG,price,bags,type:logType,variant,quality,cpk,qty,tamaW:tamaW||0});const area=document.getElementById('result-area');const t=document.createElement('div');t.className='toast';const label=logType==='teiban'?`定番${variant}・約400g`:logType==='tokudai'?`特大1個売り・${tamaW}g`:`${specG}g袋`;t.textContent=`✓ ${label}・${price}円・${logType==='tokudai'?bags+'個':bags+'袋'} を記録しました`;area.prepend(t);setTimeout(()=>t.remove(),3000);calc();}
+function showTab(t){document.getElementById('view-main').className=t==='main'?'':'hidden';document.getElementById('view-log').className=t==='log'?'':'hidden';document.getElementById('tab-main').className='tab'+(t==='main'?' on':'');document.getElementById('tab-log').className='tab'+(t==='log'?' on':'');if(t==='log')renderLog();}
+function setType(t){type=t;['teiban','hiteiban','tokudai'].forEach(x=>{document.getElementById('btn-'+x).className='type-btn'+(x===t?' on':'');document.getElementById(x+'-inputs').className=x===t?'':'hidden';});calc();}
+function setMode(g,m){if(g==='h'){modeH=m;[10,20,30,40,50].forEach(v=>document.getElementById('hm'+v).className='mb'+(v===m?' on'+v:''));}else{modeTD=m;[10,20,30,40,50].forEach(v=>document.getElementById('tdm'+v).className='mb'+(v===m?' on'+v:''));}calc();}
+function calc(){const cpk=parseFloat(document.getElementById('cost').value)||0;const qty=parseFloat(document.getElementById('qty').value)||0;const area=document.getElementById('result-area');if(cpk<=0||qty<=0){area.innerHTML='';document.getElementById('alert-area').innerHTML='';return;}if(type==='teiban')renderTeiban(cpk,qty,area);else if(type==='hiteiban')renderHiteiban(cpk,qty,area);else renderTokudai(cpk,qty,area);}
+function renderTeiban(cpk,qty,area){const sz=document.getElementById('teiban-size').value;const quality=document.getElementById('t-quality').value;const avgW=sz==='M'?0.095:0.155;const packW=0.400;const perPack=Math.round(packW/avgW);const bags=Math.floor(qty/packW);const cpb=Math.round(cpk*packW);const fc=fixedBySpec(0,true);const tc=cpb+fc;const price=nearestPrice(tc/0.70);const margin=Math.round((1-tc/price)*100);const pb=Math.round(price-tc);const pt=Math.round(pb*bags);const lab=laborBySpec(0,true);const qc=QC[quality]||QC['A'];renderAlerts(checkAlerts(null,'teiban',sz));area.innerHTML=`<div class="result-teiban"><p style="font-size:13px;color:#042C53;font-weight:600;margin-bottom:10px;">定番　${sz}サイズ　約400g（${perPack}個前後）　値入率30%固定</p><div style="display:flex;gap:6px;margin-bottom:10px;"><span class="badge" style="background:${qc.bg};border:1px solid ${qc.bd};color:${qc.tx};">${qc.lb}</span><span class="badge" style="background:#E6F1FB;color:#042C53;">1袋約400g・${perPack}個前後</span></div><div class="price-big" style="color:#042C53;">${price.toLocaleString()}円</div><div class="mg4"><div class="metric"><p class="metric-l">値入率</p><p class="metric-v">${margin}<span class="metric-u">%</span></p></div><div class="metric"><p class="metric-l">粗利／袋</p><p class="metric-v">${pb.toLocaleString()}<span class="metric-u">円</span></p></div><div class="metric"><p class="metric-l">袋数</p><p class="metric-v">${bags}<span class="metric-u">袋</span></p></div><div class="metric"><p class="metric-l">粗利合計</p><p class="metric-v">${pt.toLocaleString()}<span class="metric-u">円</span></p></div></div><div class="divider"></div><p style="font-size:12px;color:#042C53;font-weight:600;margin-bottom:4px;">原価内訳</p>${costTable(cpb,fc,lab,BASE_SEC+'秒/袋','#042C53')}<p class="section-sub" style="color:#042C53;margin-top:14px;">作成する定番を選んで記録</p><div class="act-btns"><div class="act-btn primary" onclick="recordAction(0,${price},${bags},'teiban','M','${quality}',0)">定番 M<br><span style="font-size:12px;opacity:0.85;">${price}円 × ${bags}袋</span></div><div class="act-btn" onclick="recordAction(0,${price},${bags},'teiban','L','${quality}',0)" style="background:#E6F1FB;border-color:#185FA5;color:#042C53;">定番 L<br><span style="font-size:12px;">${price}円 × ${bags}袋</span></div></div></div>`;}
+function renderHiteiban(cpk,qty,area){const sizeKey=document.getElementById('size').value;const quality=document.getElementById('quality').value;const rec=SIZE_REC[sizeKey];const d1=calcSpec(cpk,qty,rec.r1,modeH);const d2=calcSpec(cpk,qty,rec.r2,modeH);const ms=MS[modeH],qc=QC[quality];renderAlerts(checkAlerts(rec.r1,'toku',''));const allSpecs=[500,700,1000,1200,1500];const otherBtns=allSpecs.filter(s=>s!==d1.specG&&s!==d2.specG).map(s=>{const d=calcSpec(cpk,qty,s,modeH);return`<div class="other-btn" onclick="recordAction(${s},${d.price},${d.bags},'toku','','${quality}',0)">${s}g袋<br><span style="font-size:10px;color:#aaa;">${d.price}円・${d.sec}</span></div>`;}).join('');area.innerHTML=`<div class="card"><div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px;"><span class="badge" style="background:${qc.bg};border:1px solid ${qc.bd};color:${qc.tx};">${qc.lb}</span><span class="badge" style="background:${ms.bg};border:1px solid ${ms.bd};color:${ms.tx};">${ms.nm}（${modeH}%）</span><span class="badge" style="background:#f1f1ed;color:#888;">徳用・${TOKU_CLASS[rec.r1]||''}</span></div><p class="section-sub">推奨規格</p><div class="rec-grid"><div class="rec-card" style="background:#E6F1FB;border-color:#185FA5;"><p class="rec-rank">第1候補</p><p class="rec-sz" style="color:#042C53;">${d1.specG}g袋</p><p style="font-size:11px;color:#042C53;margin-top:3px;">${d1.sec}</p><p class="rec-why">${rec.reason1}</p></div><div class="rec-card"><p class="rec-rank">第2候補</p><p class="rec-sz">${d2.specG}g袋</p><p style="font-size:11px;color:#888;margin-top:3px;">${d2.sec}</p><p class="rec-why">${rec.reason2}</p></div></div><p class="section-sub">第1候補　${d1.specG}g袋</p><div style="background:${ms.bg};border:1px solid ${ms.bd};border-radius:10px;padding:14px;margin-bottom:10px;"><div class="price-big" style="color:${ms.tx};">${d1.price.toLocaleString()}円</div><div class="mg4"><div class="metric"><p class="metric-l">値入率</p><p class="metric-v">${d1.margin}<span class="metric-u">%</span></p></div><div class="metric"><p class="metric-l">粗利／袋</p><p class="metric-v">${d1.pb.toLocaleString()}<span class="metric-u">円</span></p></div><div class="metric"><p class="metric-l">袋数</p><p class="metric-v">${d1.bags}<span class="metric-u">袋</span></p></div><div class="metric"><p class="metric-l">粗利合計</p><p class="metric-v">${d1.pt.toLocaleString()}<span class="metric-u">円</span></p></div></div><div class="divider"></div><p style="font-size:12px;color:${ms.tx};font-weight:600;margin-bottom:4px;">原価内訳</p>${costTable(d1.cpb,d1.fc,d1.labor,d1.sec,ms.tx)}</div><p class="section-sub">第2候補　${d2.specG}g袋</p><div style="background:#f9f9f7;border-radius:10px;padding:12px;margin-bottom:12px;"><div class="price-big" style="font-size:28px;">${d2.price.toLocaleString()}円</div><div class="mg4sm"><div><p class="metric-l">値入率</p><p style="font-size:15px;font-weight:600;">${d2.margin}%</p></div><div><p class="metric-l">粗利/袋</p><p style="font-size:15px;font-weight:600;">${d2.pb}円</p></div><div><p class="metric-l">袋数</p><p style="font-size:15px;font-weight:600;">${d2.bags}袋</p></div><div><p class="metric-l">粗利合計</p><p style="font-size:15px;font-weight:600;">${d2.pt.toLocaleString()}円</p></div></div></div><p class="section-sub">作成する規格を選んで記録</p><div class="act-btns"><div class="act-btn primary" onclick="recordAction(${d1.specG},${d1.price},${d1.bags},'toku','','${quality}',0)">第1候補　${d1.specG}g袋<br><span style="font-size:12px;opacity:0.85;">${d1.price}円 × ${d1.bags}袋</span></div><div class="act-btn" onclick="recordAction(${d2.specG},${d2.price},${d2.bags},'toku','','${quality}',0)" style="background:#E6F1FB;border-color:#185FA5;color:#042C53;">第2候補　${d2.specG}g袋<br><span style="font-size:12px;">${d2.price}円 × ${d2.bags}袋</span></div></div><p class="section-sub">その他の規格</p><div class="other-btns">${otherBtns}</div></div>`;}
+function renderTokudai(cpk,qty,area){const tamaW=parseFloat(document.getElementById('tama-weight').value)||500;const quality=document.getElementById('td-quality').value;const tamaKg=tamaW/1000;const cpb=Math.round(cpk*tamaKg);const fc=fixedBySpec(0,true);const tc=cpb+fc;const price=nearestPrice(tc/(1-modeTD/100));const margin=Math.round((1-tc/price)*100);const pb=Math.round(price-tc);const kosu=Math.floor(qty/tamaKg);const pt=Math.round(pb*kosu);const ms=MS[modeTD];const qc=QC[quality]||QC['A'];const lab=laborBySpec(0,true);renderAlerts(checkAlerts(null,'tokudai',''));area.innerHTML=`<div class="result-tokudai"><p style="font-size:13px;color:#A32D2D;font-weight:600;margin-bottom:10px;">特大　1個売り　4L以上（${tamaW}g前後）　ラベルなし</p><div style="display:flex;gap:6px;margin-bottom:10px;"><span class="badge" style="background:${qc.bg};border:1px solid ${qc.bd};color:${qc.tx};">${qc.lb}</span><span class="badge" style="background:${ms.bg};border:1px solid ${ms.bd};color:${ms.tx};">${ms.nm}（${modeTD}%）</span></div><div class="price-big" style="color:#A32D2D;">${price.toLocaleString()}円</div><div class="mg4"><div class="metric"><p class="metric-l">値入率</p><p class="metric-v">${margin}<span class="metric-u">%</span></p></div><div class="metric"><p class="metric-l">粗利／個</p><p class="metric-v">${pb.toLocaleString()}<span class="metric-u">円</span></p></div><div class="metric"><p class="metric-l">個数</p><p class="metric-v">${kosu}<span class="metric-u">個</span></p></div><div class="metric"><p class="metric-l">粗利合計</p><p class="metric-v">${pt.toLocaleString()}<span class="metric-u">円</span></p></div></div><div class="divider"></div><p style="font-size:12px;color:#A32D2D;font-weight:600;margin-bottom:4px;">原価内訳</p>${costTable(cpb,fc,lab,BASE_SEC+'秒/個','#A32D2D','個')}<p class="section-sub" style="color:#A32D2D;margin-top:14px;">記録する</p><div class="act-btns"><div class="act-btn tokudai" onclick="recordAction(0,${price},${kosu},'tokudai','','${quality}',${tamaW})">特大 1個売り　${tamaW}g<br><span style="font-size:12px;">${price}円 × ${kosu}個</span></div></div></div>`;}
+function renderLog(){const log=getLog();const el=document.getElementById('log-list');if(!log.length){el.innerHTML='<p class="empty">記録がありません</p>';return;}el.innerHTML=log.map(r=>{const d=new Date(r.ts);let label,badgeClass;if(r.type==='teiban'){label=`定番 ${r.variant}　約400g`;badgeClass='badge-teiban';}else if(r.type==='tokudai'){label=`特大 1個売り　${r.tamaW}g`;badgeClass='badge-tokudai';}else{label=`徳用 ${r.specG}g・${TOKU_CLASS[r.specG]||''}`;badgeClass='badge-toku';}return`<div class="log-item"><div style="flex:1;"><span class="badge ${badgeClass}">${label}</span><span style="font-size:14px;margin-left:8px;font-weight:600;">${r.price}円</span><span style="font-size:12px;color:#aaa;margin-left:6px;">${r.type==='tokudai'?r.bags+'個':r.bags+'袋'}</span><p class="log-date">${fmtDate(d)}｜仕入 ${r.cpk}円/kg・${r.qty}kg</p></div><span class="del-btn" onclick="deleteLog(${r.id})">削除</span></div>`;}).join('');}
+calc();
+</script>
+</body>
+</html>
