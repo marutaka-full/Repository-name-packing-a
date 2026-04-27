@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ピーマン パッキングAI ver1.0</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Sans','Yu Gothic',sans-serif;background:#f0f7f0;color:#1a1a1a;min-height:100vh;padding:16px;}
+.app{max-width:560px;margin:0 auto;}
+.header{margin-bottom:16px;padding:16px 20px;background:#2E7D32;border-radius:12px;}
+.header h1{font-size:20px;font-weight:600;margin-bottom:2px;color:#fff;}
+.header p{font-size:12px;color:#A5D6A7;}
+.card{background:#fff;border:1px solid #dde8dd;border-radius:12px;padding:16px 20px;margin-bottom:10px;}
+label{font-size:12px;color:#666;display:block;margin-bottom:5px;}
+select,input[type=number]{width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:8px;font-size:14px;background:#fff;color:#1a1a1a;outline:none;}
+select:focus,input:focus{border-color:#2E7D32;}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;}
+.type-toggle{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px;}
+.type-btn{border:1px solid #ddd;border-radius:8px;padding:10px;text-align:center;cursor:pointer;font-size:13px;font-weight:500;background:#f5fbf5;color:#888;}
+.type-btn.on{background:#E8F5E9;border-color:#2E7D32;color:#1B5E20;}
+.mode-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:5px;margin-bottom:12px;}
+.mb{border:1px solid #ddd;border-radius:8px;padding:7px 3px;text-align:center;cursor:pointer;font-size:11px;background:#f5fbf5;color:#333;}
+.mb .pct{font-size:15px;font-weight:600;display:block;}
+.mb .mnm{font-size:10px;color:#999;display:block;margin-top:1px;}
+.mb.on10{background:#E6F1FB;border-color:#378ADD;color:#042C53;}
+.mb.on20{background:#EAF3DE;border-color:#639922;color:#173404;}
+.mb.on30{background:#E8F5E9;border-color:#2E7D32;color:#1B5E20;}
+.mb.on40{background:#FAECE7;border-color:#D85A30;color:#4A1B0C;}
+.mb.on50{background:#FCEBEB;border-color:#E24B4A;color:#501313;}
+.spec-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:5px;margin-bottom:12px;}
+.sb{border:1px solid #ddd;border-radius:8px;padding:8px 3px;text-align:center;cursor:pointer;font-size:12px;background:#f5fbf5;color:#333;}
+.sb.on{background:#E8F5E9;border-color:#2E7D32;color:#1B5E20;font-weight:600;}
+.result-box{background:#E8F5E9;border:1px solid #2E7D32;border-radius:12px;padding:16px 20px;margin-bottom:10px;}
+.price-big{font-size:40px;font-weight:700;text-align:center;margin:10px 0;letter-spacing:-1px;color:#1B5E20;}
+.mg4{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-top:10px;}
+.metric{background:#fff;border-radius:8px;padding:10px 12px;}
+.metric-l{font-size:11px;color:#888;margin-bottom:3px;}
+.metric-v{font-size:22px;font-weight:600;}
+.metric-u{font-size:12px;color:#888;font-weight:400;}
+.cost-table{width:100%;border-collapse:collapse;font-size:13px;margin-top:8px;}
+.cost-table td{padding:4px 8px;}
+.cost-table tr:last-child td{border-top:1px solid rgba(0,0,0,0.1);font-weight:600;}
+.cost-table .lbl{color:#888;}
+.cost-table .val{text-align:right;font-weight:500;}
+.act-btn{border:none;border-radius:8px;padding:13px 8px;text-align:center;cursor:pointer;font-size:13px;font-weight:500;background:#2E7D32;color:#fff;line-height:1.5;width:100%;margin-top:10px;}
+.act-btn:active{transform:scale(0.98);}
+.tab-bar{display:grid;grid-template-columns:1fr 1fr;border:1px solid #dde8dd;border-radius:10px;overflow:hidden;margin-bottom:12px;background:#f5fbf5;}
+.tab{padding:10px;text-align:center;cursor:pointer;font-size:13px;color:#888;font-weight:500;}
+.tab.on{background:#fff;color:#1a1a1a;}
+.hidden{display:none;}
+.divider{border:none;border-top:1px solid rgba(0,0,0,0.07);margin:10px 0;}
+.toast{background:#2E7D32;color:#fff;border-radius:8px;padding:11px 16px;font-size:13px;margin-bottom:10px;font-weight:500;animation:fadein 0.3s;}
+@keyframes fadein{from{opacity:0;transform:translateY(-6px);}to{opacity:1;transform:translateY(0);}}
+.section-sub{font-size:12px;color:#888;margin:12px 0 6px;}
+.empty{font-size:13px;color:#aaa;text-align:center;padding:20px 0;}
+.log-item{display:flex;justify-content:space-between;align-items:flex-start;padding:10px 0;border-bottom:1px solid #eef5ee;}
+.log-item:last-child{border-bottom:none;}
+.log-date{font-size:11px;color:#aaa;margin-top:3px;}
+.badge{display:inline-block;font-size:11px;padding:3px 9px;border-radius:6px;font-weight:500;}
+.badge-w{background:#E8F5E9;color:#1B5E20;}
+.badge-n{background:#C8E6C9;color:#1B5E20;}
+.del-btn{font-size:11px;color:#aaa;cursor:pointer;padding:3px 8px;border:1px solid #dde8dd;border-radius:6px;white-space:nowrap;margin-left:8px;flex-shrink:0;}
+.info-box{background:#E8F5E9;border:1px solid #2E7D32;border-radius:8px;padding:8px 12px;font-size:12px;color:#1B5E20;margin-bottom:10px;}
+</style>
+</head>
+<body>
+<div class="app">
+<div class="header">
+  <h1>🫑 ピーマン パッキングAI</h1>
+  <p>まるたかフルーツ × 味采市場｜ver 1.0</p>
+</div>
+<div class="tab-bar">
+  <div class="tab on" id="tab-main" onclick="showTab('main')">計算・作成</div>
+  <div class="tab" id="tab-log" onclick="showTab('log')">作成記録</div>
+</div>
+<div id="view-main">
+  <div class="card">
+    <label>販売形態</label>
+    <div class="type-toggle">
+      <div class="type-btn on" id="btn-weight" onclick="setType('weight')">重量パック</div>
+      <div class="type-btn" id="btn-count" onclick="setType('count')">個数パック</div>
+    </div>
+    <div class="row2">
+      <div>
+        <label>仕入れ原価（円/kg）</label>
+        <input type="number" id="cost" value="200" min="1" oninput="calc()"/>
+      </div>
+      <div>
+        <label>仕入れ量（kg）<span style="font-size:10px;color:#888;">※イレギュラー入力可</span></label>
+        <input type="number" id="qty" value="5" min="0.1" step="0.1" oninput="calc()"/>
+      </div>
+    </div>
+    <div class="row2">
+      <div>
+        <label>サイズ</label>
+        <select id="size" onchange="onSizeChange()">
+          <option value="2S">2S（約20g）</option>
+          <option value="S">S（約30g）</option>
+          <option value="M" selected>M（約35g）</option>
+          <option value="L">L（約45g）</option>
+          <option value="2L">2L（約60g）</option>
+          <option value="3L">3L（約75g）</option>
+          <option value="custom">イレギュラー（直接入力）</option>
+        </select>
+      </div>
+      <div>
+        <label>1個重量（g）</label>
+        <input type="number" id="unit_w" value="35" min="5" oninput="calc()"/>
+      </div>
+    </div>
+    <div class="row2">
+      <div>
+        <label>等級</label>
+        <select id="grade" onchange="calc()">
+          <option value="A">A品（正品）</option>
+          <option value="B" selected>B品</option>
+        </select>
+      </div>
+      <div></div>
+    </div>
+    <div class="divider"></div>
+
+    <div id="weight-inputs">
+      <label>重量規格</label>
+      <div class="spec-grid">
+        <div class="sb on" id="w100" onclick="setSpec('w',100)"><span>100g</span></div>
+        <div class="sb" id="w150" onclick="setSpec('w',150)"><span>150g</span></div>
+        <div class="sb" id="w200" onclick="setSpec('w',200)"><span>200g</span></div>
+        <div class="sb" id="w300" onclick="setSpec('w',300)"><span>300g</span></div>
+        <div class="sb" id="w400" onclick="setSpec('w',400)"><span>400g</span></div>
+      </div>
+    </div>
+
+    <div id="count-inputs" class="hidden">
+      <label>個数規格</label>
+      <div class="spec-grid">
+        <div class="sb on" id="n3" onclick="setSpec('n',3)"><span>3個</span></div>
+        <div class="sb" id="n4" onclick="setSpec('n',4)"><span>4個</span></div>
+        <div class="sb" id="n5" onclick="setSpec('n',5)"><span>5個</span></div>
+        <div class="sb" id="n6" onclick="setSpec('n',6)"><span>6個</span></div>
+        <div class="sb" style="font-size:10px;padding:6px 2px;" id="n8" onclick="setSpec('n',8)"><span>8個</span></div>
+      </div>
+    </div>
+
+    <div class="divider"></div>
+    <label>利益モード</label>
+    <div class="mode-grid">
+      <div class="mb" id="m10" onclick="setMode(10)"><span class="pct">10%</span><span class="mnm">超特価</span></div>
+      <div class="mb" id="m20" onclick="setMode(20)"><span class="pct">20%</span><span class="mnm">安く売る</span></div>
+      <div class="mb on30" id="m30" onclick="setMode(30)"><span class="pct">30%</span><span class="mnm">標準</span></div>
+      <div class="mb" id="m40" onclick="setMode(40)"><span class="pct">40%</span><span class="mnm">しっかり</span></div>
+      <div class="mb" id="m50" onclick="setMode(50)"><span class="pct">50%</span><span class="mnm">高利益</span></div>
+    </div>
+  </div>
+
+  <div id="alert-area"></div>
+  <div id="result-area"></div>
+</div>
+
+<div id="view-log" class="hidden">
+  <div class="card">
+    <p style="font-size:15px;font-weight:600;margin-bottom:14px;">作成記録（過去7日間）</p>
+    <div id="log-list"></div>
+  </div>
+</div>
+</div>
+
+<script>
+const PRICES=[49,69,79,89,99,100,129,139,149,159,179,199,200,239,249,259,279,299,300,339,359,379,399,499,599,699,799,899,979,1000];
+const SIZE_W={'2S':20,S:30,M:35,L:45,'2L':60,'3L':75};
+const BAG=4,LABEL=2;
+const SPECS_W=[100,150,200,300,400];
+const SPECS_N=[3,4,5,6,8];
+
+function laborCost(sec){return Math.round(1303*sec/3600/0.75);}
+function fixedCost(specIdx){return BAG+LABEL+laborCost(15+specIdx*5);}
+function nearestPrice(raw){return PRICES.reduce((p,c)=>Math.abs(c-raw)<Math.abs(p-raw)?c:p);}
+
+const MS={10:{bg:'#E6F1FB',bd:'#378ADD',tx:'#042C53',nm:'超特価'},20:{bg:'#EAF3DE',bd:'#639922',tx:'#173404',nm:'安く売る'},30:{bg:'#E8F5E9',bd:'#2E7D32',tx:'#1B5E20',nm:'標準'},40:{bg:'#FAECE7',bd:'#D85A30',tx:'#4A1B0C',nm:'しっかり'},50:{bg:'#FCEBEB',bd:'#E24B4A',tx:'#501313',nm:'高利益'}};
+const GC={A:{bg:'#EAF3DE',bd:'#639922',tx:'#173404',lb:'A品'},B:{bg:'#E8F5E9',bd:'#2E7D32',tx:'#1B5E20',lb:'B品'}};
+
+let type='weight',specW=100,specN=3,mode=30;
+
+function onSizeChange(){
+  const sz=document.getElementById('size').value;
+  if(sz!=='custom') document.getElementById('unit_w').value=SIZE_W[sz]||35;
+  calc();
+}
+function setType(t){
+  type=t;
+  document.getElementById('btn-weight').className='type-btn'+(t==='weight'?' on':'');
+  document.getElementById('btn-count').className='type-btn'+(t==='count'?' on':'');
+  document.getElementById('weight-inputs').className=t==='weight'?'':'hidden';
+  document.getElementById('count-inputs').className=t==='count'?'':'hidden';
+  calc();
+}
+function setSpec(g,v){
+  if(g==='w'){specW=v;SPECS_W.forEach(x=>document.getElementById('w'+x).className='sb'+(x===v?' on':''));}
+  else{specN=v;SPECS_N.forEach(x=>document.getElementById('n'+x).className='sb'+(x===v?' on':''));}
+  calc();
+}
+function setMode(m){
+  mode=m;[10,20,30,40,50].forEach(v=>document.getElementById('m'+v).className='mb'+(v===m?' on'+v:''));
+  calc();
+}
+
+function getLog(){try{const r=localStorage.getItem('piiman_v1');if(!r)return[];return JSON.parse(r).filter(x=>x.ts>Date.now()-7*24*60*60*1000);}catch(e){return[];}}
+function saveLog(e){try{const l=getLog();l.unshift({...e,ts:Date.now(),id:Date.now()});localStorage.setItem('piiman_v1',JSON.stringify(l));}catch(e){}}
+function deleteLog(id){try{localStorage.setItem('piiman_v1',JSON.stringify(JSON.parse(localStorage.getItem('piiman_v1')||'[]').filter(x=>x.id!==id)));renderLog();}catch(e){}}
+function fmtDate(d){return`${d.getMonth()+1}/${d.getDate()} ${d.getHours()}:${String(d.getMinutes()).padStart(2,'0')}`;}
+
+function calc(){
+  const cpk=parseFloat(document.getElementById('cost').value)||0;
+  const qty=parseFloat(document.getElementById('qty').value)||0;
+  const unitW=parseFloat(document.getElementById('unit_w').value)||35;
+  const grade=document.getElementById('grade').value;
+  const area=document.getElementById('result-area');
+  if(cpk<=0||qty<=0||unitW<=0){area.innerHTML='';return;}
+
+  let packW,packN,specLabel,specIdx;
+  if(type==='weight'){
+    packW=specW/1000;
+    packN=Math.round(specW/unitW);
+    specLabel=specW+'g（約'+packN+'個入り）';
+    specIdx=SPECS_W.indexOf(specW);
+    if(specIdx<0)specIdx=0;
+  } else {
+    packN=specN;
+    packW=(unitW*specN)/1000;
+    specLabel=specN+'個入り（約'+Math.round(unitW*specN)+'g）';
+    specIdx=SPECS_N.indexOf(specN);
+    if(specIdx<0)specIdx=0;
+  }
+
+  const bags=Math.floor(qty/packW);
+  const cpb=Math.round(cpk*packW);
+  const fc=fixedCost(specIdx);
+  const labor=laborCost(15+specIdx*5);
+  const tc=cpb+fc;
+  const price=nearestPrice(tc/(1-mode/100));
+  const margin=Math.round((1-tc/price)*100);
+  const pb=Math.round(price-tc);
+  const pt=Math.round(pb*bags);
+  const ms=MS[mode];
+  const gc=GC[grade]||GC['A'];
+  const sizeLabel=document.getElementById('size').value;
+
+  area.innerHTML=`
+  <div class="result-box" style="background:${ms.bg};border-color:${ms.bd};">
+    <p style="font-size:13px;color:${ms.tx};font-weight:600;margin-bottom:10px;">
+      🫑 ${sizeLabel==='custom'?'イレギュラー':sizeLabel}サイズ（${unitW}g/個）　${specLabel}　${ms.nm}（${mode}%）
+    </p>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;">
+      <span class="badge" style="background:${gc.bg};border:1px solid ${gc.bd};color:${gc.tx};">${gc.lb}</span>
+      <span class="badge" style="background:#f1f5f1;color:#2E7D32;">仕入れ${qty}kg箱</span>
+    </div>
+    <div class="price-big" style="color:${ms.tx};">${price.toLocaleString()}円</div>
+    <div class="mg4">
+      <div class="metric"><p class="metric-l">値入率</p><p class="metric-v">${margin}<span class="metric-u">%</span></p></div>
+      <div class="metric"><p class="metric-l">粗利／袋</p><p class="metric-v">${pb.toLocaleString()}<span class="metric-u">円</span></p></div>
+      <div class="metric"><p class="metric-l">袋数</p><p class="metric-v">${bags}<span class="metric-u">袋</span></p></div>
+      <div class="metric"><p class="metric-l">粗利合計</p><p class="metric-v">${pt.toLocaleString()}<span class="metric-u">円</span></p></div>
+    </div>
+    <div class="divider"></div>
+    <p style="font-size:12px;color:${ms.tx};font-weight:600;margin-bottom:6px;">原価内訳</p>
+    <table class="cost-table">
+      <tr><td class="lbl">青果原価</td><td class="val" style="color:${ms.tx};">${cpb}円／袋</td></tr>
+      <tr><td class="lbl">袋代</td><td class="val">${BAG}円／袋</td></tr>
+      <tr><td class="lbl">ラベル代</td><td class="val">${LABEL}円／袋</td></tr>
+      <tr><td class="lbl">人件費（${15+specIdx*5}秒／袋）</td><td class="val">${labor}円／袋</td></tr>
+      <tr><td class="lbl" style="color:${ms.tx};font-weight:600;">原価合計</td><td class="val" style="color:${ms.tx};font-weight:600;">${tc}円／袋</td></tr>
+    </table>
+    <button class="act-btn" onclick="record(${price},${bags},'${specLabel}','${grade}',${unitW},${qty})">
+      ✓ ${specLabel}・${price}円・${bags}袋 を記録する
+    </button>
+  </div>`;
+}
+
+function record(price,bags,specLabel,grade,unitW,qty){
+  const cpk=parseFloat(document.getElementById('cost').value)||0;
+  const sizeLabel=document.getElementById('size').value;
+  saveLog({price,bags,specLabel,grade,unitW,qty,cpk,type,mode,sizeLabel});
+  const area=document.getElementById('result-area');
+  const t=document.createElement('div');
+  t.className='toast';
+  t.textContent=`✓ ${specLabel}・${price}円・${bags}袋 を記録しました`;
+  area.prepend(t);
+  setTimeout(()=>t.remove(),3000);
+  calc();
+}
+
+function showTab(t){
+  document.getElementById('view-main').className=t==='main'?'':'hidden';
+  document.getElementById('view-log').className=t==='log'?'':'hidden';
+  document.getElementById('tab-main').className='tab'+(t==='main'?' on':'');
+  document.getElementById('tab-log').className='tab'+(t==='log'?' on':'');
+  if(t==='log')renderLog();
+}
+
+function renderLog(){
+  const log=getLog();
+  const el=document.getElementById('log-list');
+  if(!log.length){el.innerHTML='<p class="empty">記録がありません</p>';return;}
+  el.innerHTML=log.map(r=>{
+    const d=new Date(r.ts);
+    return`<div class="log-item">
+      <div style="flex:1;">
+        <span class="badge ${r.type==='weight'?'badge-w':'badge-n'}">${r.specLabel}</span>
+        <span style="font-size:14px;margin-left:8px;font-weight:600;">${r.price}円</span>
+        <span style="font-size:12px;color:#aaa;margin-left:6px;">${r.bags}袋</span>
+        <p class="log-date">${fmtDate(d)}｜${r.sizeLabel}(${r.unitW}g/個)・仕入${r.cpk}円/kg・${r.qty}kg</p>
+      </div>
+      <span class="del-btn" onclick="deleteLog(${r.id})">削除</span>
+    </div>`;
+  }).join('');
+}
+
+calc();
+</script>
+</body>
+</html>
