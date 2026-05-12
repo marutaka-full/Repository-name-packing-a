@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>温州みかん パッキングAI ver1.0</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Sans','Yu Gothic',sans-serif;background:#FFF8E1;color:#1a1a1a;min-height:100vh;padding:16px;}
+.app{max-width:560px;margin:0 auto;}
+.header{margin-bottom:16px;padding:16px 20px;background:#E65100;border-radius:12px;}
+.header h1{font-size:20px;font-weight:600;margin-bottom:2px;color:#fff;}
+.header p{font-size:12px;color:#FFCCBC;}
+.card{background:#fff;border:1px solid #FFCCBC;border-radius:12px;padding:16px 20px;margin-bottom:10px;}
+label{font-size:12px;color:#666;display:block;margin-bottom:5px;}
+select,input[type=number]{width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:8px;font-size:14px;background:#fff;color:#1a1a1a;outline:none;}
+select:focus,input:focus{border-color:#E65100;}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;}
+.qty-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:12px;}
+.qb{border:1px solid #ddd;border-radius:8px;padding:8px 4px;text-align:center;cursor:pointer;font-size:12px;background:#FFF8E1;color:#555;}
+.qb.on{background:#E65100;border-color:#E65100;color:#fff;font-weight:600;}
+.size-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:5px;margin-bottom:8px;}
+.size-grid2{display:grid;grid-template-columns:repeat(3,1fr);gap:5px;margin-bottom:12px;}
+.sb{border:1px solid #ddd;border-radius:8px;padding:8px 3px;text-align:center;cursor:pointer;font-size:11px;background:#FFF8E1;color:#333;}
+.sb.on{background:#FFF3E0;border-color:#E65100;color:#BF360C;font-weight:600;}
+.sell-area{background:#FFF3E0;border:1px solid #FFAB40;border-radius:10px;padding:14px 16px;margin-bottom:12px;}
+.sell-area label{color:#E65100;font-weight:600;}
+.sell-input{font-size:22px;font-weight:700;width:100%;padding:10px 12px;border:2px solid #FFAB40;border-radius:8px;background:#fff;color:#BF360C;outline:none;text-align:right;}
+.sell-input:focus{border-color:#E65100;}
+.result-box{border-radius:12px;padding:16px 20px;margin-bottom:10px;}
+.result-main{text-align:center;padding:14px 0 10px;}
+.indi-big{font-size:56px;font-weight:800;letter-spacing:-2px;}
+.indi-unit{font-size:18px;font-weight:500;color:#666;margin-left:4px;}
+.mg4{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-top:12px;}
+.metric{background:#fff;border-radius:8px;padding:10px 12px;}
+.metric-l{font-size:11px;color:#888;margin-bottom:3px;}
+.metric-v{font-size:20px;font-weight:600;}
+.metric-u{font-size:11px;color:#888;font-weight:400;}
+.cost-table{width:100%;border-collapse:collapse;font-size:13px;margin-top:8px;}
+.cost-table td{padding:4px 8px;}
+.cost-table tr:last-child td{border-top:1px solid rgba(0,0,0,0.1);font-weight:600;}
+.cost-table .lbl{color:#888;}
+.cost-table .val{text-align:right;font-weight:500;}
+.act-btn{border:none;border-radius:8px;padding:13px 8px;text-align:center;cursor:pointer;font-size:13px;font-weight:500;background:#E65100;color:#fff;line-height:1.5;width:100%;margin-top:10px;}
+.act-btn:active{transform:scale(0.98);}
+.tab-bar{display:grid;grid-template-columns:1fr 1fr;border:1px solid #FFCCBC;border-radius:10px;overflow:hidden;margin-bottom:12px;background:#FFF8E1;}
+.tab{padding:10px;text-align:center;cursor:pointer;font-size:13px;color:#888;font-weight:500;}
+.tab.on{background:#fff;color:#1a1a1a;}
+.hidden{display:none;}
+.divider{border:none;border-top:1px solid rgba(0,0,0,0.07);margin:10px 0;}
+.toast{background:#E65100;color:#fff;border-radius:8px;padding:11px 16px;font-size:13px;margin-bottom:10px;font-weight:500;animation:fadein 0.3s;}
+@keyframes fadein{from{opacity:0;transform:translateY(-6px);}to{opacity:1;transform:translateY(0);}}
+.empty{font-size:13px;color:#aaa;text-align:center;padding:20px 0;}
+.log-item{display:flex;justify-content:space-between;align-items:flex-start;padding:10px 0;border-bottom:1px solid #FFF3E0;}
+.log-item:last-child{border-bottom:none;}
+.log-date{font-size:11px;color:#aaa;margin-top:3px;}
+.badge{display:inline-block;font-size:11px;padding:3px 9px;border-radius:6px;font-weight:500;}
+.del-btn{font-size:11px;color:#aaa;cursor:pointer;padding:3px 8px;border:1px solid #FFCCBC;border-radius:6px;white-space:nowrap;margin-left:8px;flex-shrink:0;}
+.warn{background:#FFF3E0;border:1px solid #FFAB40;border-radius:8px;padding:8px 12px;font-size:12px;color:#BF360C;margin-top:8px;}
+</style>
+</head>
+<body>
+<div class="app">
+<div class="header">
+  <h1>🍊 温州みかん パッキングAI</h1>
+  <p>まるたかフルーツ × 味采市場｜ver 1.0　3名体制</p>
+</div>
+<div class="tab-bar">
+  <div class="tab on" id="tab-main" onclick="showTab('main')">計算・作成</div>
+  <div class="tab" id="tab-log" onclick="showTab('log')">作成記録</div>
+</div>
+
+<div id="view-main">
+  <div class="card">
+
+    <div class="row2">
+      <div>
+        <label>仕入れ単価（円/kg）</label>
+        <input type="number" id="cost" value="200" min="1" oninput="calc()"/>
+      </div>
+      <div>
+        <label>等級</label>
+        <select id="grade" onchange="calc()">
+          <option value="A">A品（正品）</option>
+          <option value="B" selected>B品</option>
+        </select>
+      </div>
+    </div>
+
+    <label>仕入れ量</label>
+    <div class="qty-grid">
+      <div class="qb" id="q5"  onclick="setQty(5)">5kg</div>
+      <div class="qb on" id="q10" onclick="setQty(10)">10kg</div>
+      <div class="qb" id="q18" onclick="setQty(18)">18kg</div>
+      <div class="qb" id="q20" onclick="setQty(20)">20kg</div>
+    </div>
+    <div style="margin-bottom:12px;">
+      <label>イレギュラー量（kg）</label>
+      <input type="number" id="qty_custom" placeholder="直接入力" min="0.1" step="0.1" oninput="setQtyCustom()"/>
+    </div>
+
+    <label>サイズ</label>
+    <div class="size-grid">
+      <div class="sb" id="s3S" onclick="setSize('3S',40)">3S<br><span style="font-size:10px;color:#888;">40g</span></div>
+      <div class="sb" id="s2S" onclick="setSize('2S',60)">2S<br><span style="font-size:10px;color:#888;">60g</span></div>
+      <div class="sb on" id="sS"  onclick="setSize('S',80)">S<br><span style="font-size:10px;color:#888;">80g</span></div>
+      <div class="sb" id="sM"  onclick="setSize('M',100)">M<br><span style="font-size:10px;color:#888;">100g</span></div>
+    </div>
+    <div class="size-grid2">
+      <div class="sb" id="sL"  onclick="setSize('L',130)">L<br><span style="font-size:10px;color:#888;">130g</span></div>
+      <div class="sb" id="s2L" onclick="setSize('2L',150)">2L<br><span style="font-size:10px;color:#888;">150g</span></div>
+      <div class="sb" id="s3L" onclick="setSize('3L',180)">3L<br><span style="font-size:10px;color:#888;">180g</span></div>
+    </div>
+    <div class="row2" style="margin-bottom:12px;">
+      <div>
+        <label>イレギュラー（1個重量 g）</label>
+        <input type="number" id="unit_w_custom" placeholder="直接入力" min="1" oninput="setCustomSize()"/>
+      </div>
+      <div></div>
+    </div>
+
+    <div class="divider"></div>
+
+    <!-- 売価・値入率入力エリア -->
+    <div class="sell-area">
+      <div class="row2">
+        <div>
+          <label>売価（円）</label>
+          <input type="number" class="sell-input" id="sell_price" value="298" min="1" oninput="calc()"/>
+        </div>
+        <div>
+          <label>目標値入率（%）</label>
+          <input type="number" class="sell-input" id="target_margin" value="30" min="1" max="99" oninput="calc()"/>
+        </div>
+      </div>
+      <div style="margin-top:8px;">
+        <label style="color:#888;font-weight:normal;">運賃（円／袋）　※任意・0で無効</label>
+        <input type="number" class="sell-input" id="shipping" value="0" min="0" step="1" oninput="calc()" style="font-size:16px;color:#666;border-color:#ddd;"/>
+      </div>
+    </div>
+
+  </div>
+
+  <div id="result-area"></div>
+</div>
+
+<div id="view-log" class="hidden">
+  <div class="card">
+    <p style="font-size:15px;font-weight:600;margin-bottom:14px;">作成記録（過去7日間）</p>
+    <div id="log-list"></div>
+  </div>
+</div>
+</div>
+
+<script>
+const STAND=25,LABEL=2;  // スタンドパック(持ち手穴あり)25円・ラベル2円
+const SIZES=['3S','2S','S','M','L','2L','3L'];
+const SIZE_W={'3S':40,'2S':60,'S':80,'M':100,'L':130,'2L':150,'3L':180};
+const QTYS=[5,10,18,20];
+
+function laborCost(sec){return Math.round(1303*3*sec/3600/0.75);}  // 3名体制
+
+let qty=10, unitW=80, sizeLabel='S';
+
+function setQty(v){
+  qty=v;
+  QTYS.forEach(x=>{
+    const el=document.getElementById('q'+x);
+    if(el) el.className='qb'+(x===v?' on':'');
+  });
+  document.getElementById('qty_custom').value='';
+  calc();
+}
+
+function setQtyCustom(){
+  const v=parseFloat(document.getElementById('qty_custom').value);
+  if(v>0){
+    qty=v;
+    QTYS.forEach(x=>{
+      const el=document.getElementById('q'+x);
+      if(el) el.className='qb';
+    });
+    calc();
+  }
+}
+
+function setSize(sz,w){
+  sizeLabel=sz; unitW=w;
+  SIZES.forEach(x=>document.getElementById('s'+x).className='sb'+(x===sz?' on':''));
+  document.getElementById('unit_w_custom').value='';
+  calc();
+}
+
+function setCustomSize(){
+  const v=parseFloat(document.getElementById('unit_w_custom').value);
+  if(v>0){
+    unitW=v; sizeLabel='カスタム';
+    SIZES.forEach(x=>document.getElementById('s'+x).className='sb');
+    calc();
+  }
+}
+
+function getLog(){try{const r=localStorage.getItem('mikan_v1');if(!r)return[];return JSON.parse(r).filter(x=>x.ts>Date.now()-7*24*60*60*1000);}catch(e){return[];}}
+function saveLog(e){try{const l=getLog();l.unshift({...e,ts:Date.now(),id:Date.now()});localStorage.setItem('mikan_v1',JSON.stringify(l));}catch(e){}}
+function deleteLog(id){try{localStorage.setItem('mikan_v1',JSON.stringify(JSON.parse(localStorage.getItem('mikan_v1')||'[]').filter(x=>x.id!==id)));renderLog();}catch(e){}}
+function fmtDate(d){return`${d.getMonth()+1}/${d.getDate()} ${d.getHours()}:${String(d.getMinutes()).padStart(2,'0')}`;}
+
+function calc(){
+  const cpk=parseFloat(document.getElementById('cost').value)||0;
+  const sellPrice=parseFloat(document.getElementById('sell_price').value)||0;
+  const targetMargin=parseFloat(document.getElementById('target_margin').value)||0;
+  const grade=document.getElementById('grade').value;
+  const area=document.getElementById('result-area');
+
+  if(cpk<=0||sellPrice<=0||targetMargin<=0||unitW<=0||qty<=0){
+    area.innerHTML='';return;
+  }
+
+  // 1個の原価
+  const cpUnit=Math.round(cpk*unitW/1000*10)/10;
+
+  // 資材費・人件費
+  const labor=laborCost(15);
+  const shipping=parseFloat(document.getElementById('shipping').value)||0;
+  const matCost=STAND+LABEL+labor+shipping;
+
+  // 袋あたり原価上限（売価 × (1-値入率)）
+  const bagCostLimit=Math.round(sellPrice*(1-targetMargin/100));
+
+  // 青果原価上限（資材費を引いた残り）
+  const fruitCostLimit=bagCostLimit-matCost;
+
+  if(fruitCostLimit<=0){
+    area.innerHTML=`<div class="warn">⚠ 値入率が高すぎて詰め個数が計算できません。売価を上げるか値入率を下げてください。</div>`;
+    return;
+  }
+
+  // 詰め個数（四捨五入）
+  const packN=Math.round(fruitCostLimit/cpUnit);
+
+  if(packN<=0){
+    area.innerHTML=`<div class="warn">⚠ 1個も詰められません。仕入れ単価を下げるか売価を上げてください。</div>`;
+    return;
+  }
+
+  // 実際の袋あたり青果原価
+  const actualFruitCost=Math.round(cpUnit*packN);
+  const actualTotalCost=actualFruitCost+matCost;
+
+  // 実際の値入率・粗利
+  const actualMargin=Math.round((1-actualTotalCost/sellPrice)*100*10)/10;
+  const pb=sellPrice-actualTotalCost;
+
+  // 袋数
+  const packWkg=(unitW*packN)/1000;
+  const bags=Math.floor(qty/packWkg);
+  const pt=Math.round(pb*bags);
+
+  // 余り
+  const usedKg=packWkg*bags;
+  const remainKg=Math.round((qty-usedKg)*1000)/1000;
+  const remainN=Math.round(remainKg/(unitW/1000));
+
+  const gradeColor=grade==='A'?'#639922':'#E65100';
+  const gradeBg=grade==='A'?'#EAF3DE':'#FFF3E0';
+
+  area.innerHTML=`
+  <div class="result-box" style="background:#FFF3E0;border:1px solid #FFAB40;">
+    <p style="font-size:13px;color:#BF360C;font-weight:600;margin-bottom:10px;">
+      🍊 ${sizeLabel}サイズ（${unitW}g/個）　${qty}kg　売価${sellPrice.toLocaleString()}円
+    </p>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;">
+      <span class="badge" style="background:${gradeBg};border:1px solid ${gradeColor};color:${gradeColor};">${grade}品</span>
+      <span class="badge" style="background:#FFF8E1;color:#E65100;">目標値入率 ${targetMargin}%</span>
+    </div>
+
+    <div class="result-main">
+      <div style="font-size:13px;color:#888;margin-bottom:4px;">1袋に詰める個数</div>
+      <div><span class="indi-big" style="color:#BF360C;">${packN}</span><span class="indi-unit">個</span></div>
+      <div style="font-size:12px;color:#888;margin-top:4px;">約${Math.round(packWkg*1000)}g／袋</div>
+    </div>
+
+    <div class="mg4">
+      <div class="metric"><p class="metric-l">実際の値入率</p><p class="metric-v" style="color:#E65100;">${actualMargin}<span class="metric-u">%</span></p></div>
+      <div class="metric"><p class="metric-l">粗利／袋</p><p class="metric-v">${pb.toLocaleString()}<span class="metric-u">円</span></p></div>
+      <div class="metric"><p class="metric-l">袋数</p><p class="metric-v">${bags}<span class="metric-u">袋</span></p></div>
+      <div class="metric"><p class="metric-l">粗利合計</p><p class="metric-v">${pt.toLocaleString()}<span class="metric-u">円</span></p></div>
+    </div>
+
+    ${remainN>0?`<div class="warn" style="margin-top:10px;">📦 端数：約${remainN}個（${remainKg}kg）が余ります</div>`:''}
+
+    <div style="border-top:1px solid rgba(0,0,0,0.07);margin:10px 0;"></div>
+    <p style="font-size:12px;color:#BF360C;font-weight:600;margin-bottom:6px;">原価内訳（1袋）</p>
+    <table class="cost-table">
+      <tr><td class="lbl">みかん原価（${packN}個×${cpUnit}円）</td><td class="val" style="color:#BF360C;">${actualFruitCost}円</td></tr>
+      <tr><td class="lbl">スタンドパック（持ち手穴あり）</td><td class="val">${STAND}円</td></tr>
+      <tr><td class="lbl">ラベル代</td><td class="val">${LABEL}円</td></tr>
+      <tr><td class="lbl">人件費（15秒）</td><td class="val">${labor}円</td></tr>
+      <tr><td class="lbl" style="color:#BF360C;font-weight:600;">原価合計</td><td class="val" style="color:#BF360C;font-weight:600;">${actualTotalCost}円</td></tr>
+    </table>
+    <button class="act-btn" onclick="record(${packN},${bags},${sellPrice},${actualMargin},'${grade}',${unitW},${qty})">
+      ✓ ${packN}個詰め・${sellPrice}円・${bags}袋 を記録する
+    </button>
+  </div>`;
+}
+
+function record(packN,bags,sellPrice,actualMargin,grade,unitW,qty){
+  const cpk=parseFloat(document.getElementById('cost').value)||0;
+  const targetMargin=parseFloat(document.getElementById('target_margin').value)||0;
+  saveLog({packN,bags,sellPrice,actualMargin,grade,unitW,qty,cpk,sizeLabel,targetMargin,shipping});
+  const area=document.getElementById('result-area');
+  const t=document.createElement('div');
+  t.className='toast';
+  t.textContent=`✓ ${sizeLabel}サイズ ${packN}個詰め・${sellPrice}円・${bags}袋 を記録しました`;
+  area.prepend(t);
+  setTimeout(()=>t.remove(),3000);
+  calc();
+}
+
+function showTab(t){
+  document.getElementById('view-main').className=t==='main'?'':'hidden';
+  document.getElementById('view-log').className=t==='log'?'':'hidden';
+  document.getElementById('tab-main').className='tab'+(t==='main'?' on':'');
+  document.getElementById('tab-log').className='tab'+(t==='log'?' on':'');
+  if(t==='log')renderLog();
+}
+
+function renderLog(){
+  const log=getLog();
+  const el=document.getElementById('log-list');
+  if(!log.length){el.innerHTML='<p class="empty">記録がありません</p>';return;}
+  el.innerHTML=log.map(r=>{
+    const d=new Date(r.ts);
+    return`<div class="log-item">
+      <div style="flex:1;">
+        <span class="badge" style="background:#FFF3E0;color:#BF360C;border:1px solid #FFAB40;">${r.sizeLabel} ${r.packN}個詰め</span>
+        <span style="font-size:14px;margin-left:8px;font-weight:600;">${r.sellPrice}円</span>
+        <span style="font-size:12px;color:#aaa;margin-left:6px;">${r.bags}袋</span>
+        <p class="log-date">${fmtDate(d)}｜${r.unitW}g/個・仕入${r.cpk}円/kg・${r.qty}kg・値入${r.actualMargin}%</p>
+      </div>
+      <span class="del-btn" onclick="deleteLog(${r.id})">削除</span>
+    </div>`;
+  }).join('');
+}
+
+calc();
+</script>
+</body>
+</html>
