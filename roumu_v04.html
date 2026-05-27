@@ -15,6 +15,9 @@
     --orange-light: #f4dccb;
     --yellow: #d9b347;
     --red: #c24e4e;
+    --purple: #7b1fa2;
+    --purple-light: #e1bee7;
+    --purple-bg: #f3e5f5;
     --gray: #888;
     --bg: #f7f9f8;
     --card: #ffffff;
@@ -919,6 +922,667 @@
     .add-form { grid-template-columns: 1fr 1fr; }
     .history-row { grid-template-columns: 70px 110px 1fr; gap: 8px; padding: 8px 10px; font-size: 0.85rem; }
   }
+
+  /* === v0.7: 勤務計画変更画面 === */
+  .card.plan-change-card h2 {
+    color: var(--purple);
+    border-bottom-color: var(--purple-light);
+  }
+  .plan-desc {
+    font-size: 0.95rem;
+    color: #555;
+    margin-bottom: 18px;
+    padding: 12px 16px;
+    background: var(--purple-bg);
+    border-radius: 8px;
+    border-left: 4px solid var(--purple);
+  }
+  .plan-filter-row {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+  }
+  .plan-filter-row label { font-size: 0.9rem; color: #555; }
+  .plan-filter-row input[type="text"] {
+    padding: 6px 12px;
+    border: 1.5px solid #ccc;
+    border-radius: 6px;
+    font-family: inherit;
+    font-size: 0.9rem;
+    min-width: 200px;
+  }
+  .emp-card {
+    background: var(--card);
+    border: 2px solid var(--purple-light);
+    border-radius: 12px;
+    padding: 16px 12px;
+    cursor: pointer;
+    text-align: center;
+    transition: all 0.15s;
+    font-family: inherit;
+    position: relative;
+  }
+  .emp-card:hover {
+    border-color: var(--purple);
+    transform: translateY(-2px);
+    box-shadow: var(--shadow);
+    background: var(--purple-bg);
+  }
+  .emp-card .face { font-size: 3.2rem; line-height: 1; margin-bottom: 6px; }
+  .emp-card .face-img {
+    width: 80px; height: 80px;
+    border-radius: 50%;
+    object-fit: cover;
+    display: block;
+    margin: 0 auto 6px;
+    border: 2px solid var(--purple-light);
+  }
+  .emp-card .name { font-weight: bold; font-size: 1rem; color: #333; }
+  .emp-card .contract { font-size: 0.78rem; color: var(--gray); margin-top: 4px; }
+  .change-badge {
+    display: inline-block;
+    margin-top: 8px;
+    padding: 3px 10px;
+    border-radius: 12px;
+    font-size: 0.78rem;
+    font-weight: bold;
+  }
+  .change-badge.none { background: #f5f5f5; color: var(--gray); }
+  .change-badge.few { background: var(--blue-light); color: var(--blue); }
+  .change-badge.many { background: var(--orange-light); color: var(--orange); }
+  .change-badge.alert { background: #fce4ec; color: var(--red); }
+  .pending-mark {
+    position: absolute;
+    top: 8px; right: 8px;
+    background: var(--yellow);
+    color: white;
+    font-size: 0.7rem;
+    font-weight: bold;
+    padding: 2px 7px;
+    border-radius: 10px;
+  }
+  .plan-legend {
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+    margin-top: 16px;
+    padding: 12px 16px;
+    background: #fafafa;
+    border-radius: 8px;
+    font-size: 0.82rem;
+  }
+  .plan-legend-item { display: flex; align-items: center; gap: 6px; }
+  .plan-legend-dot { display: inline-block; width: 14px; height: 14px; border-radius: 50%; }
+
+  /* === v0.7: 勤務計画変更 - 画面2（変更項目選択） === */
+  .emp-profile {
+    display: flex; align-items: center; gap: 18px;
+    padding: 18px 20px; background: var(--purple-bg);
+    border-radius: 12px; margin-bottom: 24px;
+  }
+  .emp-profile .face { font-size: 3.5rem; line-height: 1; }
+  .emp-profile .face-img {
+    width: 80px; height: 80px; border-radius: 50%;
+    object-fit: cover; border: 2px solid var(--purple);
+  }
+  .emp-profile .info { flex: 1; }
+  .emp-profile .name { font-size: 1.4rem; font-weight: bold; color: #333; }
+  .emp-profile .meta { font-size: 0.9rem; color: #666; margin-top: 4px; }
+  .emp-profile .stats { display: flex; gap: 16px; margin-top: 8px; flex-wrap: wrap; }
+  .emp-profile .stat-item {
+    background: white; padding: 6px 12px; border-radius: 8px;
+    font-size: 0.85rem; border: 1px solid var(--purple-light);
+  }
+  .emp-profile .stat-label { color: var(--gray); margin-right: 6px; }
+  .emp-profile .stat-value { font-weight: bold; color: var(--purple); }
+  .menu-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 16px;
+  }
+  .menu-card {
+    background: var(--card);
+    border: 2px solid var(--purple-light);
+    border-radius: 14px;
+    padding: 28px 20px;
+    cursor: pointer;
+    text-align: center;
+    transition: all 0.15s;
+  }
+  .menu-card:hover {
+    border-color: var(--purple); transform: translateY(-3px);
+    box-shadow: var(--shadow); background: var(--purple-bg);
+  }
+  .menu-card.day { border-color: var(--blue-light); }
+  .menu-card.day:hover { border-color: var(--blue); background: var(--blue-light); }
+  .menu-card.day .menu-icon { color: var(--blue); }
+  .menu-card.day .menu-title { color: var(--blue); }
+  .menu-card.time { border-color: var(--orange-light); }
+  .menu-card.time:hover { border-color: var(--orange); background: var(--orange-light); }
+  .menu-card.time .menu-icon { color: var(--orange); }
+  .menu-card.time .menu-title { color: var(--orange); }
+  .menu-card.history { border-color: #c9c9c9; }
+  .menu-card.history:hover { border-color: var(--gray); background: #f5f5f5; }
+  .menu-card.history .menu-icon { color: var(--gray); }
+  .menu-card.history .menu-title { color: #555; }
+  .menu-icon { font-size: 3rem; line-height: 1; margin-bottom: 10px; }
+  .menu-title { font-size: 1.2rem; font-weight: bold; margin-bottom: 6px; }
+  .menu-desc { font-size: 0.85rem; color: var(--gray); }
+  .info-note {
+    margin-top: 18px;
+    padding: 12px 16px;
+    background: #fffde7;
+    border-radius: 8px;
+    border-left: 4px solid var(--yellow);
+    font-size: 0.85rem;
+    color: #555;
+  }
+
+  /* === v0.7: 勤務計画変更 - 画面3-A（勤務日変更） === */
+  .yellow-light { --yellow-light-val: #fff3c4; }
+  .emp-profile-mini {
+    display: flex; align-items: center; gap: 14px;
+    padding: 12px 16px; background: var(--purple-bg);
+    border-radius: 10px; margin-bottom: 18px;
+  }
+  .emp-profile-mini .face { font-size: 2.2rem; line-height: 1; }
+  .emp-profile-mini .face-img {
+    width: 48px; height: 48px; border-radius: 50%;
+    object-fit: cover; border: 2px solid var(--purple);
+  }
+  .emp-profile-mini .name { font-size: 1.1rem; font-weight: bold; }
+  .emp-profile-mini .meta { font-size: 0.85rem; color: #666; }
+  .ym-bar {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 12px; padding: 10px 14px; background: #fafafa;
+    border-radius: 8px; flex-wrap: wrap; gap: 10px;
+  }
+  .ym-bar .ym-label { font-size: 1.1rem; font-weight: bold; color: var(--blue); }
+  .ym-bar .ym-controls { display: flex; gap: 8px; }
+  .ym-bar button {
+    background: white; border: 1px solid #ccc; border-radius: 6px;
+    padding: 5px 12px; cursor: pointer; font-size: 0.85rem;
+  }
+  .ym-bar button:hover { border-color: var(--blue); color: var(--blue); }
+  /* カレンダーセル状態（画面3-A固有） */
+  .cal-cell.cal-pending-change {
+    background: var(--purple-light) !important;
+    border: 2px solid var(--purple) !important;
+    box-shadow: 0 0 0 2px rgba(123,31,162,0.2);
+  }
+  .cal-cell.cal-pending-change .change-arrow {
+    font-size: 0.7rem; color: var(--purple); font-weight: bold;
+    margin-top: 2px;
+  }
+  .cal-cell.cal-requested {
+    background: #fff3c4 !important;
+    border: 2px solid var(--yellow) !important;
+  }
+  .cal-cell.cal-requested::after {
+    content: '申請中';
+    position: absolute; top: 2px; right: 2px;
+    background: var(--yellow); color: white;
+    font-size: 0.6rem; padding: 1px 4px; border-radius: 6px;
+    font-weight: bold;
+  }
+  .cal-cell.cal-approved-change {
+    background: var(--orange-light) !important;
+    border: 2px solid var(--orange) !important;
+  }
+  .cal-cell.cal-approved-change::after {
+    content: '変更済';
+    position: absolute; top: 2px; right: 2px;
+    background: var(--orange); color: white;
+    font-size: 0.6rem; padding: 1px 4px; border-radius: 6px;
+    font-weight: bold;
+  }
+  .cal-cell { position: relative; }
+  .cal-legend {
+    display: flex; gap: 14px; flex-wrap: wrap;
+    margin-top: 10px; padding: 10px 14px;
+    background: #fafafa; border-radius: 8px;
+    font-size: 0.78rem;
+  }
+  .cal-legend-item { display: flex; align-items: center; gap: 5px; }
+  .cal-legend-swatch {
+    width: 14px; height: 14px; border-radius: 3px; border: 1px solid #ccc;
+  }
+  /* 選択中変更リスト */
+  .pending-list {
+    background: #fafafa; border-radius: 10px; padding: 14px 18px;
+    margin: 16px 0;
+  }
+  .pending-list h3 {
+    margin: 0 0 10px 0; font-size: 1rem; color: var(--purple);
+  }
+  .pending-row {
+    display: flex; align-items: center; gap: 14px;
+    padding: 10px 12px; background: white; border-radius: 8px;
+    margin-bottom: 8px; border-left: 4px solid var(--purple);
+    flex-wrap: wrap;
+  }
+  .pending-row .date { font-weight: bold; min-width: 110px; }
+  .pending-row .change-summary { flex: 1; font-size: 0.9rem; min-width: 200px; }
+  .pending-row .change-arrow-inline { color: var(--purple); margin: 0 6px; font-weight: bold; }
+  .pending-row .remove-btn {
+    background: transparent; border: 1px solid #ccc;
+    border-radius: 6px; padding: 4px 10px; cursor: pointer;
+    color: var(--red); font-size: 0.85rem;
+  }
+  .pending-row .remove-btn:hover { background: #ffebee; border-color: var(--red); }
+  .pending-list-empty {
+    text-align: center; color: var(--gray);
+    padding: 16px; font-size: 0.9rem;
+  }
+  /* 理由入力 */
+  .reason-section {
+    background: #fffde7; border-radius: 10px; padding: 14px 18px;
+    margin: 16px 0; border-left: 4px solid var(--yellow);
+  }
+  .reason-section h3 {
+    margin: 0 0 10px 0; font-size: 1rem; color: #555;
+  }
+  .reason-row {
+    display: flex; gap: 12px; align-items: center; flex-wrap: wrap;
+    margin-bottom: 10px;
+  }
+  .reason-row label { font-size: 0.9rem; min-width: 80px; }
+  .reason-row select, .reason-row input[type="text"] {
+    flex: 1; padding: 6px 12px; border: 1.5px solid #ccc;
+    border-radius: 6px; font-family: inherit; font-size: 0.9rem;
+    min-width: 200px;
+  }
+  /* 変更方式 */
+  .mode-section {
+    background: var(--green-bg); border-radius: 10px; padding: 14px 18px;
+    margin: 16px 0; border-left: 4px solid var(--green);
+  }
+  .mode-section h3 {
+    margin: 0 0 10px 0; font-size: 1rem; color: var(--green);
+  }
+  .mode-row {
+    display: flex; gap: 18px; flex-wrap: wrap; padding: 8px 0;
+  }
+  .mode-row label {
+    display: flex; align-items: center; gap: 6px;
+    font-size: 0.95rem; cursor: pointer;
+  }
+  /* 実行ボタン */
+  .submit-section {
+    display: flex; gap: 12px; justify-content: flex-end; flex-wrap: wrap;
+    margin-top: 20px;
+  }
+  .submit-btn-apply, .submit-btn-immediate, .submit-btn-cancel {
+    border-radius: 8px; padding: 12px 24px; cursor: pointer;
+    font-size: 1.02rem; font-weight: bold; border: none; font-family: inherit;
+  }
+  .submit-btn-apply { background: var(--purple); color: white; }
+  .submit-btn-apply:hover { background: #6a1b9a; }
+  .submit-btn-immediate { background: var(--orange); color: white; }
+  .submit-btn-immediate:hover { background: #c66838; }
+  .submit-btn-cancel {
+    background: white; color: #666;
+    border: 1.5px solid #ccc;
+  }
+  .submit-btn-cancel:hover { border-color: var(--red); color: var(--red); }
+  .submit-btn-apply:disabled, .submit-btn-immediate:disabled {
+    background: #ccc !important; cursor: not-allowed;
+  }
+
+  /* === v0.7: 勤務計画変更 - 画面3-B（勤務時間変更） === */
+  .cal-cell.cal-editing {
+    background: var(--blue-light) !important;
+    border: 2px solid var(--blue) !important;
+    box-shadow: 0 0 0 2px rgba(43,123,190,0.2);
+  }
+  .cal-cell.cal-editing .editing-mark {
+    font-size: 0.7rem; color: var(--blue); font-weight: bold;
+    margin-top: 2px;
+  }
+  .cal-cell.cal-pending-change .new-time {
+    font-size: 0.7rem; color: var(--purple); font-weight: bold;
+  }
+  /* 時刻編集パネル */
+  .time-edit-panel {
+    background: var(--blue-light); border-radius: 10px;
+    padding: 16px 20px; margin: 16px 0;
+    border-left: 4px solid var(--blue);
+  }
+  .time-edit-panel h3 {
+    margin: 0 0 12px 0; font-size: 1.05rem; color: var(--blue);
+  }
+  .time-edit-row {
+    display: flex; gap: 14px; align-items: center; flex-wrap: wrap;
+    margin-bottom: 12px;
+  }
+  .time-edit-row label { min-width: 60px; font-size: 0.9rem; }
+  .time-edit-row .arrow {
+    color: var(--blue); font-weight: bold; font-size: 1.2rem;
+  }
+  .time-edit-row .original {
+    background: white; padding: 6px 12px; border-radius: 6px;
+    font-family: 'Courier New', monospace; font-size: 0.95rem;
+    border: 1px solid #ccc; min-width: 110px; text-align: center;
+  }
+  .time-edit-row input[type="time"] {
+    padding: 6px 12px; border: 2px solid var(--blue);
+    border-radius: 6px; font-family: 'Courier New', monospace;
+    font-size: 0.95rem; min-width: 110px;
+  }
+  .time-edit-row .calculated {
+    font-size: 0.85rem; color: var(--gray); margin-left: 8px;
+  }
+  .time-edit-buttons {
+    display: flex; gap: 10px; justify-content: flex-end; margin-top: 10px;
+  }
+  .time-edit-buttons button {
+    border-radius: 6px; padding: 8px 18px; cursor: pointer;
+    font-size: 0.9rem; font-weight: bold; border: none; font-family: inherit;
+  }
+  .btn-add { background: var(--blue); color: white; }
+  .btn-add:hover { background: #1e6aa3; }
+  .btn-cancel { background: white; color: #666; border: 1.5px solid #ccc; }
+  .btn-cancel:hover { border-color: var(--red); color: var(--red); }
+  .time-edit-empty {
+    padding: 24px; text-align: center; color: var(--gray);
+    font-size: 0.9rem; background: #fafafa; border-radius: 10px;
+    margin: 16px 0;
+  }
+
+  /* === v0.7: 承認待ちリスト・承認画面 === */
+  .approval-badge-btn {
+    background: var(--yellow); color: white;
+    border: 1.5px solid #b87b00;
+    border-radius: 8px;
+    padding: 6px 14px;
+    cursor: pointer; font-weight: bold; font-size: 0.9rem;
+    box-shadow: 0 2px 6px rgba(217,179,71,0.4);
+    animation: pulse-yellow 2s infinite;
+  }
+  .approval-badge-btn:hover { background: #c69c2e; }
+  @keyframes pulse-yellow {
+    0% { box-shadow: 0 2px 6px rgba(217,179,71,0.4); }
+    50% { box-shadow: 0 2px 14px rgba(217,179,71,0.7); }
+    100% { box-shadow: 0 2px 6px rgba(217,179,71,0.4); }
+  }
+  .approval-summary {
+    display: flex; align-items: center; gap: 16px; padding: 14px 18px;
+    background: var(--yellow-light, #fff3c4); border-radius: 10px;
+    border-left: 4px solid var(--yellow); margin-bottom: 18px;
+    flex-wrap: wrap;
+  }
+  .approval-summary .icon { font-size: 2rem; }
+  .approval-summary .text { flex: 1; min-width: 200px; }
+  .approval-summary .text strong { color: #b87b00; font-size: 1.05rem; }
+  .approval-summary .stats { display: flex; gap: 14px; font-size: 0.85rem; flex-wrap: wrap; }
+  .approval-summary .stat { background: white; padding: 4px 10px; border-radius: 6px; }
+  .approval-summary .stat .label { color: #888; margin-right: 4px; }
+  .approval-summary .stat .value { font-weight: bold; }
+  .emp-group {
+    background: #fafafa; border-radius: 12px; padding: 16px;
+    margin-bottom: 16px; border-left: 4px solid var(--purple);
+  }
+  .emp-group-header {
+    display: flex; align-items: center; gap: 14px;
+    margin-bottom: 12px; padding-bottom: 10px;
+    border-bottom: 1px dashed #ccc;
+  }
+  .emp-group-header .face { font-size: 2.4rem; line-height: 1; }
+  .emp-group-header .face-img {
+    width: 50px; height: 50px; border-radius: 50%;
+    object-fit: cover; border: 2px solid var(--purple);
+  }
+  .emp-group-header .name { font-size: 1.15rem; font-weight: bold; }
+  .emp-group-header .meta { font-size: 0.85rem; color: #666; margin-left: auto; }
+  .req-card {
+    background: white; border-radius: 10px; padding: 14px 16px;
+    margin-bottom: 10px; border-left: 4px solid var(--blue);
+    transition: all 0.15s;
+  }
+  .req-card.time-type { border-left-color: var(--orange); }
+  .req-card.day-type { border-left-color: var(--blue); }
+  .req-card-header {
+    display: flex; align-items: center; gap: 10px;
+    margin-bottom: 8px; flex-wrap: wrap;
+  }
+  .req-type-badge {
+    padding: 3px 10px; border-radius: 12px;
+    font-size: 0.78rem; font-weight: bold;
+  }
+  .req-type-badge.day { background: var(--blue-light); color: var(--blue); }
+  .req-type-badge.time { background: var(--orange-light); color: var(--orange); }
+  .req-target-date { font-weight: bold; font-size: 1rem; }
+  .req-time { font-size: 0.8rem; color: var(--gray); margin-left: auto; }
+  .req-change {
+    background: #f5f5f5; padding: 8px 12px; border-radius: 6px;
+    margin-bottom: 8px; font-size: 0.95rem;
+  }
+  .req-change .arrow { color: var(--purple); margin: 0 6px; font-weight: bold; }
+  .req-change .diff { margin-left: 8px; font-size: 0.85rem; }
+  .req-change .diff.plus { color: var(--orange); }
+  .req-change .diff.minus { color: var(--red); }
+  .req-reason {
+    display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
+    margin-bottom: 10px;
+  }
+  .req-reason .reason-cat {
+    padding: 3px 10px; border-radius: 12px;
+    font-size: 0.8rem; font-weight: bold;
+  }
+  .req-reason .reason-cat.cat-本人都合 { background: var(--green-bg); color: var(--green); }
+  .req-reason .reason-cat.cat-会社都合 { background: var(--blue-light); color: var(--blue); }
+  .req-reason .reason-cat.cat-体調不良 { background: #ffebee; color: var(--red); }
+  .req-reason .reason-cat.cat-行事冠婚葬祭 { background: var(--orange-light); color: var(--orange); }
+  .req-reason .reason-cat.cat-その他 { background: #f5f5f5; color: var(--gray); }
+  .req-reason .reason-note {
+    font-size: 0.9rem; color: #555; flex: 1; min-width: 100px;
+  }
+  .req-actions {
+    display: flex; gap: 10px; justify-content: flex-end;
+  }
+  .btn-approve {
+    background: var(--green); color: white; border: none;
+    border-radius: 8px; padding: 8px 18px; cursor: pointer;
+    font-size: 0.95rem; font-weight: bold;
+  }
+  .btn-approve:hover { background: #167a5b; }
+  .btn-reject {
+    background: white; color: var(--red); border: 1.5px solid var(--red);
+    border-radius: 8px; padding: 8px 18px; cursor: pointer;
+    font-size: 0.95rem; font-weight: bold;
+  }
+  .btn-reject:hover { background: #ffebee; }
+  .approval-empty {
+    text-align: center; padding: 40px 20px; color: var(--gray);
+  }
+  .approval-empty .icon { font-size: 3rem; margin-bottom: 8px; }
+
+  /* === v0.7: 本人通知バナー === */
+  .notif-banner {
+    background: linear-gradient(135deg, var(--orange-light), var(--yellow-light, #fff3c4));
+    border: 2px solid var(--orange);
+    border-radius: 10px;
+    margin-bottom: 16px;
+    overflow: hidden;
+    transition: all 0.2s;
+  }
+  .notif-banner-header {
+    padding: 12px 16px; cursor: pointer;
+    display: flex; align-items: center; gap: 10px;
+    transition: background 0.15s;
+    user-select: none;
+  }
+  .notif-banner-header:hover { background: rgba(255,255,255,0.4); }
+  .notif-icon-wrap {
+    font-size: 1.6rem; line-height: 1;
+    animation: bell-shake 2.5s infinite;
+  }
+  @keyframes bell-shake {
+    0%, 50%, 100% { transform: rotate(0deg); }
+    55%, 65%, 75%, 85% { transform: rotate(-10deg); }
+    60%, 70%, 80%, 90% { transform: rotate(10deg); }
+  }
+  .notif-banner-title {
+    flex: 1;
+    font-weight: bold; color: #b85a1e;
+    font-size: 1.02rem;
+  }
+  .notif-banner-toggle {
+    color: #b85a1e; font-size: 1.1rem; font-weight: bold;
+  }
+  .notif-list {
+    background: white;
+    border-top: 1px solid var(--orange-light);
+  }
+  .notif-item {
+    padding: 12px 16px;
+    border-bottom: 1px dashed #ddd;
+  }
+  .notif-item:last-child { border-bottom: none; }
+  .notif-item-header {
+    display: flex; align-items: center; gap: 8px;
+    margin-bottom: 6px; flex-wrap: wrap;
+  }
+  .notif-type-icon { font-size: 1.2rem; }
+  .notif-type-label { font-weight: bold; font-size: 0.95rem; }
+  .notif-type-label.approved { color: var(--green); }
+  .notif-type-label.rejected { color: var(--red); }
+  .notif-type-label.admin { color: var(--orange); }
+  .notif-date { font-size: 0.8rem; color: var(--gray); margin-left: auto; }
+  .notif-body {
+    font-size: 0.92rem; color: #333; padding-left: 28px;
+    line-height: 1.5;
+  }
+  .notif-actions {
+    display: flex; justify-content: flex-end; margin-top: 8px;
+  }
+  .btn-confirm {
+    background: var(--green); color: white; border: none;
+    border-radius: 6px; padding: 6px 14px; cursor: pointer;
+    font-size: 0.85rem; font-weight: bold; font-family: inherit;
+  }
+  .btn-confirm:hover { background: #167a5b; }
+  /* ホーム画面：個人ボタンの未読件数バッジ */
+  .emp-btn { position: relative; }
+  .emp-btn .notif-count-badge {
+    position: absolute;
+    top: 6px; right: 6px;
+    background: var(--orange);
+    color: white;
+    border-radius: 12px;
+    padding: 2px 8px;
+    font-size: 0.75rem;
+    font-weight: bold;
+    box-shadow: 0 1px 4px rgba(217,120,71,0.4);
+    z-index: 2;
+    animation: pulse-orange 2s infinite;
+  }
+  @keyframes pulse-orange {
+    0%, 100% { box-shadow: 0 1px 4px rgba(217,120,71,0.4); }
+    50% { box-shadow: 0 2px 10px rgba(217,120,71,0.7); }
+  }
+
+  /* === v0.7: 変更履歴閲覧画面 === */
+  .history-filter-panel {
+    background: #fafafa; border-radius: 10px; padding: 16px 18px;
+    margin-bottom: 16px;
+  }
+  .history-filter-row {
+    display: flex; gap: 12px; align-items: center; flex-wrap: wrap;
+    margin-bottom: 10px;
+  }
+  .history-filter-row > label { font-size: 0.9rem; min-width: 70px; color: #555; }
+  .history-filter-row input[type="date"],
+  .history-filter-row select {
+    padding: 6px 12px; border: 1.5px solid #ccc; border-radius: 6px;
+    font-family: inherit; font-size: 0.9rem;
+  }
+  .history-filter-checks {
+    display: flex; gap: 14px; flex-wrap: wrap;
+  }
+  .history-filter-checks label {
+    display: flex; align-items: center; gap: 5px; cursor: pointer;
+    font-size: 0.9rem; min-width: auto;
+  }
+  .history-filter-actions {
+    display: flex; gap: 10px; justify-content: flex-end; margin-top: 10px;
+    flex-wrap: wrap;
+  }
+  .btn-history-reset {
+    background: white; color: #666; border: 1.5px solid #ccc;
+    border-radius: 6px; padding: 6px 14px; cursor: pointer;
+    font-size: 0.9rem; font-family: inherit;
+  }
+  .btn-history-csv {
+    background: var(--green); color: white; border: none;
+    border-radius: 6px; padding: 6px 16px; cursor: pointer;
+    font-size: 0.9rem; font-weight: bold; font-family: inherit;
+  }
+  .btn-history-csv:hover { background: #167a5b; }
+  .btn-history-csv:disabled { background: #ccc; cursor: not-allowed; }
+  .history-stats-panel {
+    display: flex; gap: 12px; padding: 12px 16px;
+    background: var(--blue-light); border-radius: 8px;
+    margin-bottom: 16px; flex-wrap: wrap;
+    border-left: 4px solid var(--blue);
+  }
+  .history-stats-panel .total {
+    font-size: 1rem; font-weight: bold; color: var(--blue);
+  }
+  .history-stats-panel .breakdown {
+    display: flex; gap: 14px; font-size: 0.85rem; margin-left: auto;
+    flex-wrap: wrap;
+  }
+  .history-stats-panel .breakdown span {
+    background: white; padding: 3px 10px; border-radius: 12px;
+  }
+  .history-stats-panel .breakdown .approved { color: var(--green); font-weight: bold; }
+  .history-stats-panel .breakdown .admin { color: var(--orange); font-weight: bold; }
+  .history-stats-panel .breakdown .rejected { color: var(--red); font-weight: bold; }
+  .history-table {
+    width: 100%; border-collapse: collapse;
+    background: white; border-radius: 8px; overflow: hidden;
+    font-size: 0.88rem;
+  }
+  .history-table th {
+    background: #eaeaea; padding: 10px 8px; text-align: left;
+    border-bottom: 2px solid #ccc; font-size: 0.85rem; color: #555;
+  }
+  .history-table td {
+    padding: 10px 8px; border-bottom: 1px solid #eee;
+    vertical-align: top;
+  }
+  .history-table tr:hover { background: #fafafa; }
+  .history-table .datetime { color: #555; white-space: nowrap; font-size: 0.85rem; }
+  .history-table .emp-name { font-weight: bold; white-space: nowrap; }
+  .change-type-badge {
+    display: inline-block; padding: 2px 8px; border-radius: 10px;
+    font-size: 0.75rem; font-weight: bold; white-space: nowrap;
+  }
+  .change-type-badge.approved { background: var(--green-bg); color: var(--green); }
+  .change-type-badge.admin { background: var(--orange-light); color: var(--orange); }
+  .change-type-badge.rejected { background: #ffebee; color: var(--red); }
+  .history-change-text { font-size: 0.87rem; color: #333; }
+  .history-change-text .arrow { color: var(--purple); margin: 0 4px; font-weight: bold; }
+  .reason-cell {
+    display: flex; flex-direction: column; gap: 3px;
+  }
+  .reason-cat-mini {
+    display: inline-block; padding: 1px 6px; border-radius: 8px;
+    font-size: 0.7rem; font-weight: bold; align-self: flex-start;
+  }
+  .reason-cat-mini.cat-本人都合 { background: var(--green-bg); color: var(--green); }
+  .reason-cat-mini.cat-会社都合 { background: var(--blue-light); color: var(--blue); }
+  .reason-cat-mini.cat-体調不良 { background: #ffebee; color: var(--red); }
+  .reason-cat-mini.cat-行事冠婚葬祭 { background: var(--orange-light); color: var(--orange); }
+  .reason-cat-mini.cat-その他 { background: #f5f5f5; color: var(--gray); }
+  .reason-note-mini { font-size: 0.8rem; color: #666; line-height: 1.3; }
+  .history-empty {
+    text-align: center; padding: 40px 20px; color: var(--gray);
+  }
+  .history-empty .icon { font-size: 3rem; margin-bottom: 8px; }
 </style>
 </head>
 <body>
@@ -961,6 +1625,10 @@ const STORAGE_KEYS = {
   WORK_MATERIALS: 'work_materials', // 包材費マスタ（作業×品目）
   WORK_RECORDS: 'work_records',   // 作業記録（出来高付き・v0.6新規）
   APP_SETTINGS: 'app_settings',   // アプリ設定（配賦率など）
+  // v0.7 勤務計画変更
+  CHANGE_REQUESTS: 'change_requests',         // 申請データ（承認待ち）
+  CHANGE_HISTORY: 'change_history',           // 履歴データ（給与計算根拠資料）
+  EMPLOYEE_NOTIFICATIONS: 'employee_notifications', // 本人通知バナー
 };
 
 const DEFAULT_EMPLOYEES = [
@@ -1178,6 +1846,10 @@ async function initializeData() {
   if (!materials || materials.length === 0) await saveData(STORAGE_KEYS.WORK_MATERIALS, DEFAULT_WORK_MATERIALS);
   if (!(await loadData(STORAGE_KEYS.WORK_RECORDS, null))) await saveData(STORAGE_KEYS.WORK_RECORDS, []);
   if (!(await loadData(STORAGE_KEYS.APP_SETTINGS, null))) await saveData(STORAGE_KEYS.APP_SETTINGS, DEFAULT_APP_SETTINGS);
+  // v0.7 勤務計画変更
+  if (!(await loadData(STORAGE_KEYS.CHANGE_REQUESTS, null))) await saveData(STORAGE_KEYS.CHANGE_REQUESTS, []);
+  if (!(await loadData(STORAGE_KEYS.CHANGE_HISTORY, null))) await saveData(STORAGE_KEYS.CHANGE_HISTORY, []);
+  if (!(await loadData(STORAGE_KEYS.EMPLOYEE_NOTIFICATIONS, null))) await saveData(STORAGE_KEYS.EMPLOYEE_NOTIFICATIONS, []);
 }
 
 // ===========================================
@@ -1204,6 +1876,10 @@ const state = {
   work_materials: [],
   work_records: [],
   app_settings: {},
+  // v0.7 勤務計画変更
+  change_requests: [],
+  change_history: [],
+  employee_notifications: [],
 };
 
 const PUNCH_TYPES = {
@@ -1540,6 +2216,12 @@ function render() {
   else if (state.screen === 'app_settings') app.innerHTML = renderAppSettings();
   else if (state.screen === 'work_register') app.innerHTML = renderWorkRegister();
   else if (state.screen === 'reports') app.innerHTML = renderReports();
+  else if (state.screen === 'plan_change_index') app.innerHTML = renderPlanChangeIndex();
+  else if (state.screen === 'plan_change_menu') app.innerHTML = renderPlanChangeMenu();
+  else if (state.screen === 'plan_day_change') app.innerHTML = renderPlanDayChange();
+  else if (state.screen === 'plan_time_change') app.innerHTML = renderPlanTimeChange();
+  else if (state.screen === 'approval_list') app.innerHTML = renderApprovalList();
+  else if (state.screen === 'change_history') app.innerHTML = renderChangeHistoryList();
   attachHandlers();
 }
 
@@ -1572,8 +2254,14 @@ function renderHome() {
     const faceHtml = emp.photo 
       ? `<img class="face-img" src="${emp.photo}" alt="" />` 
       : `<div class="face">${emp.emoji}</div>`;
+    // 未読通知件数バッジ
+    const unreadCount = getUnreadNotificationCount(emp.id);
+    const notifBadge = unreadCount > 0
+      ? `<div class="notif-count-badge">📬 ${unreadCount}</div>`
+      : '';
     html += `
       <button class="${classes.join(' ')}" data-action="select-employee" data-id="${emp.id}">
+        ${notifBadge}
         ${faceHtml}
         <div class="name">${emp.name}</div>
         ${statusHtml}
@@ -1642,6 +2330,7 @@ function renderPersonal() {
     <div class="card">
       <h2>${emp.emoji} ${emp.name}さん、こんにちは!</h2>
       <div class="greeting">現在の状態：<strong>${st.label}</strong></div>
+      ${renderNotifBanner(emp.id)}
       <div class="punch-area">
         <button class="punch-btn btn-start" data-action="punch" data-type="START" ${buttonState.START ? '' : 'disabled'}><span class="icon">🟢</span>出勤</button>
         <button class="punch-btn btn-work-start" data-action="punch-solo-start" ${buttonState.WORK_START ? '' : 'disabled'}><span class="icon">🚀</span>作業開始</button>
@@ -5289,6 +5978,1579 @@ function renderLogsTimeline(punches) {
   return html;
 }
 
+// =========================================================
+// v0.7: 勤務計画変更（画面1：個人選択）
+// =========================================================
+function renderPlanChangeIndex() {
+  // フィルタ状態（初回はデフォルト）
+  if (state._planChangeFilter === undefined) {
+    state._planChangeFilter = { search: '', sortByChange: false, activeOnly: true };
+  }
+  const filter = state._planChangeFilter;
+
+  // 対象従業員リスト
+  const allEmps = state.employees.filter(e => !filter.activeOnly || (e.status || 'active') === 'active');
+
+  // 名前/カナで絞り込み
+  const searchLower = (filter.search || '').toLowerCase();
+  const filtered = allEmps.filter(e => {
+    if (!searchLower) return true;
+    const name = (e.name || '').toLowerCase();
+    const kana = (e.name_kana || '').toLowerCase();
+    return name.includes(searchLower) || kana.includes(searchLower);
+  });
+
+  // 各従業員の今月の変更回数と申請中件数を取得（change_history未実装のため現時点は0）
+  const enriched = filtered.map(e => {
+    const changeCount = getPlanChangeCount(e.id, 'this_month');
+    const pendingCount = getPendingApprovalCount(e.id);
+    return { ...e, _changeCount: changeCount, _pendingCount: pendingCount };
+  });
+
+  // 変更が多い順ソート
+  if (filter.sortByChange) {
+    enriched.sort((a, b) => b._changeCount - a._changeCount);
+  }
+
+  let html = `
+    <div class="nav-row">
+      <button class="nav-btn" data-action="back-admin">← 管理画面へ戻る</button>
+      <button class="nav-btn" data-action="go-plan-change-history" style="background:#fafafa; color:#555;">📜 全変更履歴</button>
+    </div>
+    <div class="card plan-change-card">
+      <h2>📅 勤務計画変更 — 変更したい従業員を選択してください</h2>
+      <div class="plan-desc">
+        💡 個人を選択すると「勤務日変更」「勤務時間変更」のメニューが表示されます。<br>
+        各カード右上の <span style="background:var(--yellow); color:white; padding:1px 7px; border-radius:8px; font-size:0.75rem; font-weight:bold;">申請中</span> マークは承認待ちの申請があることを示します。
+      </div>
+      <div class="plan-filter-row">
+        <input type="text" id="plan-search" placeholder="🔍 名前で検索（カタカナ可）" value="${filter.search}" data-action="plan-search-input" />
+        <label><input type="checkbox" data-action="plan-toggle-active" ${filter.activeOnly ? 'checked' : ''} /> 在籍者のみ</label>
+        <label><input type="checkbox" data-action="plan-toggle-sort" ${filter.sortByChange ? 'checked' : ''} /> 変更が多い順に並べる</label>
+      </div>
+      <div class="employee-grid">
+  `;
+
+  if (enriched.length === 0) {
+    html += `<div style="grid-column:1/-1; padding:30px; text-align:center; color:var(--gray);">該当する従業員がいません</div>`;
+  }
+
+  for (const e of enriched) {
+    const faceCell = e.photo
+      ? `<img src="${e.photo}" class="face-img" alt="" />`
+      : `<div class="face">${e.emoji || '👤'}</div>`;
+    const contract = e.monthly_contract_hours ? `月${e.monthly_contract_hours}h契約` : '契約時間未設定';
+    // 変更回数バッジのクラス決定
+    let badgeClass = 'none';
+    if (e._changeCount >= 7) badgeClass = 'alert';
+    else if (e._changeCount >= 4) badgeClass = 'many';
+    else if (e._changeCount >= 1) badgeClass = 'few';
+    const pendingHTML = e._pendingCount > 0 ? `<span class="pending-mark">申請中</span>` : '';
+    html += `
+      <div class="emp-card" data-action="go-plan-change-emp" data-emp-id="${e.id}">
+        ${pendingHTML}
+        ${faceCell}
+        <div class="name">${e.name || '(無名)'}</div>
+        <div class="contract">${contract}</div>
+        <div class="change-badge ${badgeClass}">今月変更 ${e._changeCount}回</div>
+      </div>
+    `;
+  }
+
+  html += `
+      </div>
+      <div class="plan-legend">
+        <div class="plan-legend-item"><span class="plan-legend-dot" style="background:#f5f5f5; border:1px solid #ddd;"></span>0回</div>
+        <div class="plan-legend-item"><span class="plan-legend-dot" style="background:var(--blue-light);"></span>1〜3回（通常）</div>
+        <div class="plan-legend-item"><span class="plan-legend-dot" style="background:var(--orange-light);"></span>4〜6回（多め）</div>
+        <div class="plan-legend-item"><span class="plan-legend-dot" style="background:#fce4ec;"></span>7回以上（要注意）</div>
+        <div class="plan-legend-item"><span class="plan-legend-dot" style="background:var(--yellow);"></span>承認待ち申請あり</div>
+      </div>
+    </div>
+  `;
+  return html;
+}
+
+// 個人の今月の変更回数を集計（change_history未実装のため現時点は0返却）
+function getPlanChangeCount(empId, range) {
+  // TODO: v0.7 Phase 6で change_history 連動
+  if (!state.change_history) return 0;
+  const now = new Date();
+  const ym = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  return state.change_history.filter(h => h.emp_id === empId && h.timestamp.startsWith(ym)).length;
+}
+
+// 個人の承認待ち申請件数（change_requests未実装のため現時点は0返却）
+function getPendingApprovalCount(empId) {
+  // TODO: v0.7 Phase 6で change_requests 連動
+  if (!state.change_requests) return 0;
+  return state.change_requests.filter(r => r.emp_id === empId && r.status === 'pending').length;
+}
+
+// 個人の直近変更内容（change_history未実装のため現時点は null 返却）
+function getLastPlanChange(empId) {
+  // TODO: v0.7 Phase 6で change_history 連動
+  if (!state.change_history) return null;
+  const list = state.change_history.filter(h => h.emp_id === empId);
+  if (list.length === 0) return null;
+  // 最新を返す
+  return list.sort((a, b) => b.timestamp.localeCompare(a.timestamp))[0];
+}
+
+// =========================================================
+// v0.7: 勤務計画変更（画面2：変更項目選択）
+// =========================================================
+function renderPlanChangeMenu() {
+  const empId = state._planChangeEmpId;
+  const emp = state.employees.find(e => e.id === empId);
+  if (!emp) {
+    return `
+      <div class="nav-row">
+        <button class="nav-btn" data-action="back-plan-change-index">← 個人選択へ戻る</button>
+      </div>
+      <div class="card">
+        <p style="color:var(--red); text-align:center; padding:24px;">⚠️ 従業員データが見つかりません。個人選択へ戻ってください。</p>
+      </div>
+    `;
+  }
+
+  const faceCell = emp.photo
+    ? `<img src="${emp.photo}" class="face-img" alt="" />`
+    : `<div class="face">${emp.emoji || '👤'}</div>`;
+  const contract = emp.monthly_contract_hours ? `月${emp.monthly_contract_hours}h契約` : '契約時間未設定';
+  const branch = emp.branch || '川口';
+  const changeCount = getPlanChangeCount(empId, 'this_month');
+  const pendingCount = getPendingApprovalCount(empId);
+  const lastChange = getLastPlanChange(empId);
+  const lastChangeText = lastChange
+    ? `${lastChange.target_date || '-'} ${lastChange.summary || ''}`
+    : 'なし';
+
+  return `
+    <div class="nav-row">
+      <button class="nav-btn" data-action="back-plan-change-index">← 個人選択へ戻る</button>
+    </div>
+    <div class="card plan-change-card">
+      <h2>📅 変更したい項目を選んでください</h2>
+
+      <div class="emp-profile">
+        ${faceCell}
+        <div class="info">
+          <div class="name">${emp.name || '(無名)'} さん</div>
+          <div class="meta">${contract} / 拠点：${branch}</div>
+          <div class="stats">
+            <div class="stat-item">
+              <span class="stat-label">今月変更</span>
+              <span class="stat-value">${changeCount}回</span>
+            </div>
+            <div class="stat-item">
+              <span class="stat-label">申請中</span>
+              <span class="stat-value">${pendingCount}件</span>
+            </div>
+            <div class="stat-item">
+              <span class="stat-label">直近の変更</span>
+              <span class="stat-value">${lastChangeText}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="menu-grid">
+        <div class="menu-card day" data-action="go-plan-day-change">
+          <div class="menu-icon">🔄</div>
+          <div class="menu-title">勤務日変更</div>
+          <div class="menu-desc">出勤日 ⇔ 休日 の切替</div>
+        </div>
+        <div class="menu-card time" data-action="go-plan-time-change">
+          <div class="menu-icon">⏰</div>
+          <div class="menu-title">勤務時間変更</div>
+          <div class="menu-desc">出勤・退勤時刻の調整</div>
+        </div>
+        <div class="menu-card history" data-action="go-plan-emp-history">
+          <div class="menu-icon">📜</div>
+          <div class="menu-title">変更履歴</div>
+          <div class="menu-desc">この方の全変更ログ</div>
+        </div>
+      </div>
+
+      <div class="info-note">
+        💡 変更は基本「本人申告 → 管理者承認」のフローですが、業務判断による即時変更（管理者権限）も選べます。即時変更の場合は本人への通知バナーが打刻画面に表示されます。
+      </div>
+    </div>
+  `;
+}
+
+// =========================================================
+// v0.7: 勤務計画変更 - データ保存ヘルパー関数群
+// =========================================================
+
+// 一意なID生成
+function genId(prefix) {
+  return `${prefix}_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
+}
+
+// ISO形式の現在時刻
+function nowISO() {
+  return new Date().toISOString();
+}
+
+// 申請データを追加
+async function addChangeRequest(req) {
+  const fullReq = {
+    request_id: genId('REQ'),
+    status: 'pending',
+    requested_by: 'admin',
+    requested_at: nowISO(),
+    approved_by: null,
+    approved_at: null,
+    ...req
+  };
+  state.change_requests.push(fullReq);
+  await saveData(STORAGE_KEYS.CHANGE_REQUESTS, state.change_requests);
+  return fullReq;
+}
+
+// 履歴データを追加
+async function addChangeHistory(hist) {
+  const fullHist = {
+    history_id: genId('HIS'),
+    changed_by: 'admin',
+    changed_at: nowISO(),
+    ...hist
+  };
+  state.change_history.push(fullHist);
+  await saveData(STORAGE_KEYS.CHANGE_HISTORY, state.change_history);
+  return fullHist;
+}
+
+// 本人通知を追加
+async function addEmployeeNotification(empId, payload) {
+  const notif = {
+    notif_id: genId('NTF'),
+    emp_id: empId,
+    created_at: nowISO(),
+    read: false,
+    read_at: null,
+    ...payload
+  };
+  state.employee_notifications.push(notif);
+  await saveData(STORAGE_KEYS.EMPLOYEE_NOTIFICATIONS, state.employee_notifications);
+  return notif;
+}
+
+// 勤務計画（日別）の特定日を更新
+async function updateDailyPlanCell(empId, year, month, day, newDayData) {
+  let plan = state.daily_plans.find(dp => dp.employee_id === empId && dp.year === year && dp.month === month);
+  if (!plan) {
+    plan = { employee_id: empId, year, month, days: {} };
+    state.daily_plans.push(plan);
+  }
+  if (!plan.days) plan.days = {};
+  plan.days[day] = newDayData;
+  await saveData(STORAGE_KEYS.DAILY_PLANS, state.daily_plans);
+}
+
+// 日付フォーマット YYYY-MM-DD
+function fmtDate(year, month, day) {
+  return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+}
+
+// "09:00〜17:00" → {start:"09:00", end:"17:00"}
+function parseTimeRange(timeStr) {
+  if (!timeStr) return null;
+  const [s, e] = timeStr.split('〜');
+  return { start: s || '', end: e || '' };
+}
+
+// 勤務日変更の申告/即変更処理
+async function processPendingDayChanges(empId, pendings, reason, mode) {
+  let processedCount = 0;
+  for (const p of pendings) {
+    const targetDate = fmtDate(p.year, p.month, p.day);
+    if (mode === 'request') {
+      await addChangeRequest({
+        emp_id: empId,
+        type: 'day_change',
+        target_date: targetDate,
+        from_state: p.from,
+        to_state: p.to,
+        from_time: p.fromTime ? parseTimeRange(p.fromTime) : null,
+        to_time: p.toTime ? parseTimeRange(p.toTime) : null,
+        reason_category: reason.category,
+        reason_note: reason.note,
+      });
+    } else {
+      // 即変更：勤務計画更新 + 履歴記録 + 本人通知
+      let newDayData;
+      if (p.to === 'work') {
+        const toRange = p.toTime ? parseTimeRange(p.toTime) : null;
+        newDayData = toRange && toRange.start ? toRange : { start: '09:00', end: '17:00' };
+      } else {
+        newDayData = null;
+      }
+      await updateDailyPlanCell(empId, p.year, p.month, p.day, newDayData);
+      const hist = await addChangeHistory({
+        emp_id: empId,
+        type: 'day_change',
+        target_date: targetDate,
+        from_state: p.from,
+        to_state: p.to,
+        from_time: p.fromTime ? parseTimeRange(p.fromTime) : null,
+        to_time: p.toTime ? parseTimeRange(p.toTime) : null,
+        reason_category: reason.category,
+        reason_note: reason.note,
+        change_type: 'admin',
+        request_id: null,
+      });
+      const fromTxt = p.from === 'work' ? `出勤日(${p.fromTime || ''})` : '休日';
+      const toTxt = p.to === 'work' ? `出勤日${p.toTime ? '(' + p.toTime + ')' : ''}` : '休日';
+      await addEmployeeNotification(empId, {
+        type: 'day_change_admin',
+        target_date: targetDate,
+        message: `${targetDate} の勤務日が変更されました：${fromTxt} → ${toTxt}`,
+        related_history_id: hist.history_id,
+      });
+    }
+    processedCount++;
+  }
+  return processedCount;
+}
+
+// 勤務時間変更の申告/即変更処理
+async function processPendingTimeChanges(empId, pendings, reason, mode) {
+  let processedCount = 0;
+  for (const p of pendings) {
+    const targetDate = fmtDate(p.year, p.month, p.day);
+    if (mode === 'request') {
+      await addChangeRequest({
+        emp_id: empId,
+        type: 'time_change',
+        target_date: targetDate,
+        from_state: 'work',
+        to_state: 'work',
+        from_time: p.from,
+        to_time: p.to,
+        reason_category: reason.category,
+        reason_note: reason.note,
+      });
+    } else {
+      await updateDailyPlanCell(empId, p.year, p.month, p.day, { start: p.to.start, end: p.to.end });
+      const hist = await addChangeHistory({
+        emp_id: empId,
+        type: 'time_change',
+        target_date: targetDate,
+        from_state: 'work',
+        to_state: 'work',
+        from_time: p.from,
+        to_time: p.to,
+        reason_category: reason.category,
+        reason_note: reason.note,
+        change_type: 'admin',
+        request_id: null,
+      });
+      await addEmployeeNotification(empId, {
+        type: 'time_change_admin',
+        target_date: targetDate,
+        message: `${targetDate} の勤務時間が変更されました：${p.from.start}〜${p.from.end} → ${p.to.start}〜${p.to.end}`,
+        related_history_id: hist.history_id,
+      });
+    }
+    processedCount++;
+  }
+  return processedCount;
+}
+
+// =========================================================
+// v0.7: 勤務計画変更（画面3-A：勤務日変更）
+// =========================================================
+function renderPlanDayChange() {
+  const empId = state._planChangeEmpId;
+  const emp = state.employees.find(e => e.id === empId);
+  if (!emp) {
+    return `
+      <div class="nav-row"><button class="nav-btn" data-action="back-plan-change-index">← 個人選択へ戻る</button></div>
+      <div class="card"><p style="color:var(--red); text-align:center; padding:24px;">⚠️ 従業員データが見つかりません。</p></div>
+    `;
+  }
+  // 表示年月の初期化
+  if (!state._planChangeYM) state._planChangeYM = currentYM();
+  // 選択中変更リストの初期化
+  if (!state._pendingDayChanges) state._pendingDayChanges = [];
+  // 理由・変更方式の初期化
+  if (!state._planChangeReason) state._planChangeReason = { category: '本人都合', note: '' };
+  if (!state._planChangeMode) state._planChangeMode = 'request'; // 'request' | 'admin'
+
+  const { year, month } = state._planChangeYM;
+  const lastDay = new Date(year, month, 0).getDate();
+  const firstDow = new Date(year, month - 1, 1).getDay();
+
+  // 月の勤務計画
+  const dailyPlan = getDailyPlan(empId, year, month);
+  const days = (dailyPlan && dailyPlan.days) || {};
+  const pattern = getPattern(empId);
+
+  // 出勤予定日数・休日数
+  let workDays = 0, offDays = 0;
+  for (let d = 1; d <= lastDay; d++) {
+    const dayData = days[d];
+    if (dayData && dayData.start && dayData.end) workDays++;
+    else if (dayData === null) offDays++;
+  }
+
+  // 個人プロフィール表示用
+  const faceHtml = emp.photo
+    ? `<img src="${emp.photo}" class="face-img" alt="" />`
+    : `<span class="face">${emp.emoji || '👤'}</span>`;
+  const contract = emp.monthly_contract_hours ? `月${emp.monthly_contract_hours}h契約` : '契約時間未設定';
+  const branch = emp.branch || '川口';
+
+  let html = `
+    <div class="nav-row">
+      <button class="nav-btn" data-action="back-plan-change-menu">← 変更項目選択へ戻る</button>
+    </div>
+    <div class="card">
+      <h2 style="color:var(--blue); border-bottom-color:var(--blue-light);">🔄 勤務日変更（出勤日 ⇔ 休日 の切替）</h2>
+
+      <div class="emp-profile-mini">
+        ${faceHtml}
+        <div class="info">
+          <div class="name">${emp.name || '(無名)'} さん</div>
+          <div class="meta">${contract} / 拠点：${branch}</div>
+        </div>
+      </div>
+
+      <div class="ym-bar">
+        <div class="ym-controls">
+          <button data-action="pdc-prev-month">← 前月</button>
+          <button data-action="pdc-this-month">今月</button>
+          <button data-action="pdc-next-month">次月 →</button>
+        </div>
+        <div class="ym-label">${year}年${month}月</div>
+        <div style="font-size:0.85rem; color:#666;">出勤予定 ${workDays}日 / 休日 ${offDays}日</div>
+      </div>
+
+      <table class="calendar-table">
+        <thead>
+          <tr>
+            <th class="wd-sun">日</th><th>月</th><th>火</th><th>水</th><th>木</th><th>金</th><th class="wd-sat">土</th>
+          </tr>
+        </thead>
+        <tbody>
+  `;
+
+  // カレンダー描画
+  let dayNum = 1;
+  let week = '<tr>';
+  for (let i = 0; i < firstDow; i++) week += '<td class="cal-empty"></td>';
+  let col = firstDow;
+
+  while (dayNum <= lastDay) {
+    const dayData = days[dayNum];
+    const isWork = !!(dayData && dayData.start && dayData.end);
+    const isOff = (dayData === null);
+    // 選択中変更リストにあるか確認
+    const pendingChange = state._pendingDayChanges.find(p => p.year === year && p.month === month && p.day === dayNum);
+    // 申請中・承認済みの変更を確認（change_requests・change_history未実装のため現時点はなし）
+    const isRequested = isDayRequested(empId, year, month, dayNum);
+    const isApproved = isDayApprovedChange(empId, year, month, dayNum);
+
+    // セルクラス決定
+    let cellClass = 'cal-cell';
+    if (pendingChange) cellClass += ' cal-pending-change';
+    else if (isRequested) cellClass += ' cal-requested';
+    else if (isApproved) cellClass += ' cal-approved-change';
+    else if (isWork) cellClass += ' cal-work';
+    else if (isOff) cellClass += ' cal-off-cell';
+    else cellClass += ' cal-blank';
+
+    const colorClass = (col === 0) ? 'wd-sun-cell' : (col === 6 ? 'wd-sat-cell' : '');
+
+    // セル内容
+    let cellContent = `<div class="cal-day-num">${dayNum}</div>`;
+    if (pendingChange) {
+      // 変更予定（紫ハイライト）
+      if (pendingChange.from === 'work') {
+        cellContent += `<div class="cal-time" style="text-decoration:line-through;">${pendingChange.fromTime || ''}</div>`;
+        cellContent += `<div class="change-arrow">↓ 休に</div>`;
+      } else {
+        cellContent += `<div class="cal-off" style="text-decoration:line-through;">休</div>`;
+        cellContent += `<div class="change-arrow">↓ 出勤に</div>`;
+      }
+    } else if (isWork) {
+      const c = calcLaborMinutes(dayData.start, dayData.end);
+      cellContent += `<div class="cal-time">${dayData.start}<br>〜${dayData.end}</div>`;
+      cellContent += `<div class="cal-hours">${formatHMin(c.netMin)}</div>`;
+    } else if (isOff) {
+      cellContent += `<div class="cal-off">休</div>`;
+    }
+
+    week += `<td class="${cellClass} ${colorClass}" data-action="pdc-toggle-day" data-day="${dayNum}">${cellContent}</td>`;
+    col++;
+    if (col === 7) {
+      week += '</tr>';
+      html += week;
+      week = '<tr>';
+      col = 0;
+    }
+    dayNum++;
+  }
+  if (col > 0 && col < 7) {
+    for (let i = col; i < 7; i++) week += '<td class="cal-empty"></td>';
+    week += '</tr>';
+    html += week;
+  }
+
+  html += `
+        </tbody>
+      </table>
+
+      <div class="cal-legend">
+        <div class="cal-legend-item"><span class="cal-legend-swatch" style="background:#e8f4ee;"></span>出勤日</div>
+        <div class="cal-legend-item"><span class="cal-legend-swatch" style="background:#f5f5f5;"></span>休日</div>
+        <div class="cal-legend-item"><span class="cal-legend-swatch" style="background:var(--purple-light); border-color:var(--purple);"></span>変更予定（今選択中）</div>
+        <div class="cal-legend-item"><span class="cal-legend-swatch" style="background:#fff3c4; border-color:var(--yellow);"></span>申請中（承認待ち）</div>
+        <div class="cal-legend-item"><span class="cal-legend-swatch" style="background:var(--orange-light); border-color:var(--orange);"></span>変更済（承認済み）</div>
+      </div>
+  `;
+
+  // 選択中変更リスト
+  const thisMonthPending = state._pendingDayChanges.filter(p => p.year === year && p.month === month);
+  html += `<div class="pending-list">`;
+  html += `<h3>📋 選択中の変更（${thisMonthPending.length}件）</h3>`;
+  if (thisMonthPending.length === 0) {
+    html += `<div class="pending-list-empty">💡 上のカレンダーから変更したい日をタップしてください</div>`;
+  } else {
+    thisMonthPending.sort((a, b) => a.day - b.day).forEach(p => {
+      const dt = new Date(p.year, p.month - 1, p.day);
+      const wd = ['日', '月', '火', '水', '木', '金', '土'][dt.getDay()];
+      const summary = p.from === 'work'
+        ? `<span style="color:var(--green);">⬜ 出勤日</span> (${p.fromTime || ''}) <span class="change-arrow-inline">→</span> <span style="color:var(--gray);">▫️ 休日</span>`
+        : `<span style="color:var(--gray);">▫️ 休日</span> <span class="change-arrow-inline">→</span> <span style="color:var(--green);">⬜ 出勤日</span>${p.toTime ? ' (' + p.toTime + ')' : ' (標準パターン適用)'}`;
+      html += `
+        <div class="pending-row">
+          <div class="date">${p.month}/${p.day}(${wd})</div>
+          <div class="change-summary">${summary}</div>
+          <button class="remove-btn" data-action="pdc-remove-pending" data-day="${p.day}" data-year="${p.year}" data-month="${p.month}">✕ 取消</button>
+        </div>
+      `;
+    });
+  }
+  html += `</div>`;
+
+  // 理由
+  const r = state._planChangeReason;
+  html += `
+    <div class="reason-section">
+      <h3>📝 変更理由</h3>
+      <div class="reason-row">
+        <label>カテゴリ：</label>
+        <select data-action="pdc-change-reason-category">
+          <option ${r.category === '本人都合' ? 'selected' : ''}>本人都合</option>
+          <option ${r.category === '会社都合' ? 'selected' : ''}>会社都合</option>
+          <option ${r.category === '体調不良' ? 'selected' : ''}>体調不良</option>
+          <option ${r.category === '行事・冠婚葬祭' ? 'selected' : ''}>行事・冠婚葬祭</option>
+          <option ${r.category === 'その他' ? 'selected' : ''}>その他</option>
+        </select>
+      </div>
+      <div class="reason-row">
+        <label>メモ：</label>
+        <input type="text" placeholder="例：子どもの遠足のため、平日休みと振替出勤" value="${(r.note || '').replace(/"/g, '&quot;')}" data-action="pdc-change-reason-note" />
+      </div>
+    </div>
+  `;
+
+  // 変更方式
+  const mode = state._planChangeMode;
+  html += `
+    <div class="mode-section">
+      <h3>⚙️ 変更方式</h3>
+      <div class="mode-row">
+        <label><input type="radio" name="pdc-mode" value="request" data-action="pdc-change-mode" ${mode === 'request' ? 'checked' : ''} /> 📤 本人申告として登録（管理者承認後に反映）</label>
+        <label><input type="radio" name="pdc-mode" value="admin" data-action="pdc-change-mode" ${mode === 'admin' ? 'checked' : ''} /> ⚡ 管理者権限で即変更（本人通知あり）</label>
+      </div>
+    </div>
+  `;
+
+  // 実行ボタン（全月含めた総件数）
+  const totalPending = state._pendingDayChanges.length;
+  const submitLabel = mode === 'request' ? `📤 申告する（${totalPending}件）` : `⚡ 即変更する（${totalPending}件）`;
+  const submitClass = mode === 'request' ? 'submit-btn-apply' : 'submit-btn-immediate';
+  const disabled = totalPending === 0 ? 'disabled' : '';
+  html += `
+    <div class="submit-section">
+      <button class="submit-btn-cancel" data-action="pdc-clear-all" ${disabled}>全てクリア</button>
+      <button class="${submitClass}" data-action="pdc-submit" ${disabled}>${submitLabel}</button>
+    </div>
+    </div>
+  `;
+  return html;
+}
+
+// 該当日が申請中かどうか（change_requests未実装のため現時点はfalse）
+function isDayRequested(empId, year, month, day) {
+  if (!state.change_requests) return false;
+  const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+  return state.change_requests.some(r =>
+    r.emp_id === empId && r.status === 'pending' && r.target_date === dateStr
+  );
+}
+
+// 該当日が承認済み変更かどうか（change_history未実装のため現時点はfalse）
+function isDayApprovedChange(empId, year, month, day) {
+  if (!state.change_history) return false;
+  const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+  return state.change_history.some(h =>
+    h.emp_id === empId && h.target_date === dateStr
+  );
+}
+
+// =========================================================
+// v0.7: 勤務計画変更（画面3-B：勤務時間変更）
+// =========================================================
+function renderPlanTimeChange() {
+  const empId = state._planChangeEmpId;
+  const emp = state.employees.find(e => e.id === empId);
+  if (!emp) {
+    return `
+      <div class="nav-row"><button class="nav-btn" data-action="back-plan-change-index">← 個人選択へ戻る</button></div>
+      <div class="card"><p style="color:var(--red); text-align:center; padding:24px;">⚠️ 従業員データが見つかりません。</p></div>
+    `;
+  }
+  if (!state._planChangeYM) state._planChangeYM = currentYM();
+  if (!state._pendingTimeChanges) state._pendingTimeChanges = [];
+  if (!state._planChangeReason) state._planChangeReason = { category: '本人都合', note: '' };
+  if (!state._planChangeMode) state._planChangeMode = 'request';
+
+  const { year, month } = state._planChangeYM;
+  const lastDay = new Date(year, month, 0).getDate();
+  const firstDow = new Date(year, month - 1, 1).getDay();
+  const dailyPlan = getDailyPlan(empId, year, month);
+  const days = (dailyPlan && dailyPlan.days) || {};
+
+  // 出勤日数・休日数
+  let workDays = 0, offDays = 0;
+  for (let d = 1; d <= lastDay; d++) {
+    const dayData = days[d];
+    if (dayData && dayData.start && dayData.end) workDays++;
+    else if (dayData === null) offDays++;
+  }
+
+  const faceHtml = emp.photo
+    ? `<img src="${emp.photo}" class="face-img" alt="" />`
+    : `<span class="face">${emp.emoji || '👤'}</span>`;
+  const contract = emp.monthly_contract_hours ? `月${emp.monthly_contract_hours}h契約` : '契約時間未設定';
+  const branch = emp.branch || '川口';
+
+  let html = `
+    <div class="nav-row">
+      <button class="nav-btn" data-action="back-plan-change-menu">← 変更項目選択へ戻る</button>
+    </div>
+    <div class="card">
+      <h2 style="color:var(--orange); border-bottom-color:var(--orange-light);">⏰ 勤務時間変更（出勤・退勤時刻の調整）</h2>
+
+      <div class="emp-profile-mini">
+        ${faceHtml}
+        <div class="info">
+          <div class="name">${emp.name || '(無名)'} さん</div>
+          <div class="meta">${contract} / 拠点：${branch}</div>
+        </div>
+      </div>
+
+      <div class="ym-bar">
+        <div class="ym-controls">
+          <button data-action="ptc-prev-month">← 前月</button>
+          <button data-action="ptc-this-month">今月</button>
+          <button data-action="ptc-next-month">次月 →</button>
+        </div>
+        <div class="ym-label" style="color:var(--orange);">${year}年${month}月</div>
+        <div style="font-size:0.85rem; color:#666;">出勤予定 ${workDays}日 / 休日 ${offDays}日</div>
+      </div>
+
+      <table class="calendar-table">
+        <thead>
+          <tr>
+            <th class="wd-sun">日</th><th>月</th><th>火</th><th>水</th><th>木</th><th>金</th><th class="wd-sat">土</th>
+          </tr>
+        </thead>
+        <tbody>
+  `;
+
+  let dayNum = 1;
+  let week = '<tr>';
+  for (let i = 0; i < firstDow; i++) week += '<td class="cal-empty"></td>';
+  let col = firstDow;
+
+  while (dayNum <= lastDay) {
+    const dayData = days[dayNum];
+    const isWork = !!(dayData && dayData.start && dayData.end);
+    const isOff = (dayData === null);
+    // 変更予定リストにあるか
+    const pendingChange = state._pendingTimeChanges.find(p => p.year === year && p.month === month && p.day === dayNum);
+    // 編集中か
+    const isEditing = state._editingDay === dayNum &&
+                      state._editingYM &&
+                      state._editingYM.year === year &&
+                      state._editingYM.month === month;
+
+    let cellClass = 'cal-cell';
+    let cellAction = '';
+    if (pendingChange) {
+      cellClass += ' cal-pending-change';
+      cellAction = 'data-action="ptc-select-day" data-day="' + dayNum + '"';
+    } else if (isEditing) {
+      cellClass += ' cal-editing';
+      cellAction = 'data-action="ptc-select-day" data-day="' + dayNum + '"';
+    } else if (isWork) {
+      cellClass += ' cal-work';
+      cellAction = 'data-action="ptc-select-day" data-day="' + dayNum + '"';
+    } else if (isOff) {
+      cellClass += ' cal-off-cell';
+      // 休日はクリック不可
+    } else {
+      cellClass += ' cal-blank';
+      // 未設定もクリック不可（勤務日変更画面へ）
+    }
+    const colorClass = (col === 0) ? 'wd-sun-cell' : (col === 6 ? 'wd-sat-cell' : '');
+
+    let cellContent = `<div class="cal-day-num">${dayNum}</div>`;
+    if (pendingChange) {
+      cellContent += `<div class="cal-time" style="text-decoration:line-through;">${pendingChange.fromTime}</div>`;
+      cellContent += `<div class="new-time">→ ${pendingChange.toTime}</div>`;
+    } else if (isWork) {
+      const c = calcLaborMinutes(dayData.start, dayData.end);
+      cellContent += `<div class="cal-time">${dayData.start}<br>〜${dayData.end}</div>`;
+      if (isEditing) {
+        cellContent += `<div class="editing-mark">編集中</div>`;
+      } else {
+        cellContent += `<div class="cal-hours">${formatHMin(c.netMin)}</div>`;
+      }
+    } else if (isOff) {
+      cellContent += `<div class="cal-off">休</div>`;
+    }
+    week += `<td class="${cellClass} ${colorClass}" ${cellAction}>${cellContent}</td>`;
+    col++;
+    if (col === 7) {
+      week += '</tr>';
+      html += week;
+      week = '<tr>';
+      col = 0;
+    }
+    dayNum++;
+  }
+  if (col > 0 && col < 7) {
+    for (let i = col; i < 7; i++) week += '<td class="cal-empty"></td>';
+    week += '</tr>';
+    html += week;
+  }
+
+  html += `
+        </tbody>
+      </table>
+
+      <div class="cal-legend">
+        <div class="cal-legend-item"><span class="cal-legend-swatch" style="background:#e8f4ee;"></span>出勤日（変更可）</div>
+        <div class="cal-legend-item"><span class="cal-legend-swatch" style="background:#f5f5f5;"></span>休日（変更不可・🔄勤務日変更へ）</div>
+        <div class="cal-legend-item"><span class="cal-legend-swatch" style="background:var(--blue-light); border-color:var(--blue);"></span>編集中</div>
+        <div class="cal-legend-item"><span class="cal-legend-swatch" style="background:var(--purple-light); border-color:var(--purple);"></span>変更予定</div>
+      </div>
+  `;
+
+  // 時刻編集パネル（編集中の日があれば表示）
+  if (state._editingDay && state._editingYM &&
+      state._editingYM.year === year && state._editingYM.month === month) {
+    const editDay = state._editingDay;
+    const origData = days[editDay];
+    if (origData && origData.start && origData.end) {
+      const editNew = state._editingNewTime || { start: origData.start, end: origData.end };
+      // 実労働時間計算
+      const c = calcLaborMinutes(editNew.start, editNew.end);
+      const dt = new Date(year, month - 1, editDay);
+      const wd = ['日','月','火','水','木','金','土'][dt.getDay()];
+      html += `
+        <div class="time-edit-panel">
+          <h3>📝 ${month}/${editDay}(${wd}) の時刻を編集</h3>
+          <div class="time-edit-row">
+            <label>出勤：</label>
+            <div class="original">${origData.start}</div>
+            <span class="arrow">→</span>
+            <input type="time" value="${editNew.start}" data-action="ptc-change-start-time" />
+          </div>
+          <div class="time-edit-row">
+            <label>退勤：</label>
+            <div class="original">${origData.end}</div>
+            <span class="arrow">→</span>
+            <input type="time" value="${editNew.end}" data-action="ptc-change-end-time" />
+            <span class="calculated">実労働 ${formatHMin(c.netMin)}</span>
+          </div>
+          <div class="time-edit-buttons">
+            <button class="btn-cancel" data-action="ptc-cancel-edit">キャンセル</button>
+            <button class="btn-add" data-action="ptc-add-pending">💾 変更予定に追加</button>
+          </div>
+        </div>
+      `;
+    }
+  } else {
+    html += `<div class="time-edit-empty">💡 上のカレンダーから時刻を変更したい日（出勤日）をタップしてください</div>`;
+  }
+
+  // 選択中変更リスト
+  const thisMonthPending = state._pendingTimeChanges.filter(p => p.year === year && p.month === month);
+  const allPending = state._pendingTimeChanges;
+  html += `<div class="pending-list">`;
+  html += `<h3>📋 選択中の変更（${allPending.length}件）</h3>`;
+  if (allPending.length === 0) {
+    html += `<div class="pending-list-empty">時刻を変更したい日を選んで編集 → 「💾 変更予定に追加」してください</div>`;
+  } else {
+    allPending.sort((a, b) => (a.year - b.year) || (a.month - b.month) || (a.day - b.day)).forEach(p => {
+      const dt = new Date(p.year, p.month - 1, p.day);
+      const wd = ['日','月','火','水','木','金','土'][dt.getDay()];
+      const cFrom = calcLaborMinutes(p.from.start, p.from.end);
+      const cTo = calcLaborMinutes(p.to.start, p.to.end);
+      const diffMin = cTo.netMin - cFrom.netMin;
+      const diffLabel = diffMin === 0 ? '' :
+        (diffMin > 0 ? `<span style="color:var(--orange);">+${formatHMin(diffMin)}</span>` : `<span style="color:var(--red);">${formatHMin(diffMin)}</span>`);
+      html += `
+        <div class="pending-row">
+          <div class="date">${p.month}/${p.day}(${wd})</div>
+          <div class="change-summary">
+            ⏰ ${p.from.start}〜${p.from.end} (${formatHMin(cFrom.netMin)})
+            <span class="change-arrow-inline">→</span>
+            ${p.to.start}〜${p.to.end} (${formatHMin(cTo.netMin)}) ${diffLabel}
+          </div>
+          <button class="remove-btn" data-action="ptc-remove-pending" data-day="${p.day}" data-year="${p.year}" data-month="${p.month}">✕ 取消</button>
+        </div>
+      `;
+    });
+  }
+  html += `</div>`;
+
+  // 理由
+  const r = state._planChangeReason;
+  html += `
+    <div class="reason-section">
+      <h3>📝 変更理由</h3>
+      <div class="reason-row">
+        <label>カテゴリ：</label>
+        <select data-action="ptc-change-reason-category">
+          <option ${r.category === '本人都合' ? 'selected' : ''}>本人都合</option>
+          <option ${r.category === '会社都合' ? 'selected' : ''}>会社都合</option>
+          <option ${r.category === '体調不良' ? 'selected' : ''}>体調不良</option>
+          <option ${r.category === '行事・冠婚葬祭' ? 'selected' : ''}>行事・冠婚葬祭</option>
+          <option ${r.category === 'その他' ? 'selected' : ''}>その他</option>
+        </select>
+      </div>
+      <div class="reason-row">
+        <label>メモ：</label>
+        <input type="text" placeholder="例：早朝便対応のため早出シフト" value="${(r.note || '').replace(/"/g, '&quot;')}" data-action="ptc-change-reason-note" />
+      </div>
+    </div>
+  `;
+
+  // 変更方式
+  const mode = state._planChangeMode;
+  html += `
+    <div class="mode-section">
+      <h3>⚙️ 変更方式</h3>
+      <div class="mode-row">
+        <label><input type="radio" name="ptc-mode" value="request" data-action="ptc-change-mode" ${mode === 'request' ? 'checked' : ''} /> 📤 本人申告として登録（管理者承認後に反映）</label>
+        <label><input type="radio" name="ptc-mode" value="admin" data-action="ptc-change-mode" ${mode === 'admin' ? 'checked' : ''} /> ⚡ 管理者権限で即変更（本人通知あり）</label>
+      </div>
+    </div>
+  `;
+
+  // 実行ボタン
+  const totalPending = allPending.length;
+  const submitLabel = mode === 'request' ? `📤 申告する（${totalPending}件）` : `⚡ 即変更する（${totalPending}件）`;
+  const submitClass = mode === 'request' ? 'submit-btn-apply' : 'submit-btn-immediate';
+  const disabled = totalPending === 0 ? 'disabled' : '';
+  html += `
+    <div class="submit-section">
+      <button class="submit-btn-cancel" data-action="ptc-clear-all" ${disabled}>全てクリア</button>
+      <button class="${submitClass}" data-action="ptc-submit" ${disabled}>${submitLabel}</button>
+    </div>
+    </div>
+  `;
+  return html;
+}
+
+// =========================================================
+// v0.7: 承認待ちリスト・承認画面
+// =========================================================
+function renderApprovalList() {
+  // 承認待ち（pending）のみ抽出
+  const pendings = (state.change_requests || []).filter(r => r.status === 'pending');
+  // 個人ごとにグループ化
+  const grouped = {};
+  pendings.forEach(req => {
+    if (!grouped[req.emp_id]) grouped[req.emp_id] = [];
+    grouped[req.emp_id].push(req);
+  });
+  // 件数集計
+  const dayCount = pendings.filter(r => r.type === 'day_change').length;
+  const timeCount = pendings.filter(r => r.type === 'time_change').length;
+
+  let html = `
+    <div class="nav-row">
+      <button class="nav-btn" data-action="back-admin">← 管理画面へ戻る</button>
+    </div>
+    <div class="card">
+      <h2 style="color:#b87b00; border-bottom-color:var(--yellow-light, #fff3c4);">📬 承認待ちの申請（${pendings.length}件）</h2>
+  `;
+
+  if (pendings.length === 0) {
+    html += `
+      <div class="approval-empty">
+        <div class="icon">📭</div>
+        <div>承認待ちの申請はありません</div>
+      </div>
+      </div>
+    `;
+    return html;
+  }
+
+  html += `
+    <div class="approval-summary">
+      <div class="icon">📬</div>
+      <div class="text">
+        <strong>未処理の申請が ${pendings.length}件あります</strong><br>
+        <span style="font-size:0.85rem; color:#666;">承認すると勤務計画が自動更新され、本人通知が作成されます。却下時は本人通知のみ作成されます。</span>
+      </div>
+      <div class="stats">
+        <div class="stat"><span class="label">勤務日変更</span><span class="value" style="color:var(--blue);">${dayCount}件</span></div>
+        <div class="stat"><span class="label">勤務時間変更</span><span class="value" style="color:var(--orange);">${timeCount}件</span></div>
+      </div>
+    </div>
+  `;
+
+  // 各個人グループを表示
+  Object.keys(grouped).forEach(empId => {
+    const reqs = grouped[empId];
+    const emp = state.employees.find(e => e.id === empId);
+    if (!emp) return;
+    const faceHtml = emp.photo
+      ? `<img src="${emp.photo}" class="face-img" alt="" />`
+      : `<div class="face">${emp.emoji || '👤'}</div>`;
+    const contract = emp.monthly_contract_hours ? `月${emp.monthly_contract_hours}h契約` : '契約時間未設定';
+    const branch = emp.branch || emp.location || '川口';
+
+    html += `
+      <div class="emp-group">
+        <div class="emp-group-header">
+          ${faceHtml}
+          <div>
+            <div class="name">${emp.name || '(無名)'} さん</div>
+            <div style="font-size:0.8rem; color:#666;">${contract} / 拠点：${branch}</div>
+          </div>
+          <div class="meta">${reqs.length}件の申請</div>
+        </div>
+    `;
+
+    // 申請カード（申請日時降順）
+    reqs.sort((a, b) => b.requested_at.localeCompare(a.requested_at));
+    reqs.forEach(req => {
+      html += renderRequestCard(req);
+    });
+
+    html += `</div>`;
+  });
+
+  html += `</div>`;
+  return html;
+}
+
+// 申請カード単体のHTML生成
+function renderRequestCard(req) {
+  const isDay = req.type === 'day_change';
+  const typeClass = isDay ? 'day-type' : 'time-type';
+  const badgeClass = isDay ? 'day' : 'time';
+  const badgeIcon = isDay ? '🔄 勤務日変更' : '⏰ 勤務時間変更';
+
+  // 対象日表示（YYYY/MM/DD (曜)）
+  const [y, m, d] = req.target_date.split('-').map(Number);
+  const dt = new Date(y, m - 1, d);
+  const wd = ['日','月','火','水','木','金','土'][dt.getDay()];
+  const targetDateStr = `${y}/${String(m).padStart(2,'0')}/${String(d).padStart(2,'0')} (${wd})`;
+
+  // 申請日時表示
+  const requestedAt = new Date(req.requested_at);
+  const reqDateStr = `${requestedAt.getMonth() + 1}/${requestedAt.getDate()} ${String(requestedAt.getHours()).padStart(2,'0')}:${String(requestedAt.getMinutes()).padStart(2,'0')}`;
+
+  // 変更内容表示
+  let changeText = '';
+  if (isDay) {
+    const fromTxt = req.from_state === 'work'
+      ? `⬜ 出勤日 ${req.from_time ? `(${req.from_time.start}〜${req.from_time.end})` : ''}`
+      : '▫️ 休日';
+    const toTxt = req.to_state === 'work'
+      ? `⬜ 出勤日 ${req.to_time && req.to_time.start ? `(${req.to_time.start}〜${req.to_time.end})` : '(標準パターン)'}`
+      : '▫️ 休日';
+    changeText = `${fromTxt} <span class="arrow">→</span> ${toTxt}`;
+  } else {
+    // 時刻変更：実労働時間差分も表示
+    const fc = calcLaborMinutes(req.from_time.start, req.from_time.end);
+    const tc = calcLaborMinutes(req.to_time.start, req.to_time.end);
+    const diff = tc.netMin - fc.netMin;
+    let diffLabel = '';
+    if (diff !== 0) {
+      const cls = diff > 0 ? 'plus' : 'minus';
+      const sign = diff > 0 ? '+' : '';
+      diffLabel = `<span class="diff ${cls}">実労働 ${sign}${formatHMin(diff)}</span>`;
+    }
+    changeText = `⏰ ${req.from_time.start}〜${req.from_time.end} (${formatHMin(fc.netMin)}) <span class="arrow">→</span> ${req.to_time.start}〜${req.to_time.end} (${formatHMin(tc.netMin)})${diffLabel}`;
+  }
+
+  // 理由カテゴリのクラス名（特殊文字を除去）
+  const catClass = 'cat-' + (req.reason_category || '').replace(/[・]/g, '');
+
+  return `
+    <div class="req-card ${typeClass}">
+      <div class="req-card-header">
+        <span class="req-type-badge ${badgeClass}">${badgeIcon}</span>
+        <span class="req-target-date">${targetDateStr}</span>
+        <span class="req-time">申請：${reqDateStr}</span>
+      </div>
+      <div class="req-change">${changeText}</div>
+      <div class="req-reason">
+        <span class="reason-cat ${catClass}">${req.reason_category || ''}</span>
+        <span class="reason-note">${req.reason_note || '（メモなし）'}</span>
+      </div>
+      <div class="req-actions">
+        <button class="btn-reject" data-action="reject-request" data-request-id="${req.request_id}">❌ 却下</button>
+        <button class="btn-approve" data-action="approve-request" data-request-id="${req.request_id}">✅ 承認する</button>
+      </div>
+    </div>
+  `;
+}
+
+// 申請を承認する処理
+async function approveChangeRequest(requestId) {
+  const req = state.change_requests.find(r => r.request_id === requestId);
+  if (!req || req.status !== 'pending') return null;
+
+  // ステータス更新
+  req.status = 'approved';
+  req.approved_by = 'admin';
+  req.approved_at = nowISO();
+
+  // 履歴追加
+  const hist = await addChangeHistory({
+    emp_id: req.emp_id,
+    type: req.type,
+    target_date: req.target_date,
+    from_state: req.from_state,
+    to_state: req.to_state,
+    from_time: req.from_time,
+    to_time: req.to_time,
+    reason_category: req.reason_category,
+    reason_note: req.reason_note,
+    change_type: 'request',
+    request_id: req.request_id,
+  });
+
+  // 勤務計画更新
+  const [y, m, d] = req.target_date.split('-').map(Number);
+  let newDayData;
+  if (req.type === 'day_change') {
+    if (req.to_state === 'work') {
+      newDayData = (req.to_time && req.to_time.start)
+        ? { start: req.to_time.start, end: req.to_time.end }
+        : { start: '09:00', end: '17:00' };
+    } else {
+      newDayData = null; // 休日
+    }
+  } else {
+    // time_change
+    newDayData = { start: req.to_time.start, end: req.to_time.end };
+  }
+  await updateDailyPlanCell(req.emp_id, y, m, d, newDayData);
+
+  // 本人通知（承認）
+  const msg = formatChangeMessage(req);
+  await addEmployeeNotification(req.emp_id, {
+    type: req.type + '_approved',
+    target_date: req.target_date,
+    message: `✅ ${req.target_date} の変更申請が承認されました：${msg}`,
+    related_history_id: hist.history_id,
+  });
+
+  // 永続化
+  await saveData(STORAGE_KEYS.CHANGE_REQUESTS, state.change_requests);
+  return hist;
+}
+
+// 申請を却下する処理
+async function rejectChangeRequest(requestId, rejectReason) {
+  const req = state.change_requests.find(r => r.request_id === requestId);
+  if (!req || req.status !== 'pending') return null;
+
+  req.status = 'rejected';
+  req.approved_by = 'admin';
+  req.approved_at = nowISO();
+  req.reject_reason = rejectReason || '';
+
+  // 履歴に却下記録（change_type: 'rejected'）
+  await addChangeHistory({
+    emp_id: req.emp_id,
+    type: req.type,
+    target_date: req.target_date,
+    from_state: req.from_state,
+    to_state: req.to_state,
+    from_time: req.from_time,
+    to_time: req.to_time,
+    reason_category: req.reason_category,
+    reason_note: req.reason_note,
+    change_type: 'rejected',
+    request_id: req.request_id,
+    reject_reason: rejectReason || '',
+  });
+
+  // 本人通知（却下）
+  const msg = formatChangeMessage(req);
+  const rrSuffix = rejectReason ? ` / 却下理由：${rejectReason}` : '';
+  await addEmployeeNotification(req.emp_id, {
+    type: req.type + '_rejected',
+    target_date: req.target_date,
+    message: `❌ ${req.target_date} の変更申請が却下されました：${msg}${rrSuffix}`,
+  });
+
+  await saveData(STORAGE_KEYS.CHANGE_REQUESTS, state.change_requests);
+  return true;
+}
+
+// 変更内容を文字列にまとめる（通知メッセージ用）
+function formatChangeMessage(req) {
+  if (req.type === 'day_change') {
+    const fromTxt = req.from_state === 'work'
+      ? `出勤(${req.from_time ? req.from_time.start + '〜' + req.from_time.end : ''})`
+      : '休日';
+    const toTxt = req.to_state === 'work'
+      ? `出勤${req.to_time && req.to_time.start ? '(' + req.to_time.start + '〜' + req.to_time.end + ')' : ''}`
+      : '休日';
+    return `${fromTxt} → ${toTxt}`;
+  } else {
+    return `${req.from_time.start}〜${req.from_time.end} → ${req.to_time.start}〜${req.to_time.end}`;
+  }
+}
+
+// 承認待ち件数（全体）を取得
+function getTotalPendingCount() {
+  if (!state.change_requests) return 0;
+  return state.change_requests.filter(r => r.status === 'pending').length;
+}
+
+// =========================================================
+// v0.7: 本人通知バナー - ヘルパー関数
+// =========================================================
+
+// 個人の未読通知を取得（新しい順）
+function getUnreadNotifications(empId) {
+  if (!state.employee_notifications) return [];
+  return state.employee_notifications
+    .filter(n => n.emp_id === empId && !n.read)
+    .sort((a, b) => b.created_at.localeCompare(a.created_at));
+}
+
+// 個人の未読通知件数
+function getUnreadNotificationCount(empId) {
+  return getUnreadNotifications(empId).length;
+}
+
+// 通知を既読にする
+async function markNotificationAsRead(notifId) {
+  const notif = state.employee_notifications.find(n => n.notif_id === notifId);
+  if (!notif) return;
+  notif.read = true;
+  notif.read_at = nowISO();
+  await saveData(STORAGE_KEYS.EMPLOYEE_NOTIFICATIONS, state.employee_notifications);
+}
+
+// 通知タイプから表示用ラベル＆アイコン＆色を取得
+function getNotifTypeMeta(type) {
+  if (type && type.endsWith('_approved')) {
+    return { icon: '✅', label: '変更申請が承認されました', cls: 'approved' };
+  }
+  if (type && type.endsWith('_rejected')) {
+    return { icon: '❌', label: '変更申請が却下されました', cls: 'rejected' };
+  }
+  if (type && type.endsWith('_admin')) {
+    if (type.startsWith('day_')) {
+      return { icon: '⚡', label: '勤務日が変更されました', cls: 'admin' };
+    }
+    return { icon: '⚡', label: '勤務時間が変更されました', cls: 'admin' };
+  }
+  return { icon: '📩', label: 'お知らせ', cls: 'admin' };
+}
+
+// 通知メッセージから「日付・変更内容」を抽出して整形（messageは元の長い文字列）
+function formatNotifBody(notif) {
+  // messageに既に整形済みの文字列が入っているのでそれを使用
+  // 例: "✅ 2026-05-27 の変更申請が承認されました：出勤(09:00〜17:00) → 休日"
+  // ヘッダー部分はタイプアイコンで表示済みなので、本文は対象日と変更内容だけ抽出
+  const msg = notif.message || '';
+  // "：" 以降を抽出（変更内容部分）
+  const colonIdx = msg.indexOf('：');
+  const changeText = colonIdx >= 0 ? msg.substring(colonIdx + 1).trim() : msg;
+  const targetDate = notif.target_date || '';
+  return { targetDate, changeText };
+}
+
+// バナーHTML生成（renderPersonal内で使用）
+function renderNotifBanner(empId) {
+  const unread = getUnreadNotifications(empId);
+  if (unread.length === 0) return '';
+
+  // 開閉状態
+  if (!state._notifPanelOpen) state._notifPanelOpen = {};
+  const isOpen = state._notifPanelOpen[empId] === true;
+  const toggleIcon = isOpen ? '▲' : '▼';
+
+  let html = `
+    <div class="notif-banner">
+      <div class="notif-banner-header" data-action="toggle-notif-panel" data-emp-id="${empId}">
+        <div class="notif-icon-wrap">📬</div>
+        <div class="notif-banner-title">未読通知が ${unread.length}件あります</div>
+        <div class="notif-banner-toggle">${toggleIcon}</div>
+      </div>
+  `;
+
+  if (isOpen) {
+    html += `<div class="notif-list">`;
+    unread.forEach(n => {
+      const meta = getNotifTypeMeta(n.type);
+      const body = formatNotifBody(n);
+      // 通知日時表示
+      const dt = new Date(n.created_at);
+      const dateStr = `${dt.getMonth() + 1}/${dt.getDate()} ${String(dt.getHours()).padStart(2,'0')}:${String(dt.getMinutes()).padStart(2,'0')}`;
+      html += `
+        <div class="notif-item">
+          <div class="notif-item-header">
+            <span class="notif-type-icon">${meta.icon}</span>
+            <span class="notif-type-label ${meta.cls}">${meta.label}</span>
+            <span class="notif-date">${dateStr}</span>
+          </div>
+          <div class="notif-body">
+            ${body.targetDate} の予定変更：<br>
+            <strong>${body.changeText}</strong>
+          </div>
+          <div class="notif-actions">
+            <button class="btn-confirm" data-action="confirm-notif" data-notif-id="${n.notif_id}">✓ 確認しました</button>
+          </div>
+        </div>
+      `;
+    });
+    html += `</div>`;
+  }
+
+  html += `</div>`;
+  return html;
+}
+
+// =========================================================
+// v0.7: 変更履歴閲覧画面
+// =========================================================
+
+// 初期フィルター（今月）
+function defaultHistoryFilter() {
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = now.getMonth() + 1;
+  const firstDay = `${y}-${String(m).padStart(2,'0')}-01`;
+  const lastDay = new Date(y, m, 0).getDate();
+  const lastDayStr = `${y}-${String(m).padStart(2,'0')}-${String(lastDay).padStart(2,'0')}`;
+  return {
+    from: firstDay,
+    to: lastDayStr,
+    emp_id: '', // ''=全員
+    type_day: true,
+    type_time: true,
+    mode_approved: true,
+    mode_admin: true,
+    mode_rejected: true,
+  };
+}
+
+// 履歴をフィルタリング
+function filterChangeHistory(hist, filter) {
+  return hist.filter(h => {
+    // 期間
+    if (filter.from && h.target_date < filter.from) return false;
+    if (filter.to && h.target_date > filter.to) return false;
+    // 個人
+    if (filter.emp_id && h.emp_id !== filter.emp_id) return false;
+    // タイプ
+    if (h.type === 'day_change' && !filter.type_day) return false;
+    if (h.type === 'time_change' && !filter.type_time) return false;
+    // 種別
+    if (h.change_type === 'request' && !filter.mode_approved) return false;
+    if (h.change_type === 'admin' && !filter.mode_admin) return false;
+    if (h.change_type === 'rejected' && !filter.mode_rejected) return false;
+    return true;
+  });
+}
+
+// 変更内容を表示用テキストに変換
+function formatHistoryChangeText(h) {
+  if (h.type === 'day_change') {
+    const fromTxt = h.from_state === 'work'
+      ? `出勤(${h.from_time ? h.from_time.start + '〜' + h.from_time.end : ''})`
+      : '休日';
+    const toTxt = h.to_state === 'work'
+      ? `出勤${h.to_time && h.to_time.start ? '(' + h.to_time.start + '〜' + h.to_time.end + ')' : '(標準)'}`
+      : '休日';
+    return `${fromTxt} <span class="arrow">→</span> ${toTxt}`;
+  } else {
+    // time_change
+    const fc = h.from_time ? calcLaborMinutes(h.from_time.start, h.from_time.end) : null;
+    const tc = h.to_time ? calcLaborMinutes(h.to_time.start, h.to_time.end) : null;
+    const fromStr = h.from_time ? `${h.from_time.start}〜${h.from_time.end}${fc ? ' (' + formatHMin(fc.netMin) + ')' : ''}` : '-';
+    const toStr = h.to_time ? `${h.to_time.start}〜${h.to_time.end}${tc ? ' (' + formatHMin(tc.netMin) + ')' : ''}` : '-';
+    return `${fromStr} <span class="arrow">→</span> ${toStr}`;
+  }
+}
+
+// 履歴をCSV形式に変換
+function historyToCSV(historyList) {
+  const headers = [
+    '変更日時', '従業員名', '種別', '変更タイプ', '対象日',
+    '変更前', '変更後', '理由カテゴリ', '理由メモ',
+    '申請者', '承認者', '申請日時', '承認日時', '却下理由'
+  ];
+  const rows = [headers];
+  historyList.forEach(h => {
+    const emp = state.employees.find(e => e.id === h.emp_id);
+    const empName = emp ? emp.name : h.emp_id;
+    const modeLabel = h.change_type === 'request' ? '承認済み'
+                    : h.change_type === 'admin' ? '即変更'
+                    : h.change_type === 'rejected' ? '却下'
+                    : h.change_type;
+    const typeLabel = h.type === 'day_change' ? '勤務日変更' : '勤務時間変更';
+    const fromStr = h.type === 'day_change'
+      ? (h.from_state === 'work' ? `出勤(${h.from_time ? h.from_time.start + '-' + h.from_time.end : ''})` : '休日')
+      : (h.from_time ? `${h.from_time.start}-${h.from_time.end}` : '');
+    const toStr = h.type === 'day_change'
+      ? (h.to_state === 'work' ? `出勤${h.to_time && h.to_time.start ? '(' + h.to_time.start + '-' + h.to_time.end + ')' : '(標準)'}` : '休日')
+      : (h.to_time ? `${h.to_time.start}-${h.to_time.end}` : '');
+    // 申請情報（change_requestsから取得）
+    let requestedBy = '', approvedBy = '', requestedAt = '', approvedAt = '';
+    if (h.request_id) {
+      const req = state.change_requests.find(r => r.request_id === h.request_id);
+      if (req) {
+        requestedBy = req.requested_by || '';
+        approvedBy = req.approved_by || '';
+        requestedAt = req.requested_at || '';
+        approvedAt = req.approved_at || '';
+      }
+    } else {
+      // 即変更：申請者=即変更者、承認者=同じ
+      requestedBy = h.changed_by || '';
+      approvedBy = h.changed_by || '';
+      approvedAt = h.changed_at || '';
+    }
+    rows.push([
+      h.changed_at || '',
+      empName,
+      modeLabel,
+      typeLabel,
+      h.target_date || '',
+      fromStr,
+      toStr,
+      h.reason_category || '',
+      h.reason_note || '',
+      requestedBy,
+      approvedBy,
+      requestedAt,
+      approvedAt,
+      h.reject_reason || ''
+    ]);
+  });
+  // CSVエスケープ：ダブルクオート囲み、内部のクオートは2重化
+  return rows.map(row =>
+    row.map(cell => {
+      const s = String(cell == null ? '' : cell);
+      if (s.includes(',') || s.includes('"') || s.includes('\n')) {
+        return '"' + s.replace(/"/g, '""') + '"';
+      }
+      return s;
+    }).join(',')
+  ).join('\r\n');
+}
+
+// CSVファイルをダウンロード
+function downloadHistoryCSV(historyList) {
+  const csv = historyToCSV(historyList);
+  // UTF-8 BOM付き（Excel対応）
+  const bom = '\uFEFF';
+  const blob = new Blob([bom + csv], { type: 'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const now = new Date();
+  const ymd = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+  a.href = url;
+  a.download = `変更履歴_${ymd}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+function renderChangeHistoryList() {
+  if (!state._historyFilter) state._historyFilter = defaultHistoryFilter();
+  const filter = state._historyFilter;
+  const all = state.change_history || [];
+  const filtered = filterChangeHistory(all, filter);
+  // 変更日時降順
+  filtered.sort((a, b) => (b.changed_at || '').localeCompare(a.changed_at || ''));
+
+  // 統計
+  const cntApproved = filtered.filter(h => h.change_type === 'request').length;
+  const cntAdmin = filtered.filter(h => h.change_type === 'admin').length;
+  const cntRejected = filtered.filter(h => h.change_type === 'rejected').length;
+
+  // 戻り先（個人別履歴の場合は画面2、そうでなければ管理画面）
+  const backAction = filter.emp_id ? 'back-plan-change-menu' : 'back-admin';
+  const backLabel = filter.emp_id ? '← 変更項目選択へ戻る' : '← 管理画面へ戻る';
+
+  // 在籍中の従業員（プルダウン用）
+  const empOptions = state.employees.filter(e => (e.status || 'active') === 'active');
+
+  let html = `
+    <div class="nav-row">
+      <button class="nav-btn" data-action="${backAction}">${backLabel}</button>
+    </div>
+    <div class="card">
+      <h2>📜 勤務計画変更履歴</h2>
+
+      <div class="history-filter-panel">
+        <div class="history-filter-row">
+          <label>期間：</label>
+          <input type="date" value="${filter.from}" data-action="history-filter-from" />
+          <span style="color:#999;">〜</span>
+          <input type="date" value="${filter.to}" data-action="history-filter-to" />
+        </div>
+        <div class="history-filter-row">
+          <label>個人：</label>
+          <select data-action="history-filter-emp" style="min-width:180px;">
+            <option value="">全員</option>
+            ${empOptions.map(e => `<option value="${e.id}" ${filter.emp_id === e.id ? 'selected' : ''}>${e.name}</option>`).join('')}
+          </select>
+        </div>
+        <div class="history-filter-row">
+          <label>種別：</label>
+          <div class="history-filter-checks">
+            <label><input type="checkbox" data-action="history-filter-mode-approved" ${filter.mode_approved ? 'checked' : ''} /> ✅ 承認済み</label>
+            <label><input type="checkbox" data-action="history-filter-mode-admin" ${filter.mode_admin ? 'checked' : ''} /> ⚡ 即変更</label>
+            <label><input type="checkbox" data-action="history-filter-mode-rejected" ${filter.mode_rejected ? 'checked' : ''} /> ❌ 却下</label>
+          </div>
+        </div>
+        <div class="history-filter-row">
+          <label>タイプ：</label>
+          <div class="history-filter-checks">
+            <label><input type="checkbox" data-action="history-filter-type-day" ${filter.type_day ? 'checked' : ''} /> 🔄 勤務日変更</label>
+            <label><input type="checkbox" data-action="history-filter-type-time" ${filter.type_time ? 'checked' : ''} /> ⏰ 勤務時間変更</label>
+          </div>
+        </div>
+        <div class="history-filter-actions">
+          <button class="btn-history-reset" data-action="history-filter-reset">🔄 フィルターをリセット</button>
+          <button class="btn-history-csv" data-action="history-csv-download" ${filtered.length === 0 ? 'disabled' : ''}>📥 CSVダウンロード（${filtered.length}件）</button>
+        </div>
+      </div>
+
+      <div class="history-stats-panel">
+        <div class="total">表示中 ${filtered.length}件 / 全 ${all.length}件</div>
+        <div class="breakdown">
+          <span class="approved">✅ 承認済み ${cntApproved}件</span>
+          <span class="admin">⚡ 即変更 ${cntAdmin}件</span>
+          <span class="rejected">❌ 却下 ${cntRejected}件</span>
+        </div>
+      </div>
+  `;
+
+  if (filtered.length === 0) {
+    html += `
+      <div class="history-empty">
+        <div class="icon">📭</div>
+        <div>条件に該当する履歴がありません</div>
+        <div style="font-size:0.85rem; margin-top:4px;">期間を広げる、または種別チェックを増やしてみてください</div>
+      </div>
+      </div>
+    `;
+    return html;
+  }
+
+  html += `
+      <div style="overflow-x:auto;">
+      <table class="history-table">
+        <thead>
+          <tr>
+            <th>変更日時 ↓</th>
+            <th>個人</th>
+            <th>種別</th>
+            <th>タイプ</th>
+            <th>対象日</th>
+            <th>変更内容</th>
+            <th>理由</th>
+          </tr>
+        </thead>
+        <tbody>
+  `;
+
+  filtered.forEach(h => {
+    const emp = state.employees.find(e => e.id === h.emp_id);
+    const empName = emp ? emp.name : h.emp_id;
+    const empFace = emp ? (emp.emoji || '👤') : '';
+    // 変更日時表示
+    const dt = new Date(h.changed_at);
+    const dtStr = `${dt.getMonth()+1}/${dt.getDate()} ${String(dt.getHours()).padStart(2,'0')}:${String(dt.getMinutes()).padStart(2,'0')}`;
+    // 種別バッジ
+    let modeBadge;
+    if (h.change_type === 'request') modeBadge = `<span class="change-type-badge approved">✅ 承認済み</span>`;
+    else if (h.change_type === 'admin') modeBadge = `<span class="change-type-badge admin">⚡ 即変更</span>`;
+    else if (h.change_type === 'rejected') modeBadge = `<span class="change-type-badge rejected">❌ 却下</span>`;
+    else modeBadge = `<span class="change-type-badge">${h.change_type}</span>`;
+    // タイプ
+    const typeIcon = h.type === 'day_change' ? '🔄' : '⏰';
+    const typeLabel = h.type === 'day_change' ? '勤務日' : '勤務時間';
+    // 対象日（曜日付き）
+    let targetDateStr = h.target_date;
+    if (h.target_date) {
+      const [yy, mm, dd] = h.target_date.split('-').map(Number);
+      const td = new Date(yy, mm - 1, dd);
+      const wd = ['日','月','火','水','木','金','土'][td.getDay()];
+      targetDateStr = `${yy}/${String(mm).padStart(2,'0')}/${String(dd).padStart(2,'0')} (${wd})`;
+    }
+    // 理由
+    const catClass = 'cat-' + (h.reason_category || '').replace(/[・]/g, '');
+    const noteWithReject = h.reject_reason
+      ? `${h.reason_note || ''} / 却下理由：${h.reject_reason}`
+      : (h.reason_note || '');
+
+    html += `
+      <tr>
+        <td class="datetime">${dtStr}</td>
+        <td class="emp-name">${empFace} ${empName}</td>
+        <td>${modeBadge}</td>
+        <td><span style="font-size:0.9rem;">${typeIcon}</span> ${typeLabel}</td>
+        <td>${targetDateStr}</td>
+        <td class="history-change-text">${formatHistoryChangeText(h)}</td>
+        <td>
+          <div class="reason-cell">
+            <span class="reason-cat-mini ${catClass}">${h.reason_category || ''}</span>
+            <span class="reason-note-mini">${noteWithReject || '（メモなし）'}</span>
+          </div>
+        </td>
+      </tr>
+    `;
+  });
+
+  html += `
+        </tbody>
+      </table>
+      </div>
+    </div>
+  `;
+  return html;
+}
+
 function renderQRCode() {
   // QRコード生成画面（オンラインAPI利用：api.qrserver.com）
   if (!state._qrUrl) state._qrUrl = window.location.href;
@@ -5304,13 +7566,13 @@ function renderQRCode() {
       <div class="form-hint" style="margin-bottom:14px; line-height:1.7;">
         💡 このアプリの<strong>公開URL</strong>を入力すると、スマホで読み取れるQRコードを生成します。<br>
         💡 デモ機としてお客様に見せる時に便利です。<br>
-        💡 公開URLの取得方法：<a href="https://app.netlify.com/drop" target="_blank" style="color:var(--blue);">Netlify Drop</a> にHTMLファイルをドラッグ→自動的にURL発行
+        💡 公開URLの取得方法：<a href="https://github.com" target="_blank" style="color:var(--blue);">GitHub</a> リポジトリにHTMLファイルをアップロード→GitHub Pages 自動公開
       </div>
       
       <div style="display:flex; gap:10px; align-items:end; margin-bottom:16px; flex-wrap:wrap;">
         <div style="flex:1; min-width:300px;">
           <label class="form-label">📎 公開URL</label>
-          <input type="text" id="qr-url-input" value="${url}" placeholder="https://your-demo.netlify.app" style="width:100%; padding:10px; font-size:1rem;" />
+          <input type="text" id="qr-url-input" value="${url}" placeholder="https://[ユーザー名].github.io/[リポジトリ名]/roumu_v04.html" style="width:100%; padding:10px; font-size:1rem;" />
         </div>
         <button class="primary-btn" data-action="generate-qr">🔄 QR生成</button>
         <button class="nav-btn" data-action="qr-use-current" style="background:#fafafa;">📍 現在のURL</button>
@@ -5332,9 +7594,11 @@ function renderQRCode() {
       <div style="margin-top:18px; padding:14px; background:#fff8e1; border-radius:8px; font-size:0.9rem; line-height:1.7;">
         <div style="font-weight:bold; margin-bottom:6px;">📋 デモ機として配布する手順</div>
         <ol style="margin:0; padding-left:20px;">
-          <li><a href="https://app.netlify.com/drop" target="_blank" style="color:var(--blue);">https://app.netlify.com/drop</a> にアクセス</li>
-          <li>このHTMLファイル（roumu_v04.html）を画面にドラッグ＆ドロップ</li>
-          <li>自動的に発行された URL（例：https://amazing-name-12345.netlify.app）をコピー</li>
+          <li><a href="https://github.com" target="_blank" style="color:var(--blue);">github.com</a> にアクセス → リポジトリを開く（例：marutaka-full/Repository-name-packing-a）</li>
+          <li>「Add file」→「Upload files」で roumu_v04.html をアップロード</li>
+          <li>「Commit changes」で反映</li>
+          <li>Settings → Pages → Source: main / (root) → Save</li>
+          <li>数分後、公開URLが発行される（例：https://marutaka-full.github.io/Repository-name-packing-a/roumu_v04.html）</li>
           <li>上の入力欄に貼り付けて「🔄 QR生成」</li>
           <li>「📥 PNGダウンロード」でQR画像を保存</li>
           <li>パンフレット・名刺・展示パネルに使えます 🍊</li>
@@ -5361,12 +7625,34 @@ function renderAdmin() {
   });
   let html = `
     <div class="nav-row"><button class="nav-btn" data-action="back-home">← 打刻ホームへ戻る</button></div>
+  `;
+
+  // 承認待ちバッジ（件数>0の時のみ表示）
+  const pendingCount = getTotalPendingCount();
+  if (pendingCount > 0) {
+    html += `
+      <div class="card" style="background:var(--yellow-light, #fff3c4); border-left:4px solid var(--yellow); padding:14px 18px; margin-bottom:16px;">
+        <div style="display:flex; align-items:center; gap:14px; flex-wrap:wrap;">
+          <div style="font-size:2rem;">📬</div>
+          <div style="flex:1; min-width:200px;">
+            <strong style="color:#b87b00; font-size:1.05rem;">承認待ちの申請が ${pendingCount}件 あります</strong><br>
+            <span style="font-size:0.85rem; color:#666;">勤務計画変更の承認をお願いします。</span>
+          </div>
+          <button class="approval-badge-btn" data-action="go-approval-list">📬 承認待ち ${pendingCount}件 →</button>
+        </div>
+      </div>
+    `;
+  }
+
+  html += `
     <div class="card admin-section">
       <h2>👥 従業員マスタ</h2>
       <div style="margin-bottom:14px; display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
         <button class="primary-btn" data-action="new-employee">＋ 新規登録</button>
         <button class="nav-btn" data-action="go-work-plan" style="background:var(--blue-light); color:var(--blue); border-color:var(--blue); font-weight:bold;">📅 月間勤務計画</button>
         <button class="nav-btn" data-action="go-daily-plan" style="background:var(--green-bg); color:var(--green); border-color:var(--green); font-weight:bold;">🗓️ 日別計画作成</button>
+        <button class="nav-btn" data-action="go-plan-change" style="background:var(--purple-bg); color:var(--purple); border-color:var(--purple); font-weight:bold;">📅 勤務計画変更</button>
+        <button class="nav-btn" data-action="go-change-history" style="background:#fafafa; color:#555; border-color:#999; font-weight:bold;">📜 全変更履歴</button>
         <button class="nav-btn" data-action="go-shift-overview" style="background:#fff3e0; color:var(--orange); border-color:var(--orange); font-weight:bold;">📊 シフト一覧</button>
         <button class="nav-btn" data-action="go-punch-logs" style="background:#f3e5f5; color:#7b1fa2; border-color:#7b1fa2; font-weight:bold;">📋 打刻ログ詳細</button>
         <button class="nav-btn" data-action="go-tasks-master" style="background:#e0f2f1; color:#00897b; border-color:#00897b; font-weight:bold;">⚙️ 作業マスタ</button>
@@ -5819,6 +8105,413 @@ async function handleClick(e) {
     state._qrUrl = window.location.href;
     state.screen = 'qr';
     render();
+  } else if (a === 'go-plan-change') {
+    state.screen = 'plan_change_index';
+    render();
+  } else if (a === 'go-plan-change-emp') {
+    // 画面2「変更項目選択」へ遷移
+    const empId = e.currentTarget.dataset.empId;
+    state._planChangeEmpId = empId;
+    state.screen = 'plan_change_menu';
+    render();
+  } else if (a === 'back-plan-change-index') {
+    // 画面2から画面1（個人選択）へ戻る
+    state.screen = 'plan_change_index';
+    render();
+  } else if (a === 'go-plan-day-change') {
+    // 画面3-A 勤務日変更 へ遷移
+    if (!state._planChangeYM) state._planChangeYM = currentYM();
+    state._pendingDayChanges = [];
+    state._planChangeReason = { category: '本人都合', note: '' };
+    state._planChangeMode = 'request';
+    state.screen = 'plan_day_change';
+    render();
+  } else if (a === 'back-plan-change-menu') {
+    // 画面3から画面2へ戻る
+    state.screen = 'plan_change_menu';
+    render();
+  } else if (a === 'pdc-prev-month') {
+    const { year, month } = state._planChangeYM;
+    const d = new Date(year, month - 2, 1);
+    state._planChangeYM = { year: d.getFullYear(), month: d.getMonth() + 1 };
+    render();
+  } else if (a === 'pdc-next-month') {
+    const { year, month } = state._planChangeYM;
+    const d = new Date(year, month, 1);
+    state._planChangeYM = { year: d.getFullYear(), month: d.getMonth() + 1 };
+    render();
+  } else if (a === 'pdc-this-month') {
+    state._planChangeYM = currentYM();
+    render();
+  } else if (a === 'pdc-toggle-day') {
+    // 日付セルクリック → 出勤⇔休日のトグルを変更予定リストに追加/削除
+    const day = parseInt(e.currentTarget.dataset.day, 10);
+    const { year, month } = state._planChangeYM;
+    const empId = state._planChangeEmpId;
+    const existIdx = state._pendingDayChanges.findIndex(p => p.year === year && p.month === month && p.day === day);
+    if (existIdx >= 0) {
+      state._pendingDayChanges.splice(existIdx, 1);
+      render();
+      return;
+    }
+    const dailyPlan = getDailyPlan(empId, year, month);
+    const days = (dailyPlan && dailyPlan.days) || {};
+    const dayData = days[day];
+    const pattern = getPattern(empId);
+    if (dayData && dayData.start && dayData.end) {
+      state._pendingDayChanges.push({
+        year, month, day,
+        from: 'work', to: 'off',
+        fromTime: `${dayData.start}〜${dayData.end}`,
+        toTime: null
+      });
+    } else {
+      const dt = new Date(year, month - 1, day);
+      const dow = dt.getDay();
+      const dowKey = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'][dow];
+      const patternTime = pattern && pattern[dowKey];
+      state._pendingDayChanges.push({
+        year, month, day,
+        from: 'off', to: 'work',
+        fromTime: null,
+        toTime: patternTime ? `${patternTime.start}〜${patternTime.end}` : null
+      });
+    }
+    render();
+  } else if (a === 'pdc-remove-pending') {
+    const day = parseInt(e.currentTarget.dataset.day, 10);
+    const year = parseInt(e.currentTarget.dataset.year, 10);
+    const month = parseInt(e.currentTarget.dataset.month, 10);
+    const idx = state._pendingDayChanges.findIndex(p => p.year === year && p.month === month && p.day === day);
+    if (idx >= 0) {
+      state._pendingDayChanges.splice(idx, 1);
+      render();
+    }
+  } else if (a === 'pdc-clear-all') {
+    if (state._pendingDayChanges.length === 0) return;
+    if (confirm(`選択中の変更 ${state._pendingDayChanges.length}件 を全てクリアしますか？`)) {
+      state._pendingDayChanges = [];
+      render();
+    }
+  } else if (a === 'pdc-change-reason-category') {
+    if (!state._planChangeReason) state._planChangeReason = { category: '本人都合', note: '' };
+    state._planChangeReason.category = e.currentTarget.value;
+  } else if (a === 'pdc-change-reason-note') {
+    if (!state._planChangeReason) state._planChangeReason = { category: '本人都合', note: '' };
+    state._planChangeReason.note = e.currentTarget.value;
+  } else if (a === 'pdc-change-mode') {
+    state._planChangeMode = e.currentTarget.value;
+    render();
+  } else if (a === 'pdc-submit') {
+    // 勤務日変更の申告/即変更を実行
+    const empId = state._planChangeEmpId;
+    const emp = state.employees.find(x => x.id === empId);
+    const pendings = [...state._pendingDayChanges];
+    const mode = state._planChangeMode;
+    const reason = state._planChangeReason || { category: '本人都合', note: '' };
+    if (pendings.length === 0) return;
+    const modeName = mode === 'request' ? '本人申告として登録' : '管理者権限で即変更';
+    if (!confirm(`「${emp ? emp.name : ''}」さんの勤務日変更 ${pendings.length}件 を${modeName}します。よろしいですか？`)) return;
+    try {
+      const count = await processPendingDayChanges(empId, pendings, reason, mode);
+      // 状態をリセット
+      state._pendingDayChanges = [];
+      state._planChangeReason = { category: '本人都合', note: '' };
+      // 画面2へ戻る
+      state.screen = 'plan_change_menu';
+      render();
+      const msg = mode === 'request'
+        ? `📤 ${count}件の勤務日変更を申告として登録しました。管理者承認後に反映されます。`
+        : `⚡ ${count}件の勤務日変更を即時反映しました。本人通知を作成しました。`;
+      setTimeout(() => alert(msg), 100);
+    } catch (err) {
+      console.error('勤務日変更処理エラー:', err);
+      alert('処理中にエラーが発生しました：' + err.message);
+    }
+  } else if (a === 'go-plan-time-change') {
+    // 画面3-B 勤務時間変更 へ遷移
+    if (!state._planChangeYM) state._planChangeYM = currentYM();
+    state._pendingTimeChanges = [];
+    state._editingDay = null;
+    state._editingYM = null;
+    state._editingNewTime = null;
+    state._planChangeReason = { category: '本人都合', note: '' };
+    state._planChangeMode = 'request';
+    state.screen = 'plan_time_change';
+    render();
+  } else if (a === 'ptc-prev-month') {
+    const { year, month } = state._planChangeYM;
+    const d = new Date(year, month - 2, 1);
+    state._planChangeYM = { year: d.getFullYear(), month: d.getMonth() + 1 };
+    state._editingDay = null;
+    render();
+  } else if (a === 'ptc-next-month') {
+    const { year, month } = state._planChangeYM;
+    const d = new Date(year, month, 1);
+    state._planChangeYM = { year: d.getFullYear(), month: d.getMonth() + 1 };
+    state._editingDay = null;
+    render();
+  } else if (a === 'ptc-this-month') {
+    state._planChangeYM = currentYM();
+    state._editingDay = null;
+    render();
+  } else if (a === 'ptc-select-day') {
+    // 日付セル選択 → 編集パネル開く
+    const day = parseInt(e.currentTarget.dataset.day, 10);
+    const { year, month } = state._planChangeYM;
+    const empId = state._planChangeEmpId;
+    // 既存の変更予定があれば、その時刻を初期値に
+    const existing = state._pendingTimeChanges.find(p => p.year === year && p.month === month && p.day === day);
+    if (existing) {
+      state._editingDay = day;
+      state._editingYM = { year, month };
+      state._editingNewTime = { start: existing.to.start, end: existing.to.end };
+    } else {
+      // 元の計画時刻を初期値に
+      const dailyPlan = getDailyPlan(empId, year, month);
+      const days = (dailyPlan && dailyPlan.days) || {};
+      const dayData = days[day];
+      if (!dayData || !dayData.start || !dayData.end) return; // 出勤日でなければ何もしない
+      state._editingDay = day;
+      state._editingYM = { year, month };
+      state._editingNewTime = { start: dayData.start, end: dayData.end };
+    }
+    render();
+  } else if (a === 'ptc-change-start-time') {
+    if (!state._editingNewTime) state._editingNewTime = { start: '09:00', end: '17:00' };
+    state._editingNewTime.start = e.currentTarget.value;
+    render();
+  } else if (a === 'ptc-change-end-time') {
+    if (!state._editingNewTime) state._editingNewTime = { start: '09:00', end: '17:00' };
+    state._editingNewTime.end = e.currentTarget.value;
+    render();
+  } else if (a === 'ptc-cancel-edit') {
+    state._editingDay = null;
+    state._editingYM = null;
+    state._editingNewTime = null;
+    render();
+  } else if (a === 'ptc-add-pending') {
+    // 編集パネルから「変更予定に追加」
+    const day = state._editingDay;
+    const { year, month } = state._editingYM || {};
+    const empId = state._planChangeEmpId;
+    if (!day || !year || !month) return;
+    const dailyPlan = getDailyPlan(empId, year, month);
+    const days = (dailyPlan && dailyPlan.days) || {};
+    const dayData = days[day];
+    if (!dayData || !dayData.start || !dayData.end) return;
+    const newTime = state._editingNewTime || { start: dayData.start, end: dayData.end };
+    // 同じ時刻ならスキップ
+    if (newTime.start === dayData.start && newTime.end === dayData.end) {
+      alert('時刻が元と同じです。変更予定には追加されません。');
+      return;
+    }
+    // 既存があれば置き換え
+    const existIdx = state._pendingTimeChanges.findIndex(p => p.year === year && p.month === month && p.day === day);
+    const entry = {
+      year, month, day,
+      from: { start: dayData.start, end: dayData.end },
+      to: { start: newTime.start, end: newTime.end },
+      fromTime: `${dayData.start}〜${dayData.end}`,
+      toTime: `${newTime.start}〜${newTime.end}`
+    };
+    if (existIdx >= 0) {
+      state._pendingTimeChanges[existIdx] = entry;
+    } else {
+      state._pendingTimeChanges.push(entry);
+    }
+    state._editingDay = null;
+    state._editingYM = null;
+    state._editingNewTime = null;
+    render();
+  } else if (a === 'ptc-remove-pending') {
+    const day = parseInt(e.currentTarget.dataset.day, 10);
+    const year = parseInt(e.currentTarget.dataset.year, 10);
+    const month = parseInt(e.currentTarget.dataset.month, 10);
+    const idx = state._pendingTimeChanges.findIndex(p => p.year === year && p.month === month && p.day === day);
+    if (idx >= 0) {
+      state._pendingTimeChanges.splice(idx, 1);
+      render();
+    }
+  } else if (a === 'ptc-clear-all') {
+    if (state._pendingTimeChanges.length === 0) return;
+    if (confirm(`選択中の変更 ${state._pendingTimeChanges.length}件 を全てクリアしますか？`)) {
+      state._pendingTimeChanges = [];
+      state._editingDay = null;
+      state._editingYM = null;
+      state._editingNewTime = null;
+      render();
+    }
+  } else if (a === 'ptc-change-reason-category') {
+    if (!state._planChangeReason) state._planChangeReason = { category: '本人都合', note: '' };
+    state._planChangeReason.category = e.currentTarget.value;
+  } else if (a === 'ptc-change-reason-note') {
+    if (!state._planChangeReason) state._planChangeReason = { category: '本人都合', note: '' };
+    state._planChangeReason.note = e.currentTarget.value;
+  } else if (a === 'ptc-change-mode') {
+    state._planChangeMode = e.currentTarget.value;
+    render();
+  } else if (a === 'ptc-submit') {
+    // 勤務時間変更の申告/即変更を実行
+    const empId = state._planChangeEmpId;
+    const emp = state.employees.find(x => x.id === empId);
+    const pendings = [...state._pendingTimeChanges];
+    const mode = state._planChangeMode;
+    const reason = state._planChangeReason || { category: '本人都合', note: '' };
+    if (pendings.length === 0) return;
+    const modeName = mode === 'request' ? '本人申告として登録' : '管理者権限で即変更';
+    if (!confirm(`「${emp ? emp.name : ''}」さんの勤務時間変更 ${pendings.length}件 を${modeName}します。よろしいですか？`)) return;
+    try {
+      const count = await processPendingTimeChanges(empId, pendings, reason, mode);
+      // 状態をリセット
+      state._pendingTimeChanges = [];
+      state._editingDay = null;
+      state._editingYM = null;
+      state._editingNewTime = null;
+      state._planChangeReason = { category: '本人都合', note: '' };
+      // 画面2へ戻る
+      state.screen = 'plan_change_menu';
+      render();
+      const msg = mode === 'request'
+        ? `📤 ${count}件の勤務時間変更を申告として登録しました。管理者承認後に反映されます。`
+        : `⚡ ${count}件の勤務時間変更を即時反映しました。本人通知を作成しました。`;
+      setTimeout(() => alert(msg), 100);
+    } catch (err) {
+      console.error('勤務時間変更処理エラー:', err);
+      alert('処理中にエラーが発生しました：' + err.message);
+    }
+  } else if (a === 'go-plan-emp-history') {
+    // 画面2（変更項目選択）→ 個人別変更履歴
+    state._historyFilter = defaultHistoryFilter();
+    state._historyFilter.emp_id = state._planChangeEmpId || '';
+    state.screen = 'change_history';
+    render();
+  } else if (a === 'go-plan-change-history') {
+    // 画面1（個人選択）→ 全変更履歴
+    state._historyFilter = defaultHistoryFilter();
+    state.screen = 'change_history';
+    render();
+  } else if (a === 'go-change-history') {
+    // 管理画面 → 全変更履歴
+    state._historyFilter = defaultHistoryFilter();
+    state.screen = 'change_history';
+    render();
+  } else if (a === 'history-filter-from') {
+    state._historyFilter.from = e.currentTarget.value;
+    render();
+  } else if (a === 'history-filter-to') {
+    state._historyFilter.to = e.currentTarget.value;
+    render();
+  } else if (a === 'history-filter-emp') {
+    state._historyFilter.emp_id = e.currentTarget.value;
+    render();
+  } else if (a === 'history-filter-mode-approved') {
+    state._historyFilter.mode_approved = e.currentTarget.checked;
+    render();
+  } else if (a === 'history-filter-mode-admin') {
+    state._historyFilter.mode_admin = e.currentTarget.checked;
+    render();
+  } else if (a === 'history-filter-mode-rejected') {
+    state._historyFilter.mode_rejected = e.currentTarget.checked;
+    render();
+  } else if (a === 'history-filter-type-day') {
+    state._historyFilter.type_day = e.currentTarget.checked;
+    render();
+  } else if (a === 'history-filter-type-time') {
+    state._historyFilter.type_time = e.currentTarget.checked;
+    render();
+  } else if (a === 'history-filter-reset') {
+    // 個人IDは保持（画面2から来た場合）
+    const keepEmpId = state._historyFilter ? state._historyFilter.emp_id : '';
+    state._historyFilter = defaultHistoryFilter();
+    state._historyFilter.emp_id = keepEmpId;
+    render();
+  } else if (a === 'history-csv-download') {
+    try {
+      const filter = state._historyFilter;
+      const filtered = filterChangeHistory(state.change_history || [], filter);
+      filtered.sort((a, b) => (b.changed_at || '').localeCompare(a.changed_at || ''));
+      if (filtered.length === 0) {
+        alert('ダウンロード対象の履歴がありません');
+        return;
+      }
+      downloadHistoryCSV(filtered);
+    } catch (err) {
+      console.error('CSV出力エラー:', err);
+      alert('CSV出力でエラーが発生しました：' + err.message);
+    }
+  } else if (a === 'plan-search-input') {
+    if (!state._planChangeFilter) state._planChangeFilter = { search: '', sortByChange: false, activeOnly: true };
+    state._planChangeFilter.search = e.currentTarget.value;
+    // 検索ボックスはフォーカス維持のためrenderしない、リストだけ再生成
+    const grid = document.querySelector('.employee-grid');
+    if (grid) {
+      // 簡易再描画：画面全体を再renderしてフォーカスを再設定
+      const cursorPos = e.currentTarget.selectionStart;
+      render();
+      const newInput = document.getElementById('plan-search');
+      if (newInput) {
+        newInput.focus();
+        newInput.setSelectionRange(cursorPos, cursorPos);
+      }
+    }
+  } else if (a === 'plan-toggle-active') {
+    if (!state._planChangeFilter) state._planChangeFilter = { search: '', sortByChange: false, activeOnly: true };
+    state._planChangeFilter.activeOnly = e.currentTarget.checked;
+    render();
+  } else if (a === 'plan-toggle-sort') {
+    if (!state._planChangeFilter) state._planChangeFilter = { search: '', sortByChange: false, activeOnly: true };
+    state._planChangeFilter.sortByChange = e.currentTarget.checked;
+    render();
+  } else if (a === 'go-approval-list') {
+    state.screen = 'approval_list';
+    render();
+  } else if (a === 'approve-request') {
+    const requestId = e.currentTarget.dataset.requestId;
+    const req = state.change_requests.find(r => r.request_id === requestId);
+    if (!req) return;
+    const emp = state.employees.find(x => x.id === req.emp_id);
+    const empName = emp ? emp.name : '';
+    const summary = formatChangeMessage(req);
+    if (!confirm(`「${empName}」さんの ${req.target_date} の変更申請を承認しますか？\n\n${summary}\n\n承認すると勤務計画が自動更新され、本人通知が作成されます。`)) return;
+    try {
+      await approveChangeRequest(requestId);
+      render();
+      setTimeout(() => alert(`✅ 承認しました。勤務計画を更新し、本人通知を作成しました。`), 100);
+    } catch (err) {
+      console.error('承認エラー:', err);
+      alert('承認処理でエラーが発生しました：' + err.message);
+    }
+  } else if (a === 'reject-request') {
+    const requestId = e.currentTarget.dataset.requestId;
+    const req = state.change_requests.find(r => r.request_id === requestId);
+    if (!req) return;
+    const emp = state.employees.find(x => x.id === req.emp_id);
+    const empName = emp ? emp.name : '';
+    const rejectReason = prompt(`「${empName}」さんの ${req.target_date} の変更申請を却下します。\n\n却下理由（任意・本人通知に表示）：`, '');
+    if (rejectReason === null) return; // キャンセル
+    try {
+      await rejectChangeRequest(requestId, rejectReason);
+      render();
+      setTimeout(() => alert(`❌ 却下しました。本人通知を作成しました。`), 100);
+    } catch (err) {
+      console.error('却下エラー:', err);
+      alert('却下処理でエラーが発生しました：' + err.message);
+    }
+  } else if (a === 'toggle-notif-panel') {
+    const empId = e.currentTarget.dataset.empId;
+    if (!state._notifPanelOpen) state._notifPanelOpen = {};
+    state._notifPanelOpen[empId] = !state._notifPanelOpen[empId];
+    render();
+  } else if (a === 'confirm-notif') {
+    const notifId = e.currentTarget.dataset.notifId;
+    try {
+      await markNotificationAsRead(notifId);
+      render();
+    } catch (err) {
+      console.error('通知既読化エラー:', err);
+      alert('処理中にエラーが発生しました：' + err.message);
+    }
   } else if (a === 'go-prices-master') {
     state._pricesBuf = null;
     state.screen = 'prices_master';
@@ -6413,6 +9106,10 @@ async function bootstrap() {
     state.work_materials = await loadData(STORAGE_KEYS.WORK_MATERIALS, []);
     state.work_records = await loadData(STORAGE_KEYS.WORK_RECORDS, []);
     state.app_settings = await loadData(STORAGE_KEYS.APP_SETTINGS, DEFAULT_APP_SETTINGS);
+    // v0.7 勤務計画変更
+    state.change_requests = await loadData(STORAGE_KEYS.CHANGE_REQUESTS, []);
+    state.change_history = await loadData(STORAGE_KEYS.CHANGE_HISTORY, []);
+    state.employee_notifications = await loadData(STORAGE_KEYS.EMPLOYEE_NOTIFICATIONS, []);
     // データ整合性チェック：マスタが空または不正なら DEFAULT で再初期化
     if (!Array.isArray(state.employees) || state.employees.length === 0) {
       state.employees = JSON.parse(JSON.stringify(DEFAULT_EMPLOYEES));
