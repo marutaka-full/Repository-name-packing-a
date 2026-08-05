@@ -122,7 +122,18 @@ function render(){
     h+=`<div class="ok">✅ 接頭辞なしのキーはありません。アプリ同士の混線はありません。</div>`;
   }
   h+=`<button class="primary" onclick="dl()">📥 まるごと書き出す（JSON）</button>
-      <button onclick="location.reload()">🔄 読み直す</button></div>`;
+      <button onclick="location.reload()">🔄 読み直す</button>`;
+  if((cnt.old||0)>0){
+    h+=`<div style="margin-top:16px;padding:14px;background:#fff8ef;border-left:4px solid var(--orange);border-radius:8px;">
+      <strong style="color:var(--orange);">🔧 いますぐ整理する</strong>
+      <div class="hint" style="margin:6px 0 10px;">
+        接頭辞なしの ${cnt.old} 件を、味采専用の置き場所（ajisai_pc_）へ移し、元のキーを消します。<br>
+        味采アプリを上げる前でも、これだけで混線は解消します。<strong>先に「まるごと書き出す」で控えを取ってから</strong>押してください。
+      </div>
+      <button class="primary" style="background:var(--orange);border-color:var(--orange);" onclick="fixNow()">🔧 味采へ移して整理する</button>
+    </div>`;
+  }
+  h+=`</div>`;
 
   for(const [g,title,note] of [
     ['fas','🍊 ファス版（fas_pc_）','ファス パッケージセンター打刻アプリ専用。他アプリからは触られません。'],
@@ -158,6 +169,23 @@ function dl(){
   a.href=u;a.download='storage_dump_'+new Date().toISOString().slice(0,10)+'.json';
   document.body.appendChild(a);a.click();document.body.removeChild(a);
   setTimeout(()=>URL.revokeObjectURL(u),1000);
+}
+
+// 接頭辞なしのキーを味采専用（ajisai_pc_）へ移し、元を消す。これ1回で混線が解消する。
+function fixNow(){
+  const ks=[];for(let i=0;i<localStorage.length;i++){const k=localStorage.key(i);if(LEGACY.includes(k))ks.push(k);}
+  if(ks.length===0){alert('接頭辞なしのキーはありません。すでに整理済みです。');return;}
+  if(!confirm('接頭辞なしの '+ks.length+' 件を、味采専用の置き場所（ajisai_pc_）へ移します。\n元のキーは削除します。\n\n先に「📥 まるごと書き出す」で控えを取りましたか？\n\n続けますか？'))return;
+  let moved=0,skipped=0,removed=0;
+  for(const k of ks){
+    const nk=AJI+k, v=localStorage.getItem(k);
+    if(localStorage.getItem(nk)!==null){skipped++;}
+    else{localStorage.setItem(nk,v);moved++;}
+  }
+  for(const k of ks){localStorage.removeItem(k);removed++;}
+  localStorage.setItem(AJI+'migrated_at',new Date().toISOString());
+  alert('整理しました。\n\n味采へ移した：'+moved+'件\nすでにあったので据え置き：'+skipped+'件\n元のキーを削除：'+removed+'件');
+  render();
 }
 
 function delOld(){
