@@ -45,7 +45,7 @@
   } catch (e) {}
 })();
 </script>
-<title>ファス パッケージセンター 打刻システム v1.2</title>
+<title>ファス パッケージセンター 打刻システム v1.4</title>
 <style>
   :root {
     --green: #1d9e75;
@@ -1639,7 +1639,7 @@
 
 <main id="app"></main>
 
-<div class="footer-note">ファス版 v1.2（まる労務 v0.4 ベース）<span id="storage-mode-note"></span> ／ <a href="javascript:if(confirm('全データを初期化してリロードします。よろしいですか？')){localStorage.clear();location.hash='';location.reload();}" style="color:#999; text-decoration:underline; font-size:0.85rem;">🆘 緊急リセット</a></div>
+<div class="footer-note">ファス版 v1.4（まる労務 v0.4 ベース）<span id="storage-mode-note"></span> ／ <a href="javascript:if(confirm('全データを初期化してリロードします。よろしいですか？')){localStorage.clear();location.hash='';location.reload();}" style="color:#999; text-decoration:underline; font-size:0.85rem;">🆘 緊急リセット</a></div>
 
 <script>
 // ストレージモードをフッターに表示
@@ -1655,38 +1655,53 @@ document.addEventListener('DOMContentLoaded', function() {
 // データ管理
 // ===========================================
 
+// 保存先のキーには必ず接頭辞を付ける。
+// localStorage は「オリジン（https://〇〇.github.io）」単位で共有されるため、
+// 同じ GitHub Pages に置いた別のアプリと素のキー名（employees など）がぶつかり、
+// 互いのデータを上書きしてしまう。接頭辞でこのアプリ専用の領域に分ける。
 const STORAGE_KEYS = {
-  EMPLOYEES: 'employees',
-  WORK_ITEMS: 'work_items',
-  PUNCHES: 'punches',
-  PENDING_SESSIONS: 'pending_sessions',
-  ACTIVE_SESSIONS: 'active_sessions',
-  WORK_PLANS: 'work_plans',
-  WORK_PATTERNS: 'work_patterns',
-  DAILY_PLANS: 'daily_plans',
-  WORK_TASKS: 'work_tasks',       // 作業マスタ（親＋全体寄与）
-  WORK_PRODUCTS: 'work_products', // 品目マスタ
-  WORK_PRICES: 'work_prices',     // 単価マスタ（作業×品目）
-  WORK_MATERIALS: 'work_materials', // 包材費マスタ（作業×品目）
-  AJISAI_PRICES: 'ajisai_prices', // 味采パッケージ確定単価（独立参照表・案C 2026-06-21）
-  WORK_RECORDS: 'work_records',   // 作業記録（出来高付き・v0.6新規）
-  APP_SETTINGS: 'app_settings',   // アプリ設定（配賦率など）
+  EMPLOYEES: 'fas_pc_employees',
+  WORK_ITEMS: 'fas_pc_work_items',
+  PUNCHES: 'fas_pc_punches',
+  PENDING_SESSIONS: 'fas_pc_pending_sessions',
+  ACTIVE_SESSIONS: 'fas_pc_active_sessions',
+  WORK_PLANS: 'fas_pc_work_plans',
+  WORK_PATTERNS: 'fas_pc_work_patterns',
+  DAILY_PLANS: 'fas_pc_daily_plans',
+  WORK_TASKS: 'fas_pc_work_tasks',       // 作業マスタ（親＋全体寄与）
+  WORK_PRODUCTS: 'fas_pc_work_products', // 品目マスタ
+  WORK_PRICES: 'fas_pc_work_prices',     // 単価マスタ（作業×品目）
+  WORK_MATERIALS: 'fas_pc_work_materials', // 包材費マスタ（作業×品目）
+  AJISAI_PRICES: 'fas_pc_ajisai_prices', // 味采パッケージ確定単価（独立参照表・案C 2026-06-21）
+  WORK_RECORDS: 'fas_pc_work_records',   // 作業記録（出来高付き・v0.6新規）
+  APP_SETTINGS: 'fas_pc_app_settings',   // アプリ設定（配賦率など）
   // v0.7 勤務計画変更
-  CHANGE_REQUESTS: 'change_requests',         // 申請データ（承認待ち）
-  CHANGE_HISTORY: 'change_history',           // 履歴データ（給与計算根拠資料）
-  EMPLOYEE_NOTIFICATIONS: 'employee_notifications', // 本人通知バナー
+  CHANGE_REQUESTS: 'fas_pc_change_requests',         // 申請データ（承認待ち）
+  CHANGE_HISTORY: 'fas_pc_change_history',           // 履歴データ（給与計算根拠資料）
+  EMPLOYEE_NOTIFICATIONS: 'fas_pc_employee_notifications', // 本人通知バナー
   // v0.7 労働時間計画
-  LABOR_PLAN: 'labor_plan',                   // 個人別年度計画（目標所得＋月別計画）
+  LABOR_PLAN: 'fas_pc_labor_plan',                   // 個人別年度計画（目標所得＋月別計画）
   // 打刻もれ修正（管理者の上書き訂正・履歴）
-  PUNCH_EDITS: 'punch_edits',
+  PUNCH_EDITS: 'fas_pc_punch_edits',
   // ファス版 v1.0：拠点マスタと端末の拠点設定
-  SITES: 'sites',
-  DEVICE_SITE: 'device_site',
-  ADMIN_PIN: 'admin_pin',
+  SITES: 'fas_pc_sites',
+  DEVICE_SITE: 'fas_pc_device_site',
+  ADMIN_PIN: 'fas_pc_admin_pin',
 };
 
 // 管理画面の初期パスワード。設定画面で必ず変更してもらう
 const DEFAULT_ADMIN_PIN = '0000';
+
+// ===========================================
+// アプリの更新（バージョン管理）
+// ===========================================
+// このアプリは1枚のHTMLで、GitHub Pages に置いてある。
+// 新しい版を上書きしても、端末のブラウザが古い版をキャッシュしていると気づけない。
+// そこで、同じフォルダに置いた version.json を見にいって、版が違えばお知らせを出す。
+// ★データは消えない：保存先は端末の localStorage で、HTMLを入れ替えても中身はそのまま残る。
+const APP_VERSION = '1.4';
+const VERSION_FILE = 'version.json';
+const UPDATE_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;  // 6時間に1回まで（現場の通信を無駄に使わない）
 
 // 拠点マスタ（ファス版）：各拠点のパッケージセンターで同じHTMLを使い、端末ごとに拠点を設定する
 const DEFAULT_SITES = [
@@ -1695,8 +1710,32 @@ const DEFAULT_SITES = [
   { id: 'S03', name: '小牧支店' },
 ];
 
-// ファス版：サンプル従業員は入れない（管理画面→従業員マスタ→＋新規登録 で実名を登録する）
-const DEFAULT_EMPLOYEES = [];
+// ファス版：3拠点それぞれに10名分の枠を用意しておく。
+// 名前は仮のもの。管理画面→従業員マスタ→編集 で実名・時給に置き換えて使う。
+// 時給は入れていない（推測値を入れると、それが独り歩きするため）。
+const DEFAULT_EMPLOYEES = (() => {
+  const list = [];
+  const groups = [
+    { prefix: 'T', site: '鳥栖支店',   label: '鳥栖' },
+    { prefix: 'E', site: 'えびの本社', label: 'えびの' },
+    { prefix: 'K', site: '小牧支店',   label: '小牧' },
+  ];
+  for (const g of groups) {
+    for (let i = 1; i <= 10; i++) {
+      list.push({
+        id: g.prefix + String(i).padStart(3, '0'),
+        name: `${g.label}${String(i).padStart(2, '0')}（未設定）`,
+        emoji: '👤',
+        hourly_rate: null,
+        fuyo_type: 'inside',
+        location: g.site,
+        monthly_contract_hours: 120,
+        status: 'active',
+      });
+    }
+  }
+  return list;
+})();
 
 const DEFAULT_WORK_ITEMS = [
   { id: 'W01', name: 'きゅうりパッキング', emoji: '🥒' },
@@ -2006,6 +2045,9 @@ const state = {
   _adminUnlocked: false,
   _pinBuf: '',
   _pinError: '',
+  _updateInfo: null,
+  _updateCheckedAt: null,
+  _updateCheckError: null,
 };
 
 const PUNCH_TYPES = {
@@ -2031,6 +2073,74 @@ function todayStr() {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
+// 新しい版が出ていないかを version.json で確認する
+// manual=true なら結果を必ず知らせる。自動確認のときは黙って進む（オフラインでも邪魔しない）
+async function checkForUpdate(manual) {
+  if (!manual) {
+    const last = Number(localStorage.getItem('fas_pc_last_update_check') || 0);
+    if (Date.now() - last < UPDATE_CHECK_INTERVAL_MS) return;
+  }
+  try {
+    const res = await fetch(VERSION_FILE + '?t=' + Date.now(), { cache: 'no-store' });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const info = await res.json();
+    localStorage.setItem('fas_pc_last_update_check', String(Date.now()));
+    state._updateCheckedAt = new Date().toISOString();
+    if (info && info.version && String(info.version) !== APP_VERSION) {
+      state._updateInfo = info;
+      if (manual) alert(`新しい版 v${info.version} があります。\n画面上のお知らせから更新してください。`);
+    } else {
+      state._updateInfo = null;
+      if (manual) alert(`このアプリは最新です（v${APP_VERSION}）。`);
+    }
+    render();
+  } catch (err) {
+    state._updateCheckError = String(err.message || err);
+    if (manual) alert('確認できませんでした。ネットにつながっているかご確認ください。\n（' + state._updateCheckError + '）');
+  }
+}
+
+// 新しい版に入れ替える。キャッシュを避けるため、URLの末尾に版番号を付けて開き直す
+async function applyUpdate() {
+  const info = state._updateInfo;
+  if (!info) return;
+  if (!confirm(
+    `新しい版 v${info.version} に更新します。\n\n` +
+    `打刻・従業員・単価などのデータはそのまま残ります。\n` +
+    `（データは端末の中にあり、アプリの入れ替えでは消えません）\n\n` +
+    `よろしいですか？`
+  )) return;
+  try {
+    if (window.caches && caches.keys) {
+      const ks = await caches.keys();
+      await Promise.all(ks.map(k => caches.delete(k)));
+    }
+  } catch (err) {}
+  const base = location.href.split('?')[0].split('#')[0];
+  location.replace(base + '?v=' + encodeURIComponent(info.version) + '&t=' + Date.now());
+}
+
+// 画面の上に出すお知らせ（新しい版があるときだけ）
+function renderUpdateBanner() {
+  const info = state._updateInfo;
+  if (!info) return '';
+  const notes = info.notes ? `<div style="font-size:0.85rem; color:#555; margin-top:4px;">${info.notes}</div>` : '';
+  const rel = info.released ? `<span style="font-size:0.8rem; color:#888;">（${info.released} 公開）</span>` : '';
+  return `
+    <div class="card" style="border-left:4px solid var(--orange); background:#fff8ef; padding:14px 18px; margin-bottom:16px;">
+      <div style="display:flex; align-items:center; gap:14px; flex-wrap:wrap;">
+        <div style="font-size:1.8rem;">🆕</div>
+        <div style="flex:1; min-width:200px;">
+          <strong style="color:var(--orange); font-size:1.05rem;">新しい版 v${info.version} があります</strong> ${rel}
+          <div style="font-size:0.85rem; color:#666;">いまお使いの版：v${APP_VERSION}　／　データはそのまま引き継がれます</div>
+          ${notes}
+        </div>
+        <button class="primary-btn" data-action="apply-update" style="background:var(--orange);">🔄 いま更新する</button>
+      </div>
+    </div>
+  `;
+}
+
 // ファス版：テキストファイルをダウンロードさせる（バックアップ・CSV退避で使用）
 function downloadTextFile(filename, text, mime) {
   const blob = new Blob([text], { type: (mime || 'text/plain') + ';charset=utf-8' });
@@ -2600,9 +2710,12 @@ function renderHome() {
   const hour = new Date().getHours();
   let greet = hour < 11 ? greetings[0] : (hour >= 17 ? greetings[2] : greetings[1]);
 
-  const activeEmployees = state.employees.filter(e => (e.status || 'active') === 'active');
+  // この端末の拠点の人だけを並べる（3拠点分がひとつのデータに入っているため）
+  const activeEmployees = state.employees.filter(e =>
+    (e.status || 'active') === 'active' && (!e.location || e.location === currentSite())
+  );
 
-  let html = '';
+  let html = renderUpdateBanner();
   // 初期設定の案内（拠点が未選択、または従業員が未登録のとき）
   if (!state.device_site || activeEmployees.length === 0) {
     html += `
@@ -2611,7 +2724,7 @@ function renderHome() {
         <div class="form-hint" style="margin-bottom:14px;">この端末を使い始める前に、次の順で設定してください。</div>
         <ol style="line-height:2; margin:0 0 14px 20px; padding:0;">
           <li>${state.device_site ? '✅' : '⬜'} <strong>この端末の拠点を選ぶ</strong>（管理画面 → 🔧設定 → 📍この端末の拠点）${state.device_site ? `<span style="color:var(--green);"> ― ${state.device_site}</span>` : ''}</li>
-          <li>${activeEmployees.length > 0 ? '✅' : '⬜'} <strong>従業員を登録する</strong>（管理画面 → 👥従業員マスタ → ＋新規登録）${activeEmployees.length > 0 ? `<span style="color:var(--green);"> ― ${activeEmployees.length}名</span>` : ''}</li>
+          <li>⬜ <strong>従業員の名前と時給を入れる</strong>（管理画面 → 👥従業員マスタ → 編集）${activeEmployees.length > 0 ? `<span style="color:var(--green);"> ― この拠点に ${activeEmployees.length}名の枠があります</span>` : ''}</li>
           <li>⬜ <strong>作業と品目を拠点に合わせる</strong>（管理画面 → ⚙️作業・品目マスタ）</li>
           <li>⬜ <strong>単価と包材費を入れる</strong>（作業・品目マスタ → 💰単価マスタ／📦包材費マスタ）</li>
         </ol>
@@ -5228,6 +5341,24 @@ function renderAppSettings() {
       ${!state.device_site ? '<div class="form-hint" style="color:var(--red); margin-top:10px;">⚠️ まだ選ばれていません。この端末を置く拠点を選んで確定してください。</div>' : ''}
     </div>
 
+    <div class="card admin-section" style="border-left:4px solid var(--orange);">
+      <h2 style="color:var(--orange);">🔄 アプリの更新</h2>
+      <div class="form-hint" style="margin-bottom:14px;">
+        新しい版が出ていないかを、同じ場所に置いてある <code>version.json</code> で確認します。<br>
+        <strong>更新してもデータは消えません。</strong>打刻・従業員・単価はこの端末の中に残り、そのまま引き継がれます。
+      </div>
+      <div style="background:var(--green-bg); padding:12px 14px; border-radius:6px; margin-bottom:14px; font-size:0.95rem;">
+        いまお使いの版：<strong>v${APP_VERSION}</strong>
+        ${state._updateInfo ? ` ／ <span style="color:var(--orange); font-weight:bold;">新しい版 v${state._updateInfo.version} が出ています</span>` : ' ／ 最新です'}
+        ${state._updateCheckedAt ? `<div style="font-size:0.82rem; color:#888; margin-top:4px;">最終確認：${new Date(state._updateCheckedAt).toLocaleString('ja-JP')}</div>` : ''}
+      </div>
+      <div style="display:flex; gap:10px; flex-wrap:wrap;">
+        <button class="nav-btn" data-action="check-update" style="color:var(--orange); border-color:var(--orange);">🔍 いま確認する</button>
+        ${state._updateInfo ? `<button class="primary-btn" data-action="apply-update" style="background:var(--orange);">🔄 v${state._updateInfo.version} に更新する</button>` : ''}
+        <button class="nav-btn" data-action="export-backup" style="color:var(--blue); border-color:var(--blue);">📥 念のためバックアップを取る</button>
+      </div>
+    </div>
+
     <div class="card admin-section" style="border-left:4px solid ${state.admin_pin === DEFAULT_ADMIN_PIN ? 'var(--red)' : '#7b1fa2'};">
       <h2 style="color:${state.admin_pin === DEFAULT_ADMIN_PIN ? 'var(--red)' : '#7b1fa2'};">🔒 管理画面のパスワード</h2>
       ${state.admin_pin === DEFAULT_ADMIN_PIN ? `
@@ -5671,12 +5802,15 @@ function renderEmployeeEdit() {
 
 function nextEmpId() {
   // 既存IDから次の番号を計算
+  // この端末の拠点の接頭辞で採番する（鳥栖=T／えびの=E／小牧=K、それ以外はE）
+  const site = currentSite();
+  const prefix = site === '鳥栖支店' ? 'T' : (site === '小牧支店' ? 'K' : 'E');
   let maxN = 0;
   for (const e of state.employees) {
-    const m = (e.id || '').match(/^E(\d+)$/);
+    const m = (e.id || '').match(new RegExp('^' + prefix + '(\\d+)$'));
     if (m) maxN = Math.max(maxN, parseInt(m[1], 10));
   }
-  return 'E' + String(maxN + 1).padStart(3, '0');
+  return prefix + String(maxN + 1).padStart(3, '0');
 }
 
 // ===========================================
@@ -9081,7 +9215,7 @@ function renderAdmin() {
     const totals = getTodayTotals(emp.id);
     return { ...emp, ...totals };
   });
-  let html = `
+  let html = renderUpdateBanner() + `
     <div class="nav-row"><button class="nav-btn" data-action="back-home">← 打刻ホームへ戻る</button></div>
   `;
 
@@ -9757,6 +9891,10 @@ async function handleClick(e) {
     await saveData(STORAGE_KEYS.WORK_RECORDS, state.work_records);
     alert(`退避しました。残り 打刻 ${state.punches.length} 件・記録 ${state.work_records.length} 件。`);
     render();
+  } else if (a === 'apply-update') {
+    await applyUpdate();
+  } else if (a === 'check-update') {
+    await checkForUpdate(true);
   } else if (a === 'pin-key') {
     if ((state._pinBuf || '').length >= 4) return;
     state._pinBuf = (state._pinBuf || '') + e.currentTarget.dataset.digit;
@@ -11114,8 +11252,8 @@ async function bootstrap() {
     state.device_site = await loadData(STORAGE_KEYS.DEVICE_SITE, null);
     state.admin_pin = await loadData(STORAGE_KEYS.ADMIN_PIN, DEFAULT_ADMIN_PIN);
     // データ整合性チェック：マスタが空または不正なら DEFAULT で再初期化
-    if (!Array.isArray(state.employees)) {
-      state.employees = [];
+    if (!Array.isArray(state.employees) || state.employees.length === 0) {
+      state.employees = JSON.parse(JSON.stringify(DEFAULT_EMPLOYEES));
       await saveData(STORAGE_KEYS.EMPLOYEES, state.employees);
     }
     if (!Array.isArray(state.work_tasks) || state.work_tasks.length === 0) {
@@ -11147,6 +11285,8 @@ async function bootstrap() {
   }
   updateClock();
   setInterval(updateClock, 1000);
+  // 新しい版が出ていないか確認する（6時間に1回まで／オフラインなら黙って何もしない）
+  checkForUpdate(false);
   // pending タイムアウト＆ペンディング画面の自動更新
   setInterval(async () => {
     await checkTimeouts();
