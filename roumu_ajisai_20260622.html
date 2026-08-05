@@ -45,7 +45,7 @@
   } catch (e) {}
 })();
 </script>
-<title>味采 パッケージセンター 打刻システム v1.3</title>
+<title>味采 パッケージセンター 打刻システム v1.4</title>
 <style>
   :root {
     --green: #1d9e75;
@@ -1639,7 +1639,7 @@
 
 <main id="app"></main>
 
-<div class="footer-note">味采版 v1.3（まる労務 v0.4 ベース）<span id="storage-mode-note"></span> ／ <a href="javascript:if(confirm('全データを初期化してリロードします。よろしいですか？')){localStorage.clear();location.hash='';location.reload();}" style="color:#999; text-decoration:underline; font-size:0.85rem;">🆘 緊急リセット</a></div>
+<div class="footer-note">味采版 v1.4（まる労務 v0.4 ベース）<span id="storage-mode-note"></span> ／ <a href="javascript:if(confirm('全データを初期化してリロードします。よろしいですか？')){localStorage.clear();location.hash='';location.reload();}" style="color:#999; text-decoration:underline; font-size:0.85rem;">🆘 緊急リセット</a></div>
 
 <script>
 // ストレージモードをフッターに表示
@@ -1655,36 +1655,41 @@ document.addEventListener('DOMContentLoaded', function() {
 // データ管理
 // ===========================================
 
+// 保存先のキーには必ず接頭辞を付ける。
+// localStorage は「オリジン（https://〇〇.github.io）」単位で共有されるため、
+// 同じ場所に置いた別のアプリと素のキー名（employees など）がぶつかり、
+// 互いのデータを上書きしてしまう。接頭辞でこのアプリ専用の領域に分ける。
+// ※ 接頭辞を付ける前に保存したデータは、起動時に migrateLegacyKeys() が一度だけ引っ越す。
 const STORAGE_KEYS = {
-  EMPLOYEES: 'employees',
-  WORK_ITEMS: 'work_items',
-  PUNCHES: 'punches',
-  PENDING_SESSIONS: 'pending_sessions',
-  ACTIVE_SESSIONS: 'active_sessions',
-  WORK_PLANS: 'work_plans',
-  WORK_PATTERNS: 'work_patterns',
-  DAILY_PLANS: 'daily_plans',
-  WORK_TASKS: 'work_tasks',       // 作業マスタ（親＋全体寄与）
-  WORK_PRODUCTS: 'work_products', // 品目マスタ
-  WORK_PRICES: 'work_prices',     // 単価マスタ（作業×品目）
-  WORK_MATERIALS: 'work_materials', // 包材費マスタ（作業×品目）
-  AJISAI_PRICES: 'ajisai_prices', // 味采パッケージ確定単価（独立参照表・案C 2026-06-21）
-  WORK_RECORDS: 'work_records',   // 作業記録（出来高付き・v0.6新規）
-  APP_SETTINGS: 'app_settings',   // アプリ設定（配賦率など）
+  EMPLOYEES: 'ajisai_pc_employees',
+  WORK_ITEMS: 'ajisai_pc_work_items',
+  PUNCHES: 'ajisai_pc_punches',
+  PENDING_SESSIONS: 'ajisai_pc_pending_sessions',
+  ACTIVE_SESSIONS: 'ajisai_pc_active_sessions',
+  WORK_PLANS: 'ajisai_pc_work_plans',
+  WORK_PATTERNS: 'ajisai_pc_work_patterns',
+  DAILY_PLANS: 'ajisai_pc_daily_plans',
+  WORK_TASKS: 'ajisai_pc_work_tasks',       // 作業マスタ（親＋全体寄与）
+  WORK_PRODUCTS: 'ajisai_pc_work_products', // 品目マスタ
+  WORK_PRICES: 'ajisai_pc_work_prices',     // 単価マスタ（作業×品目）
+  WORK_MATERIALS: 'ajisai_pc_work_materials', // 包材費マスタ（作業×品目）
+  AJISAI_PRICES: 'ajisai_pc_ajisai_prices', // 味采パッケージ確定単価（独立参照表・案C 2026-06-21）
+  WORK_RECORDS: 'ajisai_pc_work_records',   // 作業記録（出来高付き・v0.6新規）
+  APP_SETTINGS: 'ajisai_pc_app_settings',   // アプリ設定（配賦率など）
   // v0.7 勤務計画変更
-  CHANGE_REQUESTS: 'change_requests',         // 申請データ（承認待ち）
-  CHANGE_HISTORY: 'change_history',           // 履歴データ（給与計算根拠資料）
-  EMPLOYEE_NOTIFICATIONS: 'employee_notifications', // 本人通知バナー
+  CHANGE_REQUESTS: 'ajisai_pc_change_requests',         // 申請データ（承認待ち）
+  CHANGE_HISTORY: 'ajisai_pc_change_history',           // 履歴データ（給与計算根拠資料）
+  EMPLOYEE_NOTIFICATIONS: 'ajisai_pc_employee_notifications', // 本人通知バナー
   // v0.7 労働時間計画
-  LABOR_PLAN: 'labor_plan',                   // 個人別年度計画（目標所得＋月別計画）
+  LABOR_PLAN: 'ajisai_pc_labor_plan',                   // 個人別年度計画（目標所得＋月別計画）
   // 打刻もれ修正（管理者の上書き訂正・履歴）
-  PUNCH_EDITS: 'punch_edits',
+  PUNCH_EDITS: 'ajisai_pc_punch_edits',
   // 味采版 v1.2：拠点マスタと端末の拠点設定
-  SITES: 'sites',
-  DEVICE_SITE: 'device_site',
-  ADMIN_PIN: 'admin_pin',
+  SITES: 'ajisai_pc_sites',
+  DEVICE_SITE: 'ajisai_pc_device_site',
+  ADMIN_PIN: 'ajisai_pc_admin_pin',
   // 品目をどこまで配布済みか（既存端末に足りない品目を一度だけ足すために使う）
-  PRODUCT_SEED: 'product_seed_version',
+  PRODUCT_SEED: 'ajisai_pc_product_seed_version',
 };
 
 // 管理画面の初期パスワード。設定画面で必ず変更してもらう
@@ -1995,6 +2000,55 @@ async function saveData(key, value) {
     alert('データ保存に失敗しました：' + e.message);
   }
 }
+// 接頭辞を付ける前（v1.3以前）に保存したデータを、一度だけ新しいキーへ引っ越す。
+// ・新しいキーに既に中身がある場合は触らない（上書き事故を防ぐ）
+// ・古いキーは消さずに残す（元に戻せるようにするため）
+const LEGACY_KEY_MAP = {
+  'employees': 'ajisai_pc_employees',
+  'work_items': 'ajisai_pc_work_items',
+  'punches': 'ajisai_pc_punches',
+  'pending_sessions': 'ajisai_pc_pending_sessions',
+  'active_sessions': 'ajisai_pc_active_sessions',
+  'work_plans': 'ajisai_pc_work_plans',
+  'work_patterns': 'ajisai_pc_work_patterns',
+  'daily_plans': 'ajisai_pc_daily_plans',
+  'work_tasks': 'ajisai_pc_work_tasks',
+  'work_products': 'ajisai_pc_work_products',
+  'work_prices': 'ajisai_pc_work_prices',
+  'work_materials': 'ajisai_pc_work_materials',
+  'ajisai_prices': 'ajisai_pc_ajisai_prices',
+  'work_records': 'ajisai_pc_work_records',
+  'app_settings': 'ajisai_pc_app_settings',
+  'change_requests': 'ajisai_pc_change_requests',
+  'change_history': 'ajisai_pc_change_history',
+  'employee_notifications': 'ajisai_pc_employee_notifications',
+  'labor_plan': 'ajisai_pc_labor_plan',
+  'punch_edits': 'ajisai_pc_punch_edits',
+  'sites': 'ajisai_pc_sites',
+  'device_site': 'ajisai_pc_device_site',
+  'admin_pin': 'ajisai_pc_admin_pin',
+  'product_seed_version': 'ajisai_pc_product_seed_version'
+};
+async function migrateLegacyKeys() {
+  if (HAS_WINDOW_STORAGE) return { moved: 0, skipped: 0 };  // Claude.ai 内では対象外
+  let moved = 0, skipped = 0;
+  try {
+    if (localStorage.getItem('ajisai_pc_migrated_at')) return { moved: 0, skipped: 0 };
+    for (const [oldKey, newKey] of Object.entries(LEGACY_KEY_MAP)) {
+      const oldVal = localStorage.getItem(oldKey);
+      if (oldVal === null) continue;
+      if (localStorage.getItem(newKey) !== null) { skipped++; continue; }
+      localStorage.setItem(newKey, oldVal);
+      moved++;
+    }
+    localStorage.setItem('ajisai_pc_migrated_at', new Date().toISOString());
+    if (moved > 0) console.log(`[味采] 旧データを引っ越しました：${moved}件`);
+  } catch (e) {
+    console.error('引っ越しに失敗:', e);
+  }
+  return { moved, skipped };
+}
+
 async function initializeData() {
   if (!(await loadData(STORAGE_KEYS.EMPLOYEES, null))) await saveData(STORAGE_KEYS.EMPLOYEES, DEFAULT_EMPLOYEES);
   if (!(await loadData(STORAGE_KEYS.WORK_ITEMS, null))) await saveData(STORAGE_KEYS.WORK_ITEMS, DEFAULT_WORK_ITEMS);
@@ -11154,6 +11208,7 @@ async function bootstrap() {
     return;
   }
   try {
+    await migrateLegacyKeys();   // ★接頭辞を付ける前のデータを引き継ぐ（初回のみ）
     await initializeData();
     state.employees = await loadData(STORAGE_KEYS.EMPLOYEES, []);
     state.work_items = await loadData(STORAGE_KEYS.WORK_ITEMS, []);
