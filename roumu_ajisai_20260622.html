@@ -2,8 +2,50 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>まる労務 打刻システム v0.4</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+
+<!-- ===== ホーム画面に追加したときの見た目（アイコン・アプリ名） =====
+     画像は外部ファイルではなくこのHTMLの中に埋め込んでいます。
+     GitHubにこの1枚を置くだけで、iPhone・iPad・Android・PCすべてでアイコンが出ます。 -->
+<meta name="theme-color" content="#1d9e75">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="味采打刻">
+<meta name="application-name" content="味采打刻">
+<link rel="apple-touch-icon" href="data:image/png;base64,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">
+<link rel="icon" type="image/png" sizes="192x192" href="data:image/png;base64,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">
+<link rel="icon" type="image/png" sizes="512x512" href="data:image/png;base64,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">
+<script>
+// Android Chrome / PC 用のマニフェストを、いま開いているURLを起点にして組み立てる。
+// GitHub のリポジトリ名が変わってもURLを書き換える必要がない。
+(function () {
+  try {
+    var icon192 = document.querySelector('link[sizes="192x192"]').getAttribute('href');
+    var icon512 = document.querySelector('link[sizes="512x512"]').getAttribute('href');
+    var manifest = {
+      name: '味采 パッケージセンター 打刻',
+      short_name: '味采打刻',
+      lang: 'ja',
+      start_url: location.href.split('#')[0],
+      scope: location.href.split('#')[0],
+      display: 'standalone',
+      orientation: 'any',
+      background_color: '#f7f9f8',
+      theme_color: '#1d9e75',
+      icons: [
+        { src: icon192, sizes: '192x192', type: 'image/png', purpose: 'any' },
+        { src: icon512, sizes: '512x512', type: 'image/png', purpose: 'any' }
+      ]
+    };
+    var link = document.createElement('link');
+    link.rel = 'manifest';
+    link.href = 'data:application/manifest+json;charset=utf-8,' + encodeURIComponent(JSON.stringify(manifest));
+    document.head.appendChild(link);
+  } catch (e) {}
+})();
+</script>
+<title>味采 パッケージセンター 打刻システム v1.3</title>
 <style>
   :root {
     --green: #1d9e75;
@@ -1588,13 +1630,16 @@
 <body>
 
 <header>
-  <h1>🍊 まる労務 打刻</h1>
-  <div class="clock" id="clock">--:--</div>
+  <h1>🍊 味采 パッケージセンター 打刻</h1>
+  <div style="display:flex; align-items:center; gap:10px;">
+    <div class="clock" id="site-badge" style="background:rgba(255,255,255,0.28); font-weight:bold;">拠点未設定</div>
+    <div class="clock" id="clock">--:--</div>
+  </div>
 </header>
 
 <main id="app"></main>
 
-<div class="footer-note">プロトタイプ v0.4<span id="storage-mode-note"></span> ／ <a href="javascript:if(confirm('全データを初期化してリロードします。よろしいですか？')){localStorage.clear();location.hash='';location.reload();}" style="color:#999; text-decoration:underline; font-size:0.85rem;">🆘 緊急リセット</a></div>
+<div class="footer-note">味采版 v1.3（まる労務 v0.4 ベース）<span id="storage-mode-note"></span> ／ <a href="javascript:if(confirm('全データを初期化してリロードします。よろしいですか？')){localStorage.clear();location.hash='';location.reload();}" style="color:#999; text-decoration:underline; font-size:0.85rem;">🆘 緊急リセット</a></div>
 
 <script>
 // ストレージモードをフッターに表示
@@ -1634,7 +1679,22 @@ const STORAGE_KEYS = {
   LABOR_PLAN: 'labor_plan',                   // 個人別年度計画（目標所得＋月別計画）
   // 打刻もれ修正（管理者の上書き訂正・履歴）
   PUNCH_EDITS: 'punch_edits',
+  // 味采版 v1.2：拠点マスタと端末の拠点設定
+  SITES: 'sites',
+  DEVICE_SITE: 'device_site',
+  ADMIN_PIN: 'admin_pin',
+  // 品目をどこまで配布済みか（既存端末に足りない品目を一度だけ足すために使う）
+  PRODUCT_SEED: 'product_seed_version',
 };
+
+// 管理画面の初期パスワード。設定画面で必ず変更してもらう
+const DEFAULT_ADMIN_PIN = '0000';
+
+// 拠点マスタ（味采版）：各拠点のパッケージセンターで同じHTMLを使い、端末ごとに拠点を設定する
+const DEFAULT_SITES = [
+  { id: 'S01', name: '川口' },
+  { id: 'S02', name: '松尾' },
+];
 
 const DEFAULT_EMPLOYEES = [
   { id: 'E001', name: '田中花子', emoji: '👩‍🦰', hourly_rate: 1000, location: '川口', fuyo_type: 'inside' },
@@ -1700,7 +1760,24 @@ const DEFAULT_WORK_PRODUCTS = [
   { id: 'P08', name: '大根',       emoji: '🥬' },
   { id: 'P09', name: 'なす',       emoji: '🍆' },
   { id: 'P10', name: 'ピーマン',   emoji: '🫑' },
+  // ↓ 2026-08-05 追加（現場からの依頼）
+  { id: 'P11', name: 'ミニトマト', emoji: '🍅' },
+  { id: 'P12', name: 'エノキ',     emoji: '🍄' },
+  { id: 'P13', name: 'リンゴ',     emoji: '🍎' },
+  { id: 'P14', name: 'パクチー',   emoji: '🌿' },
+  { id: 'P15', name: 'セロリ',     emoji: '🥬' },
+  { id: 'P16', name: 'サツマイモ', emoji: '🍠' },
+  { id: 'P17', name: '長芋',       emoji: '🥔' },
+  { id: 'P18', name: 'レンコン',   emoji: '🌰' },
+  { id: 'P19', name: '里芋',       emoji: '🥔' },
+  { id: 'P20', name: 'その他野菜', emoji: '🥗' },
+  { id: 'P21', name: 'その他果物', emoji: '🍇' },
 ];
+
+// 2026-08-05 に追加した品目の名前。既存端末へ配布するときの対象を、この11件だけに限定する。
+// （DEFAULT_WORK_PRODUCTS 全体を対象にすると、拠点が意図的に消した品目まで復活してしまう）
+const PRODUCT_SEED_V2_NAMES = ['ミニトマト','エノキ','リンゴ','パクチー','セロリ','サツマイモ','長芋','レンコン','里芋','その他野菜','その他果物'];
+const PRODUCT_SEED_VERSION = 2;
 
 // 単価マスタ初期データ（社長指示：経験ベースのたたき台）
 // { task_id, product_id, unit_price, unit }
@@ -1743,6 +1820,35 @@ const DEFAULT_WORK_PRICES = (() => {
         });
       }
     });
+  }
+  // ─────────────────────────────────────────────────────────
+  // 2026-08-05 追加分（P11〜P21）のたたき台
+  // 決め方：味采確定単価表（自社実績・採用87件）に該当があればその実績値を使い、
+  //         該当がない品目は「作業のしかたが最も近い既存品目の列」をそのまま複製する。
+  //         複製元と根拠は下の表に書いてある。実額は単価マスタ画面で必ず上書きすること。
+  // ─────────────────────────────────────────────────────────
+  const derived = [
+    { id:'P11', base:'P02', over:{ TH03:55 }, why:'ミニトマト：複製元トマト／確定単価⑥b 1kgパック詰め(ミニトマト/らっきょ) 55円 パック・1人作業ベース・社長確定' },
+    { id:'P12', base:'P10', over:{ TH03: 9 }, why:'エノキ：複製元ピーマン／確定単価⑥a トレー入れ+ラップ(トマト/なめこ) 9円 パック' },
+    { id:'P13', base:'P07', over:{ TH02:20 }, why:'リンゴ：複製元みかん／確定単価⑪ りんご類袋詰め 20円 袋（n=2・暫定）' },
+    { id:'P14', base:'P06', over:{ TH02:18 }, why:'パクチー：複製元長ネギ／確定単価③ 袋詰め(葉物) 18円 袋' },
+    { id:'P15', base:'P06', over:{ TH02:18 }, why:'セロリ：複製元長ネギ／確定単価③ 袋詰め(葉物:サニー/GL/ニラ/セロリ) 18円 袋。セロリは出所に実名あり' },
+    { id:'P16', base:'P03', over:{},          why:'サツマイモ：複製元じゃがいも／実績なし・複製のみ' },
+    { id:'P17', base:'P08', over:{},          why:'長芋：複製元大根（長物）／実績なし・複製のみ' },
+    { id:'P18', base:'P03', over:{},          why:'レンコン：複製元じゃがいも（根菜）／実績なし・複製のみ' },
+    { id:'P19', base:'P03', over:{},          why:'里芋：複製元じゃがいも（根菜）／実績なし・複製のみ' },
+    { id:'P20', base:'P04', over:{},          why:'その他野菜：複製元にんじん（野菜の平均的な列）／実績なし・複製のみ' },
+    { id:'P21', base:'P07', over:{},          why:'その他果物：複製元みかん（果物の平均的な列）／実績なし・複製のみ' },
+  ];
+  for (const d of derived) {
+    const bi = productIds.indexOf(d.base);
+    if (bi < 0) continue;
+    for (const [taskId, values] of Object.entries(matrix)) {
+      const task = DEFAULT_WORK_TASKS.find(t => t.id === taskId);
+      if (!task) continue;
+      const v = (d.over[taskId] !== undefined) ? d.over[taskId] : values[bi];
+      if (v > 0) prices.push({ task_id: taskId, product_id: d.id, unit_price: v, unit: task.unit });
+    }
   }
   return prices;
 })();
@@ -1818,6 +1924,20 @@ const DEFAULT_WORK_MATERIALS = (() => {
         });
       }
     });
+  }
+  // 2026-08-05 追加分（P11〜P21）：包材は作業賃と違い自社実績がないので、単価と同じ複製元をそのまま使う
+  const derivedMat = [
+    ['P11','P02'], ['P12','P10'], ['P13','P07'], ['P14','P06'], ['P15','P06'], ['P16','P03'],
+    ['P17','P08'], ['P18','P03'], ['P19','P03'], ['P20','P04'], ['P21','P07'],
+  ];
+  for (const [pid, base] of derivedMat) {
+    const bi = productIds.indexOf(base);
+    if (bi < 0) continue;
+    for (const [taskId, values] of Object.entries(matrix)) {
+      const task = DEFAULT_WORK_TASKS.find(t => t.id === taskId);
+      if (!task) continue;
+      if (values[bi] > 0) materials.push({ task_id: taskId, product_id: pid, material_cost: values[bi], unit: task.unit });
+    }
   }
   return materials;
 })();
@@ -1903,6 +2023,9 @@ async function initializeData() {
   if (!(await loadData(STORAGE_KEYS.EMPLOYEE_NOTIFICATIONS, null))) await saveData(STORAGE_KEYS.EMPLOYEE_NOTIFICATIONS, []);
   if (!(await loadData(STORAGE_KEYS.LABOR_PLAN, null))) await saveData(STORAGE_KEYS.LABOR_PLAN, []);
   if (!(await loadData(STORAGE_KEYS.PUNCH_EDITS, null))) await saveData(STORAGE_KEYS.PUNCH_EDITS, []);
+  const sites = await loadData(STORAGE_KEYS.SITES, null);
+  if (!sites || sites.length === 0) await saveData(STORAGE_KEYS.SITES, DEFAULT_SITES);
+  if (!(await loadData(STORAGE_KEYS.ADMIN_PIN, null))) await saveData(STORAGE_KEYS.ADMIN_PIN, DEFAULT_ADMIN_PIN);
 }
 
 // ===========================================
@@ -1935,6 +2058,13 @@ const state = {
   change_history: [],
   employee_notifications: [],
   punch_edits: [],
+  // 味采版 v1.2
+  sites: [],
+  device_site: null,
+  admin_pin: DEFAULT_ADMIN_PIN,
+  _adminUnlocked: false,
+  _pinBuf: '',
+  _pinError: '',
 };
 
 const PUNCH_TYPES = {
@@ -1945,7 +2075,12 @@ const PUNCH_TYPES = {
   END: { label: '退勤', icon: '🔴', badge: 'badge-end' },
 };
 
-const LOCATION = '川口';  // フェーズ1は川口固定
+// 味采版：拠点は端末ごとの設定で決まる（設定画面→この端末の拠点）
+// サーバーを持たないため拠点ごとに独立運用し、集計は月次CSV／バックアップで本部に集める
+function currentSite() {
+  if (state.device_site) return state.device_site;
+  return (state.sites && state.sites[0]) ? state.sites[0].name : '';
+}
 
 // ===========================================
 // 共通ユーティリティ
@@ -1955,6 +2090,32 @@ function todayStr() {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
+// テキストファイルをダウンロードさせる（バックアップ・CSV退避で使用）
+function downloadTextFile(filename, text, mime) {
+  const blob = new Blob([text], { type: (mime || 'text/plain') + ';charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+// CSVの1セルをエスケープ
+function csvCell(v) {
+  const t = String(v === null || v === undefined ? '' : v);
+  return /[",\n]/.test(t) ? '"' + t.replace(/"/g, '""') + '"' : t;
+}
+// この端末の保存データ量の概算（localStorage の上限は概ね5MB）
+function estimateStorageBytes() {
+  let total = 0;
+  for (const key of Object.values(STORAGE_KEYS)) {
+    try {
+      const v = HAS_WINDOW_STORAGE ? null : localStorage.getItem(key);
+      if (v) total += v.length * 2; // UTF-16換算
+    } catch (err) {}
+  }
+  return total;
+}
+
 function formatMinutes(min) {
   const h = Math.floor(min / 60);
   const m = min % 60;
@@ -2167,8 +2328,11 @@ function getCurrentMonthCycle() {
   const cutoff = parseInt(s.cutoff_day, 10);
   if (today <= cutoff) {
     // 今月〆日以前 → 前月〆+1 〜 今月〆日
-    const start = new Date(year, month - 2, cutoff + 1);
-    const end = new Date(year, month - 1, cutoff);
+    // 月の日数より大きい〆日は月末に丸める（丸めないと日付が翌月に転がり、集計から1か月分が抜ける）
+    const prevY = month === 1 ? year - 1 : year;
+    const prevM = month === 1 ? 12 : month - 1;
+    const start = new Date(prevY, prevM - 1, actualCutoffDay(prevY, prevM, cutoff) + 1);
+    const end = new Date(year, month - 1, actualCutoffDay(year, month, cutoff));
     return {
       startStr: fmtDateStr(start),
       endStr: fmtDateStr(end),
@@ -2176,8 +2340,10 @@ function getCurrentMonthCycle() {
     };
   } else {
     // 今月〆日より後 → 今月〆+1 〜 翌月〆日
-    const start = new Date(year, month - 1, cutoff + 1);
-    const end = new Date(year, month, cutoff);
+    const nextY = month === 12 ? year + 1 : year;
+    const nextM = month === 12 ? 1 : month + 1;
+    const start = new Date(year, month - 1, actualCutoffDay(year, month, cutoff) + 1);
+    const end = new Date(nextY, nextM - 1, actualCutoffDay(nextY, nextM, cutoff));
     return {
       startStr: fmtDateStr(start),
       endStr: fmtDateStr(end),
@@ -2232,9 +2398,11 @@ function monthCycleByYearMonth(year, month) {
     return { startStr, endStr };
   }
   const cutoff = parseInt(s.cutoff_day, 10);
-  // 〆日「month/cutoff」が終点、起点は前月「cutoff+1」
-  const start = new Date(year, month - 2, cutoff + 1);
-  const end = new Date(year, month - 1, cutoff);
+  // 〆日「month/cutoff」が終点、起点は前月「cutoff+1」。月末を超える〆日は月末に丸める
+  const prevY = month === 1 ? year - 1 : year;
+  const prevM = month === 1 ? 12 : month - 1;
+  const start = new Date(prevY, prevM - 1, actualCutoffDay(prevY, prevM, cutoff) + 1);
+  const end = new Date(year, month - 1, actualCutoffDay(year, month, cutoff));
   return { startStr: fmtDateStr(start), endStr: fmtDateStr(end) };
 }
 
@@ -2268,7 +2436,7 @@ async function punch(type, workItemId = null, sessionId = null) {
     type: type,
     work_item_id: workItemId,
     session_id: sessionId,
-    location: LOCATION,
+    location: currentSite(),
   };
   state.punches.push(punch);
   await saveData(STORAGE_KEYS.PUNCHES, state.punches);
@@ -2292,7 +2460,7 @@ async function startPairProposal(workItemId, selectedMemberIds) {
     work_item_id: workItemId,
     invited_members: invitedMembers,
     proposed_members: { [state.current_employee_id]: 'accept' },
-    location: LOCATION,
+    location: currentSite(),
     created_at: new Date().toISOString(),
     timeout_at: new Date(Date.now() + TIMEOUT_MS).toISOString(),
   };
@@ -2440,6 +2608,12 @@ async function checkSessionEnding() {
 // ===========================================
 
 function render() {
+  const badge = document.getElementById('site-badge');
+  if (badge) {
+    const sn = currentSite();
+    badge.textContent = sn ? `📍 ${sn}` : '拠点未設定';
+    badge.style.background = sn ? 'rgba(255,255,255,0.28)' : 'rgba(194,78,78,0.85)';
+  }
   const app = document.getElementById('app');
   if (state.screen === 'home') app.innerHTML = renderHome();
   else if (state.screen === 'personal') app.innerHTML = renderPersonal();
@@ -2448,6 +2622,7 @@ function render() {
   else if (state.screen === 'pair_respond') app.innerHTML = renderPairRespond();
   else if (state.screen === 'pending_wait') app.innerHTML = renderPendingWait();
   else if (state.screen === 'mismatch_alert') app.innerHTML = renderMismatchAlert();
+  else if (state.screen === 'admin_lock') app.innerHTML = renderAdminLock();
   else if (state.screen === 'admin') app.innerHTML = renderAdmin();
   else if (state.screen === 'qr') app.innerHTML = renderQRCode();
   else if (state.screen === 'employee_edit') app.innerHTML = renderEmployeeEdit();
@@ -2465,6 +2640,7 @@ function render() {
   else if (state.screen === 'ajisai_prices') app.innerHTML = renderAjisaiPrices();
   else if (state.screen === 'materials_master') app.innerHTML = renderMaterialsMaster();
   else if (state.screen === 'app_settings') app.innerHTML = renderAppSettings();
+  else if (state.screen === 'sites_master') app.innerHTML = renderSitesMaster();
   else if (state.screen === 'work_register') app.innerHTML = renderWorkRegister();
   else if (state.screen === 'reports') app.innerHTML = renderReports();
   else if (state.screen === 'plan_change_index') app.innerHTML = renderPlanChangeIndex();
@@ -2483,13 +2659,46 @@ function renderHome() {
   const hour = new Date().getHours();
   let greet = hour < 11 ? greetings[0] : (hour >= 17 ? greetings[2] : greetings[1]);
 
-  let html = `
+  const activeEmployees = state.employees.filter(e => (e.status || 'active') === 'active');
+
+  let html = '';
+  // 品目が配布されたときの一度きりの案内
+  if (state._seedNotice && state._seedNotice.length > 0) {
+    html += `
+      <div class="card" style="border-left:4px solid var(--blue);">
+        <h2 style="color:var(--blue);">🆕 品目が ${state._seedNotice.length}件 追加されました</h2>
+        <div style="margin:8px 0 12px; line-height:1.9;">${state._seedNotice.join('・')}</div>
+        <div class="form-hint" style="margin-bottom:12px;">
+          単価と包材費は<strong>たたき台の数字</strong>が入っています。実際の額とは違うので、
+          管理画面 → ⚙️作業・品目マスタ → 💰単価マスタ で必ず確認してください。
+        </div>
+        <button class="nav-btn" data-action="dismiss-seed-notice">確認しました</button>
+      </div>
+    `;
+  }
+  // 初期設定の案内（拠点が未選択、または従業員が未登録のとき）
+  if (!state.device_site || activeEmployees.length === 0) {
+    html += `
+      <div class="card" style="border-left:4px solid var(--orange);">
+        <h2 style="color:var(--orange);">🔧 はじめの設定</h2>
+        <div class="form-hint" style="margin-bottom:14px;">この端末を使い始める前に、次の順で設定してください。</div>
+        <ol style="line-height:2; margin:0 0 14px 20px; padding:0;">
+          <li>${state.device_site ? '✅' : '⬜'} <strong>この端末の拠点を選ぶ</strong>（管理画面 → 🔧設定 → 📍この端末の拠点）${state.device_site ? `<span style="color:var(--green);"> ― ${state.device_site}</span>` : ''}</li>
+          <li>${activeEmployees.length > 0 ? '✅' : '⬜'} <strong>従業員を登録する</strong>（管理画面 → 👥従業員マスタ → ＋新規登録）${activeEmployees.length > 0 ? `<span style="color:var(--green);"> ― ${activeEmployees.length}名</span>` : ''}</li>
+          <li>⬜ <strong>作業と品目を拠点に合わせる</strong>（管理画面 → ⚙️作業・品目マスタ）</li>
+          <li>⬜ <strong>単価と包材費を入れる</strong>（作業・品目マスタ → 💰単価マスタ／📦包材費マスタ）</li>
+        </ol>
+        <button class="primary-btn" data-action="go-admin">⚙ 管理画面へ進む</button>
+      </div>
+    `;
+  }
+
+  html += `
     <div class="card">
       <h2>顔をタッチして打刻してください</h2>
       <div class="greeting">${greet}！</div>
       <div class="employee-grid">
   `;
-  const activeEmployees = state.employees.filter(e => (e.status || 'active') === 'active');
   for (const emp of activeEmployees) {
     const st = getEmployeeStatus(emp.id);
     let statusHtml = `<div class="status ${st.status}">${st.label}</div>`;
@@ -2521,6 +2730,9 @@ function renderHome() {
       </button>
     `;
   }
+  if (activeEmployees.length === 0) {
+    html += `<div class="empty-message" style="grid-column:1/-1;">まだ従業員が登録されていません。管理画面から登録してください。</div>`;
+  }
   html += `</div></div>`;
   // 進行中チーム作業一覧（ホーム画面にも表示）
   html += renderTeamListPanel();
@@ -2530,7 +2742,7 @@ function renderHome() {
 
 function renderTeamListPanel() {
   const sameLocationSessions = state.active_sessions.filter(s => 
-    s.ended_at === null && s.location === LOCATION
+    s.ended_at === null && (!s.location || s.location === currentSite())
   );
   let html = `<div class="card team-card"><h2>🤝 現在進行中のチーム作業（${sameLocationSessions.length}件）</h2>`;
   if (sameLocationSessions.length === 0) {
@@ -2853,7 +3065,7 @@ function renderPairSelect() {
   const candidates = state.employees.filter(e => {
     if (e.id === empId) return false;
     if ((e.status || 'active') !== 'active') return false;  // 退職者除外
-    if (e.location !== LOCATION) return false;
+    if (e.location && e.location !== currentSite()) return false;
     // 応答モード：招待メンバーは候補に必ず入れる（提案者など）
     if (state.current_pending_session_id) {
       const pending = state.pending_sessions.find(p => p.id === state.current_pending_session_id);
@@ -3003,7 +3215,7 @@ function calcDayLaborSummary(employeeId, dateObj) {
   for (const p of punches) {
     if (p.type === 'BREAK') {
       if (!lastBreakStart) lastBreakStart = new Date(p.timestamp);
-    } else if (lastBreakStart && (p.type === 'WORK_START' || p.type === 'END')) {
+    } else if (lastBreakStart && p.type !== 'BREAK') {
       breakMin += Math.floor((new Date(p.timestamp) - lastBreakStart) / 60000);
       lastBreakStart = null;
     }
@@ -3231,8 +3443,15 @@ function renderReportShip() {
   const purchasePerUnit = purchaseQty > 0 ? purchaseAmount / purchaseQty : 0;     // 仕入れ単価（円/kg等）
   const usedQty = purchaseQty - remainQty;                                         // 使用量
   const yieldRate = purchaseQty > 0 ? (usedQty / purchaseQty * 100) : 0;            // 歩留まり
-  const qtyPerOutput = outputQty > 0 ? (usedQty / outputQty * 1000) : 0;            // 1個あたり使用量（g）
-  const materialCostPerOutput = outputQty > 0 ? (purchaseAmount / outputQty) : 0;   // 1個あたり原料費
+  // 1個あたり使用量。kg仕入れのときだけgに換算し、それ以外は仕入単位のまま表示する
+  const perOutputRaw = outputQty > 0 ? (usedQty / outputQty) : 0;
+  const qtyPerOutput = buf.purchase_unit === 'kg' ? perOutputRaw * 1000 : (buf.purchase_unit === 'g' ? perOutputRaw : perOutputRaw);
+  const qtyPerOutputUnit = buf.purchase_unit === 'kg' ? 'g' : buf.purchase_unit;
+  // 残り量は「次回に使える在庫」として扱う（社長確認 2026-08-04）。
+  // したがって原料費に乗せるのは、仕入額の全額ではなく実際に使った分だけ。
+  const usedAmount = purchaseQty > 0 ? purchaseAmount * (usedQty / purchaseQty) : 0;  // 使った分の原料費
+  const remainAmount = purchaseAmount - usedAmount;                                    // 在庫として残る金額
+  const materialCostPerOutput = outputQty > 0 ? (usedAmount / outputQty) : 0;          // 1個あたり原料費
   const subtotal = materialCostPerOutput + unitLaborCharge + unitMaterialCost;     // 1個あたり原価合計
   const profit = subtotal * (markupRate / 100);                                    // 1個あたり利益
   const shipPrice = subtotal + profit;                                             // 1個あたり出荷単価
@@ -3240,7 +3459,7 @@ function renderReportShip() {
   // 全体集計
   const totalLabor = unitLaborCharge * outputQty;
   const totalMaterial = unitMaterialCost * outputQty;
-  const totalCost = purchaseAmount + totalLabor + totalMaterial;
+  const totalCost = usedAmount + totalLabor + totalMaterial;
   const totalRevenue = shipPrice * outputQty;
   const totalProfit = totalRevenue - totalCost;
   
@@ -3384,14 +3603,18 @@ function renderReportShip() {
       </div>
       
       ${qtyPerOutput > 0 ? `<div style="margin-top:14px; padding:8px 12px; background:#fafafa; border-radius:6px; font-size:0.88rem;">
-        📊 <strong>1${task.unit}あたりの仕入れ重量目安</strong>：${qtyPerOutput.toFixed(1)}g（${buf.purchase_unit}から換算）
+        📊 <strong>1${task.unit}あたりの仕入れ量の目安</strong>：${qtyPerOutput.toFixed(qtyPerOutputUnit === 'g' ? 1 : 3)}${qtyPerOutputUnit}
+      </div>` : ''}
+      ${remainAmount > 0 ? `<div style="margin-top:10px; padding:8px 12px; background:#e8f4ee; border-radius:6px; font-size:0.88rem;">
+        📦 <strong>在庫に残る分</strong>：${remainQty}${buf.purchase_unit}（${Math.round(remainAmount).toLocaleString()}円）― この分は原価に乗せていません（次回に使う在庫として扱います）
       </div>` : ''}
     </div>
     
     <div style="margin-top:14px; padding:12px 14px; background:#fff8e1; border-radius:8px; font-size:0.88rem;">
       <div style="font-weight:bold; margin-bottom:6px;">💡 計算式</div>
       <div style="line-height:1.7; font-family:monospace; font-size:0.85rem;">
-        原料費／個 ＝ 仕入れ額 ÷ 出来上がり数<br>
+        使用量 ＝ 仕入れ量 − 残り量　（残り量は在庫として次回に回す）<br>
+        原料費／個 ＝ 仕入れ額 × (使用量 ÷ 仕入れ量) ÷ 出来上がり数<br>
         原価／個 ＝ 原料費 ＋ 作業賃 ＋ 包材費<br>
         出荷単価／個 ＝ 原価 × (1 ＋ 値入率／100)<br>
         粗利 ＝ 売上 − 原価合計
@@ -4011,7 +4234,6 @@ function calcMonthlyVolumeSum(employeeId, year, month) {
     r.work_started_at <= endStr + 'T23:59:59'
   );
   let totalRevenue = 0;
-  let totalQuantity = 0;
   let recordCount = records.length;
   let unpricedCount = 0;
   for (const r of records) {
@@ -4698,45 +4920,87 @@ function renderTasksMaster() {
         <button class="shift-tab${filter === 'global' ? ' active' : ''}" data-action="tasks-filter" data-filter="global">🌍 全体寄与 (${stats.global})</button>
       </div>
       <table>
-        <thead><tr><th>ID</th><th>アイコン</th><th>名称</th><th>分類</th><th>タイプ</th><th>単位</th><th>状態</th></tr></thead>
+        <thead><tr><th>ID</th><th>アイコン</th><th>名称</th><th>分類</th><th>タイプ</th><th>単位</th><th>状態</th><th>操作</th></tr></thead>
         <tbody>
   `;
   for (const t of filteredTasks) {
     const tt = TASK_TYPE_LABELS[t.type];
     const cc = TASK_CATEGORY_COLORS[t.category];
     const statusLabel = t.machine_status 
-      ? (t.machine_status === '実機' ? '<span style="color:var(--green); font-weight:bold;">✅ 実機</span>' : '<span style="color:#888;">🔵 将来</span>') 
+      ? `<select class="task-input" data-task-id="${t.id}" data-field="machine_status" style="font-size:0.8rem;">
+           <option value="実機" ${t.machine_status === '実機' ? 'selected' : ''}>✅ 実機</option>
+           <option value="将来" ${t.machine_status === '将来' ? 'selected' : ''}>🔵 将来</option>
+         </select>`
       : '-';
     html += `<tr style="background:${cc.bg};">
       <td style="font-family:monospace; font-size:0.85rem;">${t.id}</td>
-      <td style="font-size:1.4rem; text-align:center;">${t.icon}</td>
-      <td><strong>${t.name}</strong></td>
+      <td style="text-align:center;"><input type="text" class="task-input" data-task-id="${t.id}" data-field="icon" value="${t.icon}" style="width:44px; text-align:center; font-size:1.2rem; padding:3px;" /></td>
+      <td><input type="text" class="task-input" data-task-id="${t.id}" data-field="name" value="${t.name}" style="width:100%; min-width:120px; padding:4px;" /></td>
       <td><span style="display:inline-block; padding:2px 8px; border-radius:10px; background:white; border:1px solid ${cc.border}; font-size:0.8rem;">${t.category}</span></td>
       <td>${tt.icon} ${tt.label}</td>
-      <td>${t.unit}</td>
+      <td><input type="text" class="task-input" data-task-id="${t.id}" data-field="unit" value="${t.unit}" style="width:60px; padding:4px;" /></td>
       <td>${statusLabel}</td>
+      <td><button class="nav-btn" data-action="delete-task" data-task-id="${t.id}" style="padding:3px 8px; font-size:0.8rem; color:var(--red); border-color:var(--red);">削除</button></td>
     </tr>`;
   }
   if (filteredTasks.length === 0) {
-    html += `<tr><td colspan="7" class="empty-message">該当する作業がありません</td></tr>`;
+    html += `<tr><td colspan="8" class="empty-message">該当する作業がありません</td></tr>`;
   }
   html += `</tbody></table>
+      <div style="display:flex; gap:10px; margin-top:12px; flex-wrap:wrap; align-items:center;">
+        <button class="primary-btn" data-action="save-tasks">作業の変更を保存</button>
+        <span class="form-hint">※ 名称・アイコン・単位を直したら必ず保存してください。分類とタイプは後から変えられません（削除して作り直し）。</span>
+      </div>
+      <div style="margin-top:16px; padding:14px; background:#f4f6f9; border-radius:8px;">
+        <strong style="font-size:0.95rem;">＋ 作業を追加</strong>
+        <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-top:10px;">
+          <input type="text" id="new-task-icon" placeholder="🔪" style="width:56px; text-align:center; font-size:1.2rem; padding:6px;" />
+          <input type="text" id="new-task-name" placeholder="作業名（例：袋詰め）" style="min-width:180px; padding:6px;" />
+          <select id="new-task-category" style="padding:6px;">
+            <option value="手作業">🟨 手作業（出来高あり）</option>
+            <option value="マシン作業">🤖 マシン作業（出来高あり）</option>
+            <option value="全体寄与">🌍 全体寄与（出来高なし）</option>
+          </select>
+          <input type="text" id="new-task-unit" placeholder="単位（袋・kg・箱）" style="width:150px; padding:6px;" />
+          <button class="primary-btn" data-action="add-task">追加する</button>
+        </div>
+      </div>
     </div>
     
     <div class="card admin-section">
       <h2>🥬 品目マスタ（${stats.products}個）</h2>
+      <div class="form-hint" style="margin-bottom:12px;">
+        拠点で実際に扱う品目に入れ替えてください。単価・包材費が入っている品目は削除できません（先に単価マスタで0にしてください）。
+      </div>
       <table>
-        <thead><tr><th>ID</th><th>アイコン</th><th>品目名</th></tr></thead>
+        <thead><tr><th>ID</th><th>アイコン</th><th>品目名</th><th>単価設定</th><th>操作</th></tr></thead>
         <tbody>
   `;
   for (const p of state.work_products) {
+    const priceCount = state.work_prices.filter(x => x.product_id === p.id).length;
     html += `<tr>
       <td style="font-family:monospace; font-size:0.85rem;">${p.id}</td>
-      <td style="font-size:1.5rem; text-align:center;">${p.emoji}</td>
-      <td><strong>${p.name}</strong></td>
+      <td style="text-align:center;"><input type="text" class="product-input" data-product-id="${p.id}" data-field="emoji" value="${p.emoji}" style="width:44px; text-align:center; font-size:1.2rem; padding:3px;" /></td>
+      <td><input type="text" class="product-input" data-product-id="${p.id}" data-field="name" value="${p.name}" style="width:100%; min-width:120px; padding:4px;" /></td>
+      <td style="text-align:center; font-size:0.85rem; color:${priceCount ? '#1d9e75' : '#bbb'};">${priceCount ? priceCount + '件' : '未設定'}</td>
+      <td><button class="nav-btn" data-action="delete-product" data-product-id="${p.id}" style="padding:3px 8px; font-size:0.8rem; color:var(--red); border-color:var(--red);">削除</button></td>
     </tr>`;
   }
+  if (state.work_products.length === 0) {
+    html += `<tr><td colspan="5" class="empty-message">品目がありません。下から追加してください。</td></tr>`;
+  }
   html += `</tbody></table>
+      <div style="display:flex; gap:10px; margin-top:12px; flex-wrap:wrap; align-items:center;">
+        <button class="primary-btn" data-action="save-products">品目の変更を保存</button>
+      </div>
+      <div style="margin-top:16px; padding:14px; background:#f4f6f9; border-radius:8px;">
+        <strong style="font-size:0.95rem;">＋ 品目を追加</strong>
+        <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-top:10px;">
+          <input type="text" id="new-product-emoji" placeholder="🥬" style="width:56px; text-align:center; font-size:1.2rem; padding:6px;" />
+          <input type="text" id="new-product-name" placeholder="品目名（例：レタス）" style="min-width:180px; padding:6px;" />
+          <button class="primary-btn" data-action="add-product">追加する</button>
+        </div>
+      </div>
     </div>
   `;
   return html;
@@ -4953,6 +5217,48 @@ function renderMaterialsMaster() {
   return html;
 }
 
+// 拠点マスタ（各拠点のパッケージセンター）
+function renderSitesMaster() {
+  let html = `
+    <div class="nav-row">
+      <button class="nav-btn" data-action="go-app-settings">← 設定へ戻る</button>
+    </div>
+    <div class="card admin-section">
+      <h2>📍 拠点マスタ</h2>
+      <div class="form-hint" style="margin-bottom:14px;">
+        パッケージセンターのある拠点を登録します。従業員の所属と、この端末の拠点の選択肢になります。<br>
+        拠点名を変えると、その拠点に所属する従業員の表示もまとめて追従します。
+      </div>
+      <table>
+        <thead><tr><th>ID</th><th>拠点名</th><th>所属人数</th><th>操作</th></tr></thead>
+        <tbody>
+  `;
+  for (const st of state.sites) {
+    const cnt = state.employees.filter(e => e.location === st.name).length;
+    const isHere = currentSite() === st.name;
+    html += `<tr${isHere ? ' style="background:var(--green-bg);"' : ''}>
+      <td style="font-family:monospace; font-size:0.85rem;">${st.id}</td>
+      <td><input type="text" class="site-input" data-site-id="${st.id}" value="${st.name}" style="width:100%; min-width:160px; padding:5px;" />${isHere ? '<div style="font-size:0.75rem; color:var(--green); font-weight:bold; margin-top:3px;">📍 この端末の拠点</div>' : ''}</td>
+      <td style="text-align:center;">${cnt}名</td>
+      <td><button class="nav-btn" data-action="delete-site" data-site-id="${st.id}" style="padding:3px 8px; font-size:0.8rem; color:var(--red); border-color:var(--red);">削除</button></td>
+    </tr>`;
+  }
+  html += `</tbody></table>
+      <div style="display:flex; gap:10px; margin-top:12px; flex-wrap:wrap;">
+        <button class="primary-btn" data-action="save-sites">拠点名の変更を保存</button>
+      </div>
+      <div style="margin-top:16px; padding:14px; background:#f4f6f9; border-radius:8px;">
+        <strong style="font-size:0.95rem;">＋ 拠点を追加</strong>
+        <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-top:10px;">
+          <input type="text" id="new-site-name" placeholder="拠点名（例：鳥栖支店）" style="min-width:200px; padding:6px;" />
+          <button class="primary-btn" data-action="add-site">追加する</button>
+        </div>
+      </div>
+    </div>
+  `;
+  return html;
+}
+
 function renderAppSettings() {
   const settings = state.app_settings || DEFAULT_APP_SETTINGS;
   const rate = (settings.global_allocation_rate || 0.10) * 100;  // %表示
@@ -4974,6 +5280,87 @@ function renderAppSettings() {
   let html = `
     <div class="nav-row">
       <button class="nav-btn" data-action="back-admin">← 管理画面へ戻る</button>
+    </div>
+
+    <div class="card admin-section" style="border-left:4px solid var(--green);">
+      <h2 style="color:var(--green);">📍 この端末の拠点</h2>
+      <div class="form-hint" style="margin-bottom:14px;">
+        この端末で打刻すると、ここで選んだ拠点の記録として保存されます。<br>
+        <strong>拠点ごとに独立して動きます。</strong>拠点をまたぐ集計は、下のバックアップ／CSVを本部で合算してください。
+      </div>
+      <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+        <select id="device-site" data-action="save-device-site" style="padding:8px; font-size:1rem; min-width:200px;">
+          ${state.sites.map(st => `<option value="${st.name}" ${currentSite() === st.name ? 'selected' : ''}>${st.name}</option>`).join('')}
+        </select>
+        <button class="nav-btn" data-action="go-sites-master" style="background:var(--green-bg); color:var(--green); border-color:var(--green);">📍 拠点マスタを編集</button>
+      </div>
+      ${!state.device_site ? '<div class="form-hint" style="color:var(--red); margin-top:10px;">⚠️ まだ選ばれていません。この端末を置く拠点を選んで確定してください。</div>' : ''}
+    </div>
+
+    <div class="card admin-section" style="border-left:4px solid ${state.admin_pin === DEFAULT_ADMIN_PIN ? 'var(--red)' : '#7b1fa2'};">
+      <h2 style="color:${state.admin_pin === DEFAULT_ADMIN_PIN ? 'var(--red)' : '#7b1fa2'};">🔒 管理画面のパスワード</h2>
+      ${state.admin_pin === DEFAULT_ADMIN_PIN ? `
+      <div style="background:#fbedec; border-left:4px solid var(--red); padding:10px 14px; border-radius:6px; margin-bottom:14px; font-size:0.9rem;">
+        ⚠️ <strong>初期パスワード 0000 のままです。</strong>いま変更してください。
+      </div>` : ''}
+      <div class="form-hint" style="margin-bottom:14px;">
+        管理画面に入るときの4桁の数字です。打刻画面に戻ると自動でかかり直します。<br>
+        ※ 現場の端末を誰でも触れないようにするためのものです。データそのものを守る仕組みではありません。
+      </div>
+      <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end;">
+        <div>
+          <div class="form-label" style="font-size:0.85rem;">今のパスワード</div>
+          <input type="password" id="pin-current" inputmode="numeric" maxlength="4" style="width:100px; padding:8px; font-size:1.1rem; letter-spacing:0.3em; text-align:center;" />
+        </div>
+        <div>
+          <div class="form-label" style="font-size:0.85rem;">新しいパスワード</div>
+          <input type="password" id="pin-new" inputmode="numeric" maxlength="4" style="width:100px; padding:8px; font-size:1.1rem; letter-spacing:0.3em; text-align:center;" />
+        </div>
+        <div>
+          <div class="form-label" style="font-size:0.85rem;">確認のためもう一度</div>
+          <input type="password" id="pin-new2" inputmode="numeric" maxlength="4" style="width:100px; padding:8px; font-size:1.1rem; letter-spacing:0.3em; text-align:center;" />
+        </div>
+        <button class="primary-btn" data-action="save-admin-pin">変更する</button>
+      </div>
+      <div class="form-hint" style="margin-top:12px;">
+        💡 忘れたときは、この端末のバックアップJSONの <code>admin_pin</code> を見れば分かります。バックアップの保管にはご注意ください。
+      </div>
+    </div>
+
+    <div class="card admin-section" style="border-left:4px solid var(--blue);">
+      <h2 style="color:var(--blue);">💾 バックアップ（書き出し・読み込み）</h2>
+      <div class="form-hint" style="margin-bottom:14px;">
+        データはこの端末のブラウザの中だけにあります。<strong>端末が変わると引き継げません。</strong><br>
+        月に一度は書き出して、本部に送るか別の場所に保管してください。
+      </div>
+      <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
+        <button class="primary-btn" data-action="export-backup">📥 全データを書き出す（JSON）</button>
+      </div>
+      <div style="margin-top:16px; padding:14px; background:#fbedec; border-radius:8px;">
+        <strong style="font-size:0.95rem; color:var(--red);">バックアップから戻す</strong>
+        <div class="form-hint" style="margin:8px 0;">⚠️ この端末の現在のデータはすべて置き換わります。新しい端末に移すとき、または壊れたときだけ使ってください。</div>
+        <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+          <input type="file" id="restore-file" accept="application/json,.json" />
+          <button class="nav-btn" data-action="import-backup" style="color:var(--red); border-color:var(--red);">読み込んで置き換える</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="card admin-section" style="border-left:4px solid var(--purple, #7b1fa2);">
+      <h2 style="color:#7b1fa2;">📦 古い打刻の退避（容量対策）</h2>
+      <div class="form-hint" style="margin-bottom:14px;">
+        ブラウザに保存できる量は概ね5MBです。打刻1件がおよそ150バイトなので、<strong>20人×8打刻×250日でおよそ5.7MB</strong>に達し、超えると保存に失敗して打刻が消えます。<br>
+        年に一度は、決算・給与計算が済んだ古い月をCSVに書き出して端末から減らしてください。
+      </div>
+      <div style="background:var(--green-bg); padding:12px 14px; border-radius:6px; margin-bottom:14px; font-size:0.95rem;">
+        現在：打刻 <strong>${state.punches.length.toLocaleString()}</strong> 件 ／ 作業記録 <strong>${state.work_records.length.toLocaleString()}</strong> 件
+        ${!HAS_WINDOW_STORAGE ? ` ／ 使用量 約 <strong>${(estimateStorageBytes()/1024/1024).toFixed(2)} MB</strong>（上限の目安 5MB）` : ''}
+      </div>
+      <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
+        <label style="font-size:0.95rem;">この年月まで退避：</label>
+        <input type="month" id="archive-month" style="padding:6px;" />
+        <button class="nav-btn" data-action="archive-punches" style="color:#7b1fa2; border-color:#7b1fa2;">📤 CSVに書き出して端末から削除</button>
+      </div>
     </div>
 
     <div class="card admin-section" style="border-left:4px solid var(--orange);">
@@ -5145,7 +5532,7 @@ function renderAppSettings() {
         ⚠️ 単価マスタ・打刻データ・作業記録は影響を受けません。
       </div>
       <button class="nav-btn" data-action="reset-masters" style="color:var(--orange); border-color:var(--orange);">
-        🔄 作業マスタ・品目マスタを初期値で上書き（${state.work_tasks.length}→24個・${state.work_products.length}→10個）
+        🔄 作業マスタ・品目マスタを初期値で上書き（作業 ${state.work_tasks.length}→${DEFAULT_WORK_TASKS.length}個・品目 ${state.work_products.length}→${DEFAULT_WORK_PRODUCTS.length}個）
       </button>
     </div>
     
@@ -5262,7 +5649,7 @@ function renderEmployeeEdit() {
     <div class="card">
       <h2>${isNew ? '👤＋ 新規従業員 登録' : `✏️ ${emp.name} さんの情報を編集`}</h2>
       <div class="form-hint" style="margin-bottom:14px;">
-        労務管理用の最小情報のみ登録します。時給など詳細は別画面「月間勤務計画」で入力します。
+        労務管理用の最小情報を登録します。ここで登録した時給は「労働時間計画」で使い、日々の賃金計算は「月間勤務計画」の時給を使います。
       </div>
       <div class="emp-form">
         <div class="form-row">
@@ -5310,11 +5697,27 @@ function renderEmployeeEdit() {
           </div>
         </div>
         <div class="form-row">
+          <label class="form-label">時給 <span class="required">必須</span></label>
+          <div style="display:flex; align-items:center; gap:8px;">
+            <input type="number" id="ef-hourly-rate" value="${emp ? (emp.hourly_rate || '') : ''}" min="0" max="10000" step="10" style="width:120px;" placeholder="1000" />
+            <span>円／時</span>
+          </div>
+          <div class="form-hint">労働時間計画の年間総枠（目標所得÷時給）に使う基準額です。未入力だと総枠が0時間になります。<br>
+          <strong>年度の途中で時給が変わる場合は、月間勤務計画で月ごとの時給を入れてください。</strong>日々の賃金計算はそちらを使います。</div>
+        </div>
+        <div class="form-row">
+          <label class="form-label">扶養区分</label>
+          <select id="ef-fuyo">
+            <option value="inside" ${(!emp || (emp.fuyo_type || 'inside') === 'inside') ? 'selected' : ''}>扶養内（目標所得から総枠を逆算）</option>
+            <option value="outside" ${emp && emp.fuyo_type === 'outside' ? 'selected' : ''}>扶養外（年間総枠を直接入力）</option>
+          </select>
+        </div>
+        <div class="form-row">
           <label class="form-label">拠点 <span class="required">必須</span></label>
           <select id="ef-location">
-            <option value="川口" ${(!emp || emp.location === '川口') ? 'selected' : ''}>本社</option>
-            <option value="松尾" ${emp && emp.location === '松尾' ? 'selected' : ''}>松尾作業所（B型・将来用）</option>
+            ${state.sites.map(st => `<option value="${st.name}" ${((emp && emp.location === st.name) || (!emp && currentSite() === st.name)) ? 'selected' : ''}>${st.name}</option>`).join('')}
           </select>
+          <div class="form-hint">拠点は「管理画面 → 設定 → 拠点マスタ」で追加・変更できます。</div>
         </div>
         ${isNew ? '' : `
         <div class="form-row">
@@ -5506,6 +5909,10 @@ function calcLaborMinutes(start, end) {
   const grossMin = parseTimeStr(end) - parseTimeStr(start);
   if (grossMin <= 0) return { grossMin: 0, breakMin: 0, netMin: 0 };
   let breakMin = 0;
+  // 労基法：実労働が6時間を超えたら45分、8時間を超えたら60分の休憩が要る。
+  // 拘束6h00mちょうどなら休憩不要（実労働6h00m）。6h01mになると実労働が6hを超えるため45分が必要になり、
+  // 結果として実労働は5h16mに落ちる。この段差は法定休憩そのものの性質であって計算の誤りではない。
+  // 同様に拘束8h45mまでは45分で足り（実労働8h00m）、8h46mからは60分が要る。
   if (grossMin > 8 * 60 + 45) breakMin = 60;
   else if (grossMin > 6 * 60) breakMin = 45;
   return { grossMin, breakMin, netMin: grossMin - breakMin };
@@ -6785,7 +7192,7 @@ function renderPlanChangeMenu() {
     ? `<img src="${emp.photo}" class="face-img" alt="" />`
     : `<div class="face">${emp.emoji || '👤'}</div>`;
   const contract = emp.monthly_contract_hours ? `月${emp.monthly_contract_hours}h契約` : '契約時間未設定';
-  const branch = emp.branch || '川口';
+  const branch = emp.location || currentSite() || '-';
   const changeCount = getPlanChangeCount(empId, 'this_month');
   const pendingCount = getPendingApprovalCount(empId);
   const lastChange = getLastPlanChange(empId);
@@ -7079,7 +7486,7 @@ function renderPlanDayChange() {
     ? `<img src="${emp.photo}" class="face-img" alt="" />`
     : `<span class="face">${emp.emoji || '👤'}</span>`;
   const contract = emp.monthly_contract_hours ? `月${emp.monthly_contract_hours}h契約` : '契約時間未設定';
-  const branch = emp.branch || '川口';
+  const branch = emp.location || currentSite() || '-';
 
   let html = `
     <div class="nav-row">
@@ -7323,7 +7730,7 @@ function renderPlanTimeChange() {
     ? `<img src="${emp.photo}" class="face-img" alt="" />`
     : `<span class="face">${emp.emoji || '👤'}</span>`;
   const contract = emp.monthly_contract_hours ? `月${emp.monthly_contract_hours}h契約` : '契約時間未設定';
-  const branch = emp.branch || '川口';
+  const branch = emp.location || currentSite() || '-';
 
   let html = `
     <div class="nav-row">
@@ -7621,7 +8028,7 @@ function renderApprovalList() {
       ? `<img src="${emp.photo}" class="face-img" alt="" />`
       : `<div class="face">${emp.emoji || '👤'}</div>`;
     const contract = emp.monthly_contract_hours ? `月${emp.monthly_contract_hours}h契約` : '契約時間未設定';
-    const branch = emp.branch || emp.location || '川口';
+    const branch = emp.location || currentSite() || '-';
 
     html += `
       <div class="emp-group">
@@ -8705,6 +9112,35 @@ function renderQRCode() {
 }
 
 
+// 管理画面のパスワード入力（テンキー・現場のタブレット想定）
+function renderAdminLock() {
+  const len = (state._pinBuf || '').length;
+  let dots = '';
+  for (let i = 0; i < 4; i++) {
+    dots += `<span style="display:inline-block; width:22px; height:22px; margin:0 7px; border-radius:50%; ${i < len ? 'background:var(--green);' : 'background:#fff; border:2px solid var(--green-light);'}"></span>`;
+  }
+  let keys = '';
+  for (const k of ['1','2','3','4','5','6','7','8','9','clear','0','back']) {
+    if (k === 'clear') {
+      keys += `<button class="nav-btn" data-action="pin-clear" style="padding:18px; font-size:1rem;">クリア</button>`;
+    } else if (k === 'back') {
+      keys += `<button class="nav-btn" data-action="back-home" style="padding:18px; font-size:1rem;">戻る</button>`;
+    } else {
+      keys += `<button class="nav-btn" data-action="pin-key" data-digit="${k}" style="padding:18px; font-size:1.6rem; font-weight:bold;">${k}</button>`;
+    }
+  }
+  return `
+    <div class="card" style="max-width:340px; margin:40px auto; text-align:center;">
+      <h2 style="justify-content:center; text-align:center;">🔒 管理画面</h2>
+      <div class="greeting" style="margin-bottom:18px;">4桁のパスワードを入力してください</div>
+      <div style="margin-bottom:8px;">${dots}</div>
+      <div style="min-height:24px; color:var(--red); font-size:0.9rem; font-weight:bold; margin-bottom:12px;">${state._pinError || ''}</div>
+      <div style="display:grid; grid-template-columns:repeat(3, 1fr); gap:10px;">${keys}</div>
+      ${state.admin_pin === DEFAULT_ADMIN_PIN ? '<div class="form-hint" style="margin-top:16px; color:var(--orange);">⚠️ 初期パスワード 0000 のままです。入ったら設定画面で変更してください。</div>' : ''}
+    </div>
+  `;
+}
+
 function renderAdmin() {
   const today = todayStr();
   const todayLogs = state.punches
@@ -8749,7 +9185,7 @@ function renderAdmin() {
         <button class="nav-btn" data-action="go-punch-logs" style="background:#f3e5f5; color:#7b1fa2; border-color:#7b1fa2; font-weight:bold;">📋 打刻ログ詳細</button>
         <button class="nav-btn" data-action="go-punch-fix" style="background:#fff3e0; color:#e65100; border-color:#e65100; font-weight:bold;">🛠 打刻もれ修正</button>
         <button class="nav-btn" data-action="go-ajisai-prices" style="background:#fff8e1; color:#d9b347; border-color:#d9b347; font-weight:bold;">🏷 味采確定単価</button>
-        <button class="nav-btn" data-action="go-tasks-master" style="background:#e0f2f1; color:#00897b; border-color:#00897b; font-weight:bold;">⚙️ 作業マスタ</button>
+        <button class="nav-btn" data-action="go-tasks-master" style="background:#e0f2f1; color:#00897b; border-color:#00897b; font-weight:bold;">⚙️ 作業・品目マスタ</button>
         <button class="nav-btn" data-action="go-app-settings" style="background:#fafafa; color:#555; border-color:#999; font-weight:bold;">🔧 設定</button>
         <button class="nav-btn" data-action="go-reports" style="background:#ffebee; color:#c62828; border-color:#c62828; font-weight:bold;">📊 集計レポート</button>
         <button class="nav-btn" data-action="go-qr" style="background:#e8eaf6; color:#3f51b5; border-color:#3f51b5; font-weight:bold;">📱 デモQR</button>
@@ -8929,6 +9365,8 @@ async function handleClick(e) {
     state.screen = 'home';
     state.current_employee_id = null;
     state._selectedMembers = [];
+    state._adminUnlocked = false;   // 共用端末なので、打刻画面に戻ったら管理画面は閉じる
+    state._pinBuf = ''; state._pinError = '';
     render();
   } else if (a === 'back-personal') {
     state.screen = 'personal';
@@ -8939,6 +9377,12 @@ async function handleClick(e) {
     state._selectedMembers = [];
     render();
   } else if (a === 'go-admin') {
+    if (!state._adminUnlocked) {
+      state._pinBuf = ''; state._pinError = '';
+      state.screen = 'admin_lock';
+      render();
+      return;
+    }
     state.screen = 'admin';
     render();
   } else if (a === 'punch') {
@@ -9060,6 +9504,9 @@ async function handleClick(e) {
     const photo = document.getElementById('ef-photo').value || '';
     const contractHours = parseInt(document.getElementById('ef-contract-hours').value || '120', 10);
     const location = document.getElementById('ef-location').value;
+    const hourlyRate = parseInt(document.getElementById('ef-hourly-rate').value, 10) || 0;
+    const fuyoEl = document.getElementById('ef-fuyo');
+    const fuyoType = fuyoEl ? fuyoEl.value : 'inside';
     const statusEl = document.getElementById('ef-status');
     const status = statusEl ? statusEl.value : 'active';
     if (!empId || !name) { alert('従業員NOと名前は必須です'); return; }
@@ -9071,7 +9518,7 @@ async function handleClick(e) {
         id: empId, name, emoji, photo,
         monthly_contract_hours: contractHours,
         location, status,
-        // 既存のhourly_rate等のフィールドは月間勤務計画画面で別途設定
+        hourly_rate: hourlyRate, fuyo_type: fuyoType,
       });
     } else {
       const existing = state.employees.find(emp2 => emp2.id === state._editingEmpId);
@@ -9082,6 +9529,8 @@ async function handleClick(e) {
         existing.monthly_contract_hours = contractHours;
         existing.location = location;
         existing.status = status;
+        existing.hourly_rate = hourlyRate;
+        existing.fuyo_type = fuyoType;
       }
     }
     await saveData(STORAGE_KEYS.EMPLOYEES, state.employees);
@@ -9164,6 +9613,254 @@ async function handleClick(e) {
     render();
     state._fixEmpId = e.currentTarget.dataset.empId;
     render();
+  } else if (a === 'save-tasks') {
+    // 表示中の行だけを既存配列にマージ（フィルタ中でも他の作業を消さない）
+    let changed = 0;
+    document.querySelectorAll('.task-input').forEach(el => {
+      const t = state.work_tasks.find(x => x.id === el.dataset.taskId);
+      if (!t) return;
+      const f = el.dataset.field;
+      const v = el.value.trim();
+      if (f === 'name' || f === 'unit') { if (!v) return; }
+      if (t[f] !== v) { t[f] = v; changed++; }
+    });
+    await saveData(STORAGE_KEYS.WORK_TASKS, state.work_tasks);
+    // 単価・包材の unit 表記も追従させる
+    for (const p of state.work_prices) { const t = state.work_tasks.find(x => x.id === p.task_id); if (t) p.unit = t.unit; }
+    for (const m of state.work_materials) { const t = state.work_tasks.find(x => x.id === m.task_id); if (t) m.unit = t.unit; }
+    await saveData(STORAGE_KEYS.WORK_PRICES, state.work_prices);
+    await saveData(STORAGE_KEYS.WORK_MATERIALS, state.work_materials);
+    alert(changed > 0 ? `作業マスタを保存しました（${changed}項目を変更）` : '変更はありませんでした');
+    render();
+  } else if (a === 'add-task') {
+    const name = document.getElementById('new-task-name').value.trim();
+    const unit = document.getElementById('new-task-unit').value.trim();
+    const category = document.getElementById('new-task-category').value;
+    const icon = document.getElementById('new-task-icon').value.trim() || '📋';
+    if (!name) { alert('作業名を入力してください'); return; }
+    if (!unit) { alert('単位を入力してください（袋・kg・箱 など）'); return; }
+    if (state.work_tasks.some(t => t.name === name)) { alert('同じ名前の作業がすでにあります'); return; }
+    const prefix = category === '手作業' ? 'TH' : (category === 'マシン作業' ? 'TM' : 'TG');
+    let max = 0;
+    for (const t of state.work_tasks) {
+      if (t.id.startsWith(prefix)) { const num = parseInt(t.id.slice(prefix.length), 10); if (num > max) max = num; }
+    }
+    const newTask = {
+      id: prefix + String(max + 1).padStart(2, '0'),
+      name, unit, category, icon,
+      type: category === '全体寄与' ? 'global' : 'parent',
+    };
+    if (category === 'マシン作業') newTask.machine_status = '実機';
+    state.work_tasks.push(newTask);
+    await saveData(STORAGE_KEYS.WORK_TASKS, state.work_tasks);
+    state._pricesBuf = null; state._materialsBuf = null;
+    alert(`作業「${name}」を追加しました（${newTask.id}）`);
+    render();
+  } else if (a === 'delete-task') {
+    const tid = e.currentTarget.dataset.taskId;
+    const t = state.work_tasks.find(x => x.id === tid);
+    if (!t) return;
+    const usedRecords = state.work_records.filter(r => r.task_id === tid).length;
+    if (usedRecords > 0) {
+      alert(`「${t.name}」は作業記録が ${usedRecords} 件あるため削除できません。\n記録を残したまま使わなくする場合は、名称の先頭に「（廃止）」を付けてください。`);
+      return;
+    }
+    const priceCount = state.work_prices.filter(x => x.task_id === tid).length;
+    const matCount = state.work_materials.filter(x => x.task_id === tid).length;
+    if (!confirm(`作業「${t.name}」を削除します。\n単価 ${priceCount} 件・包材費 ${matCount} 件も一緒に消えます。\nよろしいですか？`)) return;
+    state.work_tasks = state.work_tasks.filter(x => x.id !== tid);
+    state.work_prices = state.work_prices.filter(x => x.task_id !== tid);
+    state.work_materials = state.work_materials.filter(x => x.task_id !== tid);
+    await saveData(STORAGE_KEYS.WORK_TASKS, state.work_tasks);
+    await saveData(STORAGE_KEYS.WORK_PRICES, state.work_prices);
+    await saveData(STORAGE_KEYS.WORK_MATERIALS, state.work_materials);
+    state._pricesBuf = null; state._materialsBuf = null;
+    render();
+  } else if (a === 'save-products') {
+    let changed = 0;
+    document.querySelectorAll('.product-input').forEach(el => {
+      const p = state.work_products.find(x => x.id === el.dataset.productId);
+      if (!p) return;
+      const v = el.value.trim();
+      if (el.dataset.field === 'name' && !v) return;
+      if (p[el.dataset.field] !== v) { p[el.dataset.field] = v; changed++; }
+    });
+    await saveData(STORAGE_KEYS.WORK_PRODUCTS, state.work_products);
+    alert(changed > 0 ? `品目マスタを保存しました（${changed}項目を変更）` : '変更はありませんでした');
+    render();
+  } else if (a === 'add-product') {
+    const name = document.getElementById('new-product-name').value.trim();
+    const emoji = document.getElementById('new-product-emoji').value.trim() || '🥬';
+    if (!name) { alert('品目名を入力してください'); return; }
+    if (state.work_products.some(p => p.name === name)) { alert('同じ名前の品目がすでにあります'); return; }
+    let max = 0;
+    for (const p of state.work_products) { const num = parseInt(String(p.id).replace(/^P/, ''), 10); if (num > max) max = num; }
+    state.work_products.push({ id: 'P' + String(max + 1).padStart(2, '0'), name, emoji });
+    await saveData(STORAGE_KEYS.WORK_PRODUCTS, state.work_products);
+    state._pricesBuf = null; state._materialsBuf = null;
+    alert(`品目「${name}」を追加しました`);
+    render();
+  } else if (a === 'delete-product') {
+    const pid = e.currentTarget.dataset.productId;
+    const p = state.work_products.find(x => x.id === pid);
+    if (!p) return;
+    const usedRecords = state.work_records.filter(r => r.product_id === pid).length;
+    if (usedRecords > 0) { alert(`「${p.name}」は作業記録が ${usedRecords} 件あるため削除できません。`); return; }
+    const priceCount = state.work_prices.filter(x => x.product_id === pid).length;
+    if (priceCount > 0) { alert(`「${p.name}」は単価が ${priceCount} 件設定されています。\n先に単価マスタで空欄にしてから削除してください。`); return; }
+    if (!confirm(`品目「${p.name}」を削除します。よろしいですか？`)) return;
+    state.work_products = state.work_products.filter(x => x.id !== pid);
+    state.work_materials = state.work_materials.filter(x => x.product_id !== pid);
+    await saveData(STORAGE_KEYS.WORK_PRODUCTS, state.work_products);
+    await saveData(STORAGE_KEYS.WORK_MATERIALS, state.work_materials);
+    state._pricesBuf = null; state._materialsBuf = null;
+    render();
+  } else if (a === 'save-device-site') {
+    const v = e.currentTarget.value;
+    state.device_site = v;
+    await saveData(STORAGE_KEYS.DEVICE_SITE, v);
+    render();
+  } else if (a === 'dismiss-seed-notice') {
+    state._seedNotice = null;
+    render();
+  } else if (a === 'go-sites-master') {
+    state.screen = 'sites_master';
+    render();
+  } else if (a === 'save-sites') {
+    let changed = 0;
+    document.querySelectorAll('.site-input').forEach(el => {
+      const st = state.sites.find(x => x.id === el.dataset.siteId);
+      const v = el.value.trim();
+      if (!st || !v) return;
+      if (st.name !== v) {
+        // 従業員の拠点表記も一緒に付け替える（拠点名を保持しているため）
+        for (const emp of state.employees) { if (emp.location === st.name) emp.location = v; }
+        if (state.device_site === st.name) state.device_site = v;
+        st.name = v; changed++;
+      }
+    });
+    if (changed > 0) {
+      await saveData(STORAGE_KEYS.SITES, state.sites);
+      await saveData(STORAGE_KEYS.EMPLOYEES, state.employees);
+      await saveData(STORAGE_KEYS.DEVICE_SITE, state.device_site);
+    }
+    alert(changed > 0 ? `拠点マスタを保存しました（${changed}件）` : '変更はありませんでした');
+    render();
+  } else if (a === 'add-site') {
+    const name = document.getElementById('new-site-name').value.trim();
+    if (!name) { alert('拠点名を入力してください'); return; }
+    if (state.sites.some(x => x.name === name)) { alert('同じ名前の拠点がすでにあります'); return; }
+    let max = 0;
+    for (const x of state.sites) { const num = parseInt(String(x.id).replace(/^S/, ''), 10); if (num > max) max = num; }
+    state.sites.push({ id: 'S' + String(max + 1).padStart(2, '0'), name });
+    await saveData(STORAGE_KEYS.SITES, state.sites);
+    render();
+  } else if (a === 'delete-site') {
+    const sid = e.currentTarget.dataset.siteId;
+    const st = state.sites.find(x => x.id === sid);
+    if (!st) return;
+    const used = state.employees.filter(emp => emp.location === st.name).length;
+    if (used > 0) { alert(`「${st.name}」には従業員が ${used} 名います。先に所属を移してから削除してください。`); return; }
+    if (state.sites.length <= 1) { alert('拠点は最低1つ必要です。'); return; }
+    if (!confirm(`拠点「${st.name}」を削除しますか？`)) return;
+    state.sites = state.sites.filter(x => x.id !== sid);
+    if (state.device_site === st.name) {
+      state.device_site = state.sites[0].name;
+      await saveData(STORAGE_KEYS.DEVICE_SITE, state.device_site);
+    }
+    await saveData(STORAGE_KEYS.SITES, state.sites);
+    render();
+  } else if (a === 'export-backup') {
+    const dump = {
+      _format: 'ajisai_package_center_backup',
+      _version: 1,
+      _site: currentSite(),
+      _exported_at: new Date().toISOString(),
+      data: {},
+    };
+    for (const [k, key] of Object.entries(STORAGE_KEYS)) {
+      dump.data[key] = await loadData(key, null);
+    }
+    downloadTextFile(
+      `ajisai_backup_${(currentSite() || 'site').replace(/[^\w぀-ヿ一-鿿]/g, '')}_${todayStr()}.json`,
+      JSON.stringify(dump, null, 2),
+      'application/json'
+    );
+  } else if (a === 'import-backup') {
+    const input = document.getElementById('restore-file');
+    if (!input || !input.files || !input.files[0]) { alert('先にバックアップのJSONファイルを選んでください'); return; }
+    const file = input.files[0];
+    const text = await file.text();
+    let dump;
+    try { dump = JSON.parse(text); } catch (err) { alert('JSONとして読めませんでした：' + err.message); return; }
+    if (!dump || dump._format !== 'ajisai_package_center_backup') { alert('このアプリのバックアップファイルではありません。'); return; }
+    if (!confirm(`バックアップを読み込みます。\n拠点：${dump._site || '不明'}\n書き出し：${dump._exported_at || '不明'}\n\n⚠️ この端末の現在のデータはすべて置き換わります。よろしいですか？`)) return;
+    for (const [key, value] of Object.entries(dump.data || {})) {
+      if (value !== null && value !== undefined) await saveData(key, value);
+    }
+    alert('読み込みました。画面を再読み込みします。');
+    location.reload();
+  } else if (a === 'archive-punches') {
+    const el = document.getElementById('archive-month');
+    if (!el || !el.value) { alert('退避する年月を選んでください'); return; }
+    const cutoff = el.value; // YYYY-MM。この月の末日までを退避対象にする
+    const boundary = cutoff + '-32';
+    const oldPunches = state.punches.filter(p => p.timestamp < boundary);
+    const oldRecords = state.work_records.filter(r => (r.work_started_at || '') < boundary);
+    if (oldPunches.length === 0 && oldRecords.length === 0) { alert(`${cutoff} 以前のデータはありません。`); return; }
+    if (!confirm(`${cutoff} 以前を退避します。\n打刻 ${oldPunches.length} 件・作業記録 ${oldRecords.length} 件をCSVで書き出したうえで、この端末から削除します。\n\n⚠️ 書き出したCSVは必ず保管してください。復元はできません。`)) return;
+    // 打刻CSV
+    let csv = '﻿打刻日時,従業員NO,氏名,種別,作業ID,セッションID,拠点\n';
+    for (const p of oldPunches) {
+      const emp = state.employees.find(x => x.id === p.employee_id);
+      csv += [p.timestamp, p.employee_id, emp ? emp.name : '', p.type, p.work_item_id || '', p.session_id || '', p.location || ''].map(csvCell).join(',') + '\n';
+    }
+    downloadTextFile(`ajisai_punches_${cutoff}以前_${todayStr()}.csv`, csv, 'text/csv');
+    // 作業記録CSV
+    let csv2 = '﻿開始,終了,従業員NO,氏名,作業ID,品目ID,数量,単価\n';
+    for (const r of oldRecords) {
+      const emp = state.employees.find(x => x.id === r.employee_id);
+      csv2 += [r.work_started_at || '', r.work_ended_at || '', r.employee_id, emp ? emp.name : '', r.task_id || '', r.product_id || '', r.quantity || 0, r.unit_price || 0].map(csvCell).join(',') + '\n';
+    }
+    if (oldRecords.length > 0) downloadTextFile(`ajisai_records_${cutoff}以前_${todayStr()}.csv`, csv2, 'text/csv');
+    state.punches = state.punches.filter(p => p.timestamp >= boundary);
+    state.work_records = state.work_records.filter(r => (r.work_started_at || '') >= boundary);
+    await saveData(STORAGE_KEYS.PUNCHES, state.punches);
+    await saveData(STORAGE_KEYS.WORK_RECORDS, state.work_records);
+    alert(`退避しました。残り 打刻 ${state.punches.length} 件・記録 ${state.work_records.length} 件。`);
+    render();
+  } else if (a === 'pin-key') {
+    if ((state._pinBuf || '').length >= 4) return;
+    state._pinBuf = (state._pinBuf || '') + e.currentTarget.dataset.digit;
+    state._pinError = '';
+    if (state._pinBuf.length === 4) {
+      if (state._pinBuf === String(state.admin_pin)) {
+        state._adminUnlocked = true;
+        state._pinBuf = '';
+        state.screen = 'admin';
+      } else {
+        state._pinBuf = '';
+        state._pinError = 'パスワードが違います';
+      }
+    }
+    render();
+  } else if (a === 'pin-clear') {
+    state._pinBuf = ''; state._pinError = '';
+    render();
+  } else if (a === 'save-admin-pin') {
+    const cur = (document.getElementById('pin-current').value || '').trim();
+    const nw  = (document.getElementById('pin-new').value || '').trim();
+    const nw2 = (document.getElementById('pin-new2').value || '').trim();
+    if (cur !== String(state.admin_pin)) { alert('今のパスワードが違います'); return; }
+    if (!/^[0-9]{4}$/.test(nw)) { alert('新しいパスワードは数字4桁で入力してください'); return; }
+    if (nw !== nw2) { alert('確認用のパスワードが一致しません'); return; }
+    state.admin_pin = nw;
+    await saveData(STORAGE_KEYS.ADMIN_PIN, nw);
+    alert('パスワードを変更しました。忘れないよう控えてください。');
+    render();
+  } else if (a === 'pfix-emp-select') {
+    state._fixEmpId = e.currentTarget.dataset.empId;
+    render();
   } else if (a === 'pfix-day-prev') {
     state._fixDate = addDays(state._fixDate, -1); render();
   } else if (a === 'pfix-day-next') {
@@ -9214,7 +9911,7 @@ async function handleClick(e) {
       type: ptype,
       work_item_id: null,
       session_id: null,
-      location: LOCATION,
+      location: currentSite(),
       manual_edited: true,
     });
     await saveData(STORAGE_KEYS.PUNCHES, state.punches);
@@ -10426,7 +11123,7 @@ async function handleClick(e) {
     const newRate = parseInt(document.getElementById('new-emp-rate').value || '1000', 10);
     if (!newId || !newName) { alert('IDと氏名は必須です'); return; }
     if (state.employees.find(emp => emp.id === newId)) { alert('そのIDは既に存在します'); return; }
-    state.employees.push({ id: newId, name: newName, emoji: newEmoji, hourly_rate: newRate, location: LOCATION });
+    state.employees.push({ id: newId, name: newName, emoji: newEmoji, hourly_rate: newRate, location: currentSite() });
     await saveData(STORAGE_KEYS.EMPLOYEES, state.employees);
     render();
   }
@@ -10480,9 +11177,17 @@ async function bootstrap() {
     state.labor_plan = await loadData(STORAGE_KEYS.LABOR_PLAN, []);
     state.punch_edits = await loadData(STORAGE_KEYS.PUNCH_EDITS, []);
     state.ajisai_prices = await loadData(STORAGE_KEYS.AJISAI_PRICES, []);
+    // 味采版：拠点マスタと、この端末の拠点
+    state.sites = await loadData(STORAGE_KEYS.SITES, []);
+    if (!Array.isArray(state.sites) || state.sites.length === 0) {
+      state.sites = JSON.parse(JSON.stringify(DEFAULT_SITES));
+      await saveData(STORAGE_KEYS.SITES, state.sites);
+    }
+    state.device_site = await loadData(STORAGE_KEYS.DEVICE_SITE, null);
+    state.admin_pin = await loadData(STORAGE_KEYS.ADMIN_PIN, DEFAULT_ADMIN_PIN);
     // データ整合性チェック：マスタが空または不正なら DEFAULT で再初期化
-    if (!Array.isArray(state.employees) || state.employees.length === 0) {
-      state.employees = JSON.parse(JSON.stringify(DEFAULT_EMPLOYEES));
+    if (!Array.isArray(state.employees)) {
+      state.employees = [];
       await saveData(STORAGE_KEYS.EMPLOYEES, state.employees);
     }
     if (!Array.isArray(state.work_tasks) || state.work_tasks.length === 0) {
@@ -10492,6 +11197,56 @@ async function bootstrap() {
     if (!Array.isArray(state.work_products) || state.work_products.length === 0) {
       state.work_products = JSON.parse(JSON.stringify(DEFAULT_WORK_PRODUCTS));
       await saveData(STORAGE_KEYS.WORK_PRODUCTS, state.work_products);
+    }
+    // ─────────────────────────────────────────────────────────
+    // 品目の配布（2026-08-05／11品目）
+    // 本部がHTMLを差し替えると、各拠点の端末が次に開いたときここが一度だけ走る。
+    // 足りない品目とその単価・包材費を足すだけで、既存の品目名・単価・打刻・作業記録には触れない。
+    // 同じ名前の品目がすでにあれば何もしない。IDが埋まっていれば空き番号を採る。
+    // ─────────────────────────────────────────────────────────
+    const seedVer = await loadData(STORAGE_KEYS.PRODUCT_SEED, 1);
+    if (seedVer < PRODUCT_SEED_VERSION) {
+      const added = [];
+      const usedIds = new Set(state.work_products.map(p => p.id));
+      const usedNames = new Set(state.work_products.map(p => p.name));
+      const taskIds = new Set(state.work_tasks.map(t => t.id));
+      for (const dp of DEFAULT_WORK_PRODUCTS) {
+        if (!PRODUCT_SEED_V2_NAMES.includes(dp.name)) continue;  // 今回の11件だけを対象にする
+        if (usedNames.has(dp.name)) continue;                    // すでにあるものは触らない
+        let id = dp.id;
+        if (usedIds.has(id)) {
+          let max = 0;
+          for (const u of usedIds) { const n = parseInt(String(u).replace(/^P/, ''), 10); if (n > max) max = n; }
+          id = 'P' + String(max + 1).padStart(2, '0');
+        }
+        state.work_products.push({ id, name: dp.name, emoji: dp.emoji });
+        usedIds.add(id); usedNames.add(dp.name);
+        added.push({ newId: id, seedId: dp.id, name: dp.name });
+      }
+      if (added.length > 0) {
+        for (const a of added) {
+          // 単価・包材費は、その品目に1件も入っていないときだけ足す。すでに消えている作業の分は入れない。
+          if (!state.work_prices.some(x => x.product_id === a.newId)) {
+            for (const sp of DEFAULT_WORK_PRICES) {
+              if (sp.product_id === a.seedId && taskIds.has(sp.task_id)) {
+                state.work_prices.push({ ...sp, product_id: a.newId });
+              }
+            }
+          }
+          if (!state.work_materials.some(x => x.product_id === a.newId)) {
+            for (const sm of DEFAULT_WORK_MATERIALS) {
+              if (sm.product_id === a.seedId && taskIds.has(sm.task_id)) {
+                state.work_materials.push({ ...sm, product_id: a.newId });
+              }
+            }
+          }
+        }
+        await saveData(STORAGE_KEYS.WORK_PRODUCTS, state.work_products);
+        await saveData(STORAGE_KEYS.WORK_PRICES, state.work_prices);
+        await saveData(STORAGE_KEYS.WORK_MATERIALS, state.work_materials);
+        state._seedNotice = added.map(a => a.name);
+      }
+      await saveData(STORAGE_KEYS.PRODUCT_SEED, PRODUCT_SEED_VERSION);
     }
     render();
   } catch (e) {
