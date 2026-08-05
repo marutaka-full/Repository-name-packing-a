@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>保存データ 診断ツール</title>
+<style>
+  :root{--green:#1d9e75;--blue:#2b7bbe;--orange:#d97847;--red:#c24e4e;--gray:#888;--bg:#f7f9f8;--line:#e0e0e0;}
+  *{box-sizing:border-box;}
+  body{font-family:"メイリオ","Hiragino Kaku Gothic ProN",sans-serif;background:var(--bg);margin:0;color:#222;}
+  header{background:var(--green);color:#fff;padding:16px 24px;}
+  header h1{margin:0;font-size:1.25rem;}
+  header .sub{font-size:.85rem;opacity:.9;margin-top:4px;word-break:break-all;}
+  main{max-width:1000px;margin:0 auto;padding:24px;}
+  .card{background:#fff;border-radius:12px;padding:20px;box-shadow:0 2px 8px rgba(0,0,0,.08);margin-bottom:18px;}
+  .card h2{margin:0 0 12px;padding-bottom:8px;border-bottom:2px solid #d0e8dd;font-size:1.05rem;color:var(--green);}
+  .hint{font-size:.88rem;color:#555;line-height:1.7;margin-bottom:12px;}
+  table{width:100%;border-collapse:collapse;font-size:.9rem;}
+  th,td{border:1px solid var(--line);padding:7px 9px;text-align:left;vertical-align:top;}
+  th{background:#eef3f0;white-space:nowrap;}
+  td.num{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums;}
+  .k{font-family:monospace;font-size:.85rem;word-break:break-all;}
+  .tag{display:inline-block;padding:2px 8px;border-radius:10px;font-size:.75rem;font-weight:bold;white-space:nowrap;}
+  .t-fas{background:#e8f4ee;color:var(--green);border:1px solid var(--green);}
+  .t-aji{background:#f3e5f5;color:#7b1fa2;border:1px solid #7b1fa2;}
+  .t-old{background:#fbedec;color:var(--red);border:1px solid var(--red);}
+  .t-etc{background:#eee;color:#666;border:1px solid #aaa;}
+  button{border:1px solid var(--line);background:#fff;border-radius:8px;padding:10px 16px;cursor:pointer;font-family:inherit;font-size:.95rem;margin:0 8px 8px 0;}
+  button:hover{box-shadow:0 2px 6px rgba(0,0,0,.12);}
+  .primary{background:var(--green);color:#fff;border-color:var(--green);font-weight:bold;}
+  .danger{color:var(--red);border-color:var(--red);}
+  .sum{background:#e8f4ee;border-radius:8px;padding:12px 14px;margin-bottom:14px;font-size:.95rem;line-height:1.8;}
+  .warn{background:#fbedec;border-left:4px solid var(--red);border-radius:6px;padding:10px 14px;font-size:.9rem;margin-bottom:12px;}
+  .ok{background:#e8f4ee;border-left:4px solid var(--green);border-radius:6px;padding:10px 14px;font-size:.9rem;margin-bottom:12px;}
+  details{margin-top:6px;}
+  summary{cursor:pointer;font-size:.85rem;color:var(--blue);}
+  pre{background:#fafafa;border:1px solid var(--line);border-radius:6px;padding:8px;overflow:auto;max-height:220px;font-size:.78rem;margin:6px 0 0;}
+</style>
+</head>
+<body>
+<header>
+  <h1>🔍 保存データ 診断ツール</h1>
+  <div class="sub" id="origin">―</div>
+</header>
+<main id="app">読み込み中…</main>
+
+<script>
+// このページは、同じ場所（オリジン）に置かれたアプリ全部の保存データを見るためのもの。
+// 読むだけ。押さない限り何も変えない。
+const FAS='fas_pc_', AJI='ajisai_pc_';
+const LEGACY=['employees','work_items','punches','pending_sessions','active_sessions','work_plans',
+ 'work_patterns','daily_plans','work_tasks','work_products','work_prices','work_materials',
+ 'ajisai_prices','work_records','app_settings','change_requests','change_history',
+ 'employee_notifications','labor_plan','punch_edits','sites','device_site','admin_pin','product_seed_version'];
+
+function bytes(s){return s?s.length*2:0;}          // UTF-16換算
+function mb(n){return (n/1024/1024).toFixed(2);}
+function esc(s){return String(s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));}
+
+function summarize(key,raw){
+  let v; try{ v=JSON.parse(raw); }catch(e){ return '（JSONではない）'; }
+  const base=key.replace(FAS,'').replace(AJI,'');
+  if(Array.isArray(v)){
+    if(v.length===0) return '空';
+    if(base==='employees'){
+      const sites={}; v.forEach(e=>{const s=e.location||'（拠点なし）'; sites[s]=(sites[s]||0)+1;});
+      const names=v.slice(0,3).map(e=>e.name).join('、');
+      return `${v.length}名（${Object.entries(sites).map(([k,c])=>k+' '+c+'名').join(' / ')}）　例：${names}${v.length>3?' …':''}`;
+    }
+    if(base==='sites') return v.map(x=>x.name).join(' / ');
+    if(base==='punches'){
+      const ds=v.map(p=>String(p.timestamp||'').slice(0,10)).filter(Boolean).sort();
+      return `${v.length}件（${ds[0]||'?'} 〜 ${ds[ds.length-1]||'?'}）`;
+    }
+    if(base==='work_products'||base==='work_tasks') return `${v.length}件　例：${v.slice(0,4).map(x=>x.name).join('、')}`;
+    if(base==='work_records') return `${v.length}件`;
+    return `${v.length}件`;
+  }
+  if(typeof v==='string') return (base==='admin_pin')?`「${v}」`:`「${v}」`;
+  if(v&&typeof v==='object') return Object.keys(v).slice(0,6).join(', ');
+  return String(v);
+}
+
+function group(k){
+  if(k.startsWith(FAS)) return ['fas','ファス版','t-fas'];
+  if(k.startsWith(AJI)) return ['aji','味采版','t-aji'];
+  if(LEGACY.includes(k)) return ['old','接頭辞なし（旧・他アプリと共用）','t-old'];
+  return ['etc','その他','t-etc'];
+}
+
+function collect(){
+  const rows=[];
+  for(let i=0;i<localStorage.length;i++){
+    const k=localStorage.key(i);
+    const raw=localStorage.getItem(k);
+    const [g,label,cls]=group(k);
+    rows.push({k,raw,g,label,cls,size:bytes(raw),sum:summarize(k,raw)});
+  }
+  rows.sort((a,b)=> a.g===b.g ? a.k.localeCompare(b.k) : ['fas','aji','old','etc'].indexOf(a.g)-['fas','aji','old','etc'].indexOf(b.g));
+  return rows;
+}
+
+function render(){
+  document.getElementById('origin').textContent = '保存場所（オリジン）：' + location.origin + '　／　このページ：' + location.pathname;
+  const rows=collect();
+  const total=rows.reduce((s,r)=>s+r.size,0);
+  const byG={}; rows.forEach(r=>{byG[r.g]=(byG[r.g]||0)+r.size;});
+  const cnt={}; rows.forEach(r=>{cnt[r.g]=(cnt[r.g]||0)+1;});
+
+  let h='';
+  h+=`<div class="card"><h2>📊 ぜんたい</h2><div class="sum">
+    キーの数：<strong>${rows.length}</strong>　／　合計サイズ：<strong>${mb(total)} MB</strong>（ブラウザの上限の目安は 5 MB）<br>
+    ファス版 <strong>${cnt.fas||0}</strong>件（${mb(byG.fas||0)} MB）　／
+    味采版 <strong>${cnt.aji||0}</strong>件（${mb(byG.aji||0)} MB）　／
+    <span style="color:var(--red);">接頭辞なし <strong>${cnt.old||0}</strong>件（${mb(byG.old||0)} MB）</span>　／
+    その他 <strong>${cnt.etc||0}</strong>件
+  </div>`;
+  if((cnt.old||0)>0){
+    h+=`<div class="warn">⚠️ <strong>接頭辞なしのキーが ${cnt.old} 件あります。</strong>
+    これは複数のアプリが共用してしまう置き場所です。中身が誰のものか、下の表でご確認ください。</div>`;
+  }else{
+    h+=`<div class="ok">✅ 接頭辞なしのキーはありません。アプリ同士の混線はありません。</div>`;
+  }
+  h+=`<button class="primary" onclick="dl()">📥 まるごと書き出す（JSON）</button>
+      <button onclick="location.reload()">🔄 読み直す</button></div>`;
+
+  for(const [g,title,note] of [
+    ['fas','🍊 ファス版（fas_pc_）','ファス パッケージセンター打刻アプリ専用。他アプリからは触られません。'],
+    ['aji','🏷 味采版（ajisai_pc_）','味采パッケージセンター打刻アプリ専用。'],
+    ['old','⚠️ 接頭辞なし（旧版・他アプリと共用）','ここが混線の置き場所です。味采の旧データと、ファス旧版が書き込んだ内容が混ざっている可能性があります。'],
+    ['etc','その他','このツールが知らないキーです。']]){
+    const rs=rows.filter(r=>r.g===g);
+    if(rs.length===0) continue;
+    h+=`<div class="card"><h2>${title}（${rs.length}件）</h2><div class="hint">${note}</div>
+      <table><thead><tr><th>キー</th><th>中身のようす</th><th>サイズ</th></tr></thead><tbody>`;
+    for(const r of rs){
+      h+=`<tr><td class="k">${esc(r.k)}</td><td>${esc(r.sum)}
+        <details><summary>生データを見る</summary><pre>${esc(r.raw.slice(0,1500))}${r.raw.length>1500?'\n…（以下略）':''}</pre></details>
+        </td><td class="num">${r.size.toLocaleString()} B</td></tr>`;
+    }
+    h+=`</tbody></table>`;
+    if(g==='old'){
+      h+=`<div style="margin-top:14px;">
+        <button class="danger" onclick="delOld()">🗑 接頭辞なしのキーだけ削除する</button>
+        <span class="hint">※ 先に「まるごと書き出す」で控えを取ってから押してください。味采アプリを新版（v1.4）にして一度開いたあとであれば、引っ越し済みなので消して構いません。</span>
+      </div>`;
+    }
+    h+=`</div>`;
+  }
+  document.getElementById('app').innerHTML=h;
+}
+
+function dl(){
+  const o={_format:'origin_storage_dump',_origin:location.origin,_at:new Date().toISOString(),data:{}};
+  for(let i=0;i<localStorage.length;i++){const k=localStorage.key(i);o.data[k]=localStorage.getItem(k);}
+  const b=new Blob([JSON.stringify(o,null,2)],{type:'application/json;charset=utf-8'});
+  const u=URL.createObjectURL(b);const a=document.createElement('a');
+  a.href=u;a.download='storage_dump_'+new Date().toISOString().slice(0,10)+'.json';
+  document.body.appendChild(a);a.click();document.body.removeChild(a);
+  setTimeout(()=>URL.revokeObjectURL(u),1000);
+}
+
+function delOld(){
+  const ks=[];for(let i=0;i<localStorage.length;i++){const k=localStorage.key(i);if(LEGACY.includes(k))ks.push(k);}
+  if(ks.length===0){alert('接頭辞なしのキーはありません。');return;}
+  if(!confirm('接頭辞なしのキー '+ks.length+' 件を削除します。\n\n先に「まるごと書き出す」で控えを取りましたか？\n復元はその控えからしかできません。\n\n続けますか？'))return;
+  if(!confirm('本当に削除しますか？（最終確認）'))return;
+  ks.forEach(k=>localStorage.removeItem(k));
+  alert(ks.length+' 件を削除しました。');
+  render();
+}
+
+render();
+</script>
+</body>
+</html>
