@@ -4,6 +4,10 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 
+<!-- 版数の目印。自動更新の確認でここだけを読みに行くので、必ず<head>の先頭付近に置くこと。
+     版を上げるときは、この content と APP_VERSION と <title> と画面下のフッターの4か所を揃える。 -->
+<meta name="app-version" content="v1.5">
+
 <!-- ===== ホーム画面に追加したときの見た目（アイコン・アプリ名） =====
      画像は外部ファイルではなくこのHTMLの中に埋め込んでいます。
      GitHubにこの1枚を置くだけで、iPhone・iPad・Android・PCすべてでアイコンが出ます。 -->
@@ -45,7 +49,7 @@
   } catch (e) {}
 })();
 </script>
-<title>味采 パッケージセンター 打刻システム v1.4</title>
+<title>味采 パッケージセンター 打刻システム v1.5</title>
 <style>
   :root {
     --green: #1d9e75;
@@ -1637,9 +1641,14 @@
   </div>
 </header>
 
+<div id="update-bar" style="display:none; background:#fff8e1; border-bottom:2px solid #d9b347; color:#856404; padding:11px 14px; text-align:center; font-size:0.95rem; line-height:1.8;">
+  🔔 新しい版（<strong id="update-bar-ver"></strong>）が出ています。手が空いたときに開き直してください。
+  <button onclick="reloadForUpdate()" style="margin-left:10px; padding:7px 18px; border:1px solid #d9b347; background:white; color:#856404; border-radius:6px; font-size:0.95rem; font-weight:bold; cursor:pointer;">開き直す</button>
+</div>
+
 <main id="app"></main>
 
-<div class="footer-note">味采版 v1.4（まる労務 v0.4 ベース）<span id="storage-mode-note"></span> ／ <a href="javascript:if(confirm('全データを初期化してリロードします。よろしいですか？')){localStorage.clear();location.hash='';location.reload();}" style="color:#999; text-decoration:underline; font-size:0.85rem;">🆘 緊急リセット</a></div>
+<div class="footer-note">味采版 v1.5（まる労務 v0.4 ベース）<span id="storage-mode-note"></span> ／ <a href="javascript:if(confirm('全データを初期化してリロードします。よろしいですか？')){localStorage.clear();location.hash='';location.reload();}" style="color:#999; text-decoration:underline; font-size:0.85rem;">🆘 緊急リセット</a></div>
 
 <script>
 // ストレージモードをフッターに表示
@@ -1655,41 +1664,36 @@ document.addEventListener('DOMContentLoaded', function() {
 // データ管理
 // ===========================================
 
-// 保存先のキーには必ず接頭辞を付ける。
-// localStorage は「オリジン（https://〇〇.github.io）」単位で共有されるため、
-// 同じ場所に置いた別のアプリと素のキー名（employees など）がぶつかり、
-// 互いのデータを上書きしてしまう。接頭辞でこのアプリ専用の領域に分ける。
-// ※ 接頭辞を付ける前に保存したデータは、起動時に migrateLegacyKeys() が一度だけ引っ越す。
 const STORAGE_KEYS = {
-  EMPLOYEES: 'ajisai_pc_employees',
-  WORK_ITEMS: 'ajisai_pc_work_items',
-  PUNCHES: 'ajisai_pc_punches',
-  PENDING_SESSIONS: 'ajisai_pc_pending_sessions',
-  ACTIVE_SESSIONS: 'ajisai_pc_active_sessions',
-  WORK_PLANS: 'ajisai_pc_work_plans',
-  WORK_PATTERNS: 'ajisai_pc_work_patterns',
-  DAILY_PLANS: 'ajisai_pc_daily_plans',
-  WORK_TASKS: 'ajisai_pc_work_tasks',       // 作業マスタ（親＋全体寄与）
-  WORK_PRODUCTS: 'ajisai_pc_work_products', // 品目マスタ
-  WORK_PRICES: 'ajisai_pc_work_prices',     // 単価マスタ（作業×品目）
-  WORK_MATERIALS: 'ajisai_pc_work_materials', // 包材費マスタ（作業×品目）
-  AJISAI_PRICES: 'ajisai_pc_ajisai_prices', // 味采パッケージ確定単価（独立参照表・案C 2026-06-21）
-  WORK_RECORDS: 'ajisai_pc_work_records',   // 作業記録（出来高付き・v0.6新規）
-  APP_SETTINGS: 'ajisai_pc_app_settings',   // アプリ設定（配賦率など）
+  EMPLOYEES: 'employees',
+  WORK_ITEMS: 'work_items',
+  PUNCHES: 'punches',
+  PENDING_SESSIONS: 'pending_sessions',
+  ACTIVE_SESSIONS: 'active_sessions',
+  WORK_PLANS: 'work_plans',
+  WORK_PATTERNS: 'work_patterns',
+  DAILY_PLANS: 'daily_plans',
+  WORK_TASKS: 'work_tasks',       // 作業マスタ（親＋全体寄与）
+  WORK_PRODUCTS: 'work_products', // 品目マスタ
+  WORK_PRICES: 'work_prices',     // 単価マスタ（作業×品目）
+  WORK_MATERIALS: 'work_materials', // 包材費マスタ（作業×品目）
+  AJISAI_PRICES: 'ajisai_prices', // 味采パッケージ確定単価（独立参照表・案C 2026-06-21）
+  WORK_RECORDS: 'work_records',   // 作業記録（出来高付き・v0.6新規）
+  APP_SETTINGS: 'app_settings',   // アプリ設定（配賦率など）
   // v0.7 勤務計画変更
-  CHANGE_REQUESTS: 'ajisai_pc_change_requests',         // 申請データ（承認待ち）
-  CHANGE_HISTORY: 'ajisai_pc_change_history',           // 履歴データ（給与計算根拠資料）
-  EMPLOYEE_NOTIFICATIONS: 'ajisai_pc_employee_notifications', // 本人通知バナー
+  CHANGE_REQUESTS: 'change_requests',         // 申請データ（承認待ち）
+  CHANGE_HISTORY: 'change_history',           // 履歴データ（給与計算根拠資料）
+  EMPLOYEE_NOTIFICATIONS: 'employee_notifications', // 本人通知バナー
   // v0.7 労働時間計画
-  LABOR_PLAN: 'ajisai_pc_labor_plan',                   // 個人別年度計画（目標所得＋月別計画）
+  LABOR_PLAN: 'labor_plan',                   // 個人別年度計画（目標所得＋月別計画）
   // 打刻もれ修正（管理者の上書き訂正・履歴）
-  PUNCH_EDITS: 'ajisai_pc_punch_edits',
+  PUNCH_EDITS: 'punch_edits',
   // 味采版 v1.2：拠点マスタと端末の拠点設定
-  SITES: 'ajisai_pc_sites',
-  DEVICE_SITE: 'ajisai_pc_device_site',
-  ADMIN_PIN: 'ajisai_pc_admin_pin',
+  SITES: 'sites',
+  DEVICE_SITE: 'device_site',
+  ADMIN_PIN: 'admin_pin',
   // 品目をどこまで配布済みか（既存端末に足りない品目を一度だけ足すために使う）
-  PRODUCT_SEED: 'ajisai_pc_product_seed_version',
+  PRODUCT_SEED: 'product_seed_version',
 };
 
 // 管理画面の初期パスワード。設定画面で必ず変更してもらう
@@ -2000,55 +2004,6 @@ async function saveData(key, value) {
     alert('データ保存に失敗しました：' + e.message);
   }
 }
-// 接頭辞を付ける前（v1.3以前）に保存したデータを、一度だけ新しいキーへ引っ越す。
-// ・新しいキーに既に中身がある場合は触らない（上書き事故を防ぐ）
-// ・古いキーは消さずに残す（元に戻せるようにするため）
-const LEGACY_KEY_MAP = {
-  'employees': 'ajisai_pc_employees',
-  'work_items': 'ajisai_pc_work_items',
-  'punches': 'ajisai_pc_punches',
-  'pending_sessions': 'ajisai_pc_pending_sessions',
-  'active_sessions': 'ajisai_pc_active_sessions',
-  'work_plans': 'ajisai_pc_work_plans',
-  'work_patterns': 'ajisai_pc_work_patterns',
-  'daily_plans': 'ajisai_pc_daily_plans',
-  'work_tasks': 'ajisai_pc_work_tasks',
-  'work_products': 'ajisai_pc_work_products',
-  'work_prices': 'ajisai_pc_work_prices',
-  'work_materials': 'ajisai_pc_work_materials',
-  'ajisai_prices': 'ajisai_pc_ajisai_prices',
-  'work_records': 'ajisai_pc_work_records',
-  'app_settings': 'ajisai_pc_app_settings',
-  'change_requests': 'ajisai_pc_change_requests',
-  'change_history': 'ajisai_pc_change_history',
-  'employee_notifications': 'ajisai_pc_employee_notifications',
-  'labor_plan': 'ajisai_pc_labor_plan',
-  'punch_edits': 'ajisai_pc_punch_edits',
-  'sites': 'ajisai_pc_sites',
-  'device_site': 'ajisai_pc_device_site',
-  'admin_pin': 'ajisai_pc_admin_pin',
-  'product_seed_version': 'ajisai_pc_product_seed_version'
-};
-async function migrateLegacyKeys() {
-  if (HAS_WINDOW_STORAGE) return { moved: 0, skipped: 0 };  // Claude.ai 内では対象外
-  let moved = 0, skipped = 0;
-  try {
-    if (localStorage.getItem('ajisai_pc_migrated_at')) return { moved: 0, skipped: 0 };
-    for (const [oldKey, newKey] of Object.entries(LEGACY_KEY_MAP)) {
-      const oldVal = localStorage.getItem(oldKey);
-      if (oldVal === null) continue;
-      if (localStorage.getItem(newKey) !== null) { skipped++; continue; }
-      localStorage.setItem(newKey, oldVal);
-      moved++;
-    }
-    localStorage.setItem('ajisai_pc_migrated_at', new Date().toISOString());
-    if (moved > 0) console.log(`[味采] 旧データを引っ越しました：${moved}件`);
-  } catch (e) {
-    console.error('引っ越しに失敗:', e);
-  }
-  return { moved, skipped };
-}
-
 async function initializeData() {
   if (!(await loadData(STORAGE_KEYS.EMPLOYEES, null))) await saveData(STORAGE_KEYS.EMPLOYEES, DEFAULT_EMPLOYEES);
   if (!(await loadData(STORAGE_KEYS.WORK_ITEMS, null))) await saveData(STORAGE_KEYS.WORK_ITEMS, DEFAULT_WORK_ITEMS);
@@ -2211,11 +2166,20 @@ function getEmployeeStatus(empId) {
     return { status: 'pending', label: '⏳ペア確認中', pending_id: pending.id, waiting_for: waitingFor };
   }
   // 進行中セッションメンバー
+  // 【2026-08-08 追加】本人がすでに作業終了・休憩・退勤を打っているなら、
+  // セッションが閉じ損ねていても「作業中」とは見なさない。
+  // セッションの閉じ漏れで本人が操作できなくなるのを防ぐ二重の備え。
   const activeSession = state.active_sessions.find(s => 
     s.ended_at === null && s.members.includes(empId)
   );
   if (activeSession) {
-    return { status: 'working', label: '作業中', session_id: activeSession.id, work_item_id: activeSession.work_item_id };
+    const sessTodayPunches = state.punches
+      .filter(p => p.employee_id === empId && p.timestamp.startsWith(todayStr()))
+      .sort((a, b) => a.timestamp.localeCompare(b.timestamp));
+    const lastOwnPunch = sessTodayPunches[sessTodayPunches.length - 1];
+    if (!lastOwnPunch || !['WORK_END', 'BREAK', 'END'].includes(lastOwnPunch.type)) {
+      return { status: 'working', label: '作業中', session_id: activeSession.id, work_item_id: activeSession.work_item_id };
+    }
   }
   // 今日の打刻ログから判定
   const today = todayStr();
@@ -2638,7 +2602,9 @@ async function checkSessionEnding() {
       const today = todayStr();
       const memberPunches = state.punches
         .filter(p => p.employee_id === memberId && p.timestamp.startsWith(today))
-        .filter(p => p.session_id === session.id || (new Date(p.timestamp) > new Date(session.started_at) && ['WORK_END', 'BREAK', 'END'].includes(p.type)))
+        // 【2026-08-08 修正】旧版が残した session_id なしの終了打刻も拾えるようにする。
+        // 「>」だと開始と終了が同じ時刻に並んだときに終了を取りこぼし、セッションが閉じないため「>=」にする。
+        .filter(p => p.session_id === session.id || (new Date(p.timestamp) >= new Date(session.started_at) && ['WORK_END', 'BREAK', 'END'].includes(p.type)))
         .sort((a, b) => a.timestamp.localeCompare(b.timestamp));
       const lastPunch = memberPunches[memberPunches.length - 1];
       if (lastPunch && lastPunch.type === 'WORK_START' && lastPunch.session_id === session.id) {
@@ -10826,8 +10792,14 @@ async function handleClick(e) {
     }
     if (!workStartPunch) { alert('作業開始の打刻がありません'); return; }
     // WORK_END打刻
+    // 【2026-08-08 修正】ペア作業のときは、開始したときと同じ session_id を必ず付ける。
+    // 付けずに終わるとセッションが閉じず、本人が「作業中」のまま抜けられなくなっていた。
+    // 休憩・退勤ボタンは以前から session_id を付けて checkSessionEnding も呼んでいたが、
+    // 出来高登録からの作業終了だけが抜けていた。
     const now = new Date().toISOString();
-    await punch('WORK_END', null, null);
+    const endSessionId = workStartPunch.session_id || null;
+    await punch('WORK_END', null, endSessionId);
+    await checkSessionEnding();
     // 単価取得
     const price = state.work_prices.find(p => p.task_id === buf.main_task_id && p.product_id === buf.main_product_id);
     const unitPrice = price ? price.unit_price : 0;
@@ -11187,6 +11159,52 @@ async function handleClick(e) {
 // 時計
 // ===========================================
 
+// =========================================================
+// 自動更新の案内（2026-08-08 追加）
+// サーバー上のHTMLの先頭だけを読みに行き、版数が自分より新しければ画面上部に帯を出す。
+// 通信できないときは黙って何もしない。打刻の邪魔は一切しない。
+// =========================================================
+const APP_VERSION = 'v1.5';
+const UPDATE_CHECK_INTERVAL_MS = 30 * 60 * 1000;   // 30分おきに確認
+const UPDATE_FIRST_CHECK_MS = 30 * 1000;           // 起動30秒後に1回目
+
+function cleanAppUrl() {
+  return location.href.split('#')[0].split('?')[0];
+}
+
+async function checkForUpdate() {
+  try {
+    // ファイルを直接開いている場合やClaude.ai内では確認しない
+    if (location.protocol !== 'http:' && location.protocol !== 'https:') return;
+    if (typeof fetch !== 'function') return;
+    const url = cleanAppUrl() + '?_check=' + Date.now();
+    // 先頭4KBだけ要求する。版数は<head>の先頭にあるので、これで足りる。
+    // 全部で550KBほどあるので、毎回まるごと落とすと現場の回線に負担がかかる。
+    const res = await fetch(url, { cache: 'no-store', headers: { 'Range': 'bytes=0-4095' } });
+    if (!res.ok) return;
+    const text = await res.text();
+    const m = text.match(/name="app-version" content="([^"]+)"/);
+    if (!m) return;
+    if (m[1] !== APP_VERSION) showUpdateBar(m[1]);
+  } catch (e) {
+    // 圏外・回線不調など。次の確認まで何もしない。
+  }
+}
+
+function showUpdateBar(newVer) {
+  const bar = document.getElementById('update-bar');
+  if (!bar) return;
+  const verEl = document.getElementById('update-bar-ver');
+  if (verEl) verEl.textContent = newVer;
+  bar.style.display = 'block';
+}
+
+// ブラウザが手元の控えを見せないよう、URLに時刻を付けて開き直す。
+// ブックマークそのものは変わらないので、次に開くときは元のURLに戻る。
+function reloadForUpdate() {
+  location.replace(cleanAppUrl() + '?v=' + Date.now());
+}
+
 function updateClock() {
   const d = new Date();
   const wd = ['日', '月', '火', '水', '木', '金', '土'][d.getDay()];
@@ -11208,7 +11226,6 @@ async function bootstrap() {
     return;
   }
   try {
-    await migrateLegacyKeys();   // ★接頭辞を付ける前のデータを引き継ぐ（初回のみ）
     await initializeData();
     state.employees = await loadData(STORAGE_KEYS.EMPLOYEES, []);
     state.work_items = await loadData(STORAGE_KEYS.WORK_ITEMS, []);
@@ -11303,6 +11320,9 @@ async function bootstrap() {
       }
       await saveData(STORAGE_KEYS.PRODUCT_SEED, PRODUCT_SEED_VERSION);
     }
+    // 【2026-08-08 追加】旧版で「作業終了しても作業中のまま」になった端末を、
+    // 開いた時点で自動的に直す。閉じ損ねたペアのセッションをここで閉じる。
+    await checkSessionEnding();
     render();
   } catch (e) {
     console.error('Bootstrap error:', e);
@@ -11324,9 +11344,13 @@ async function bootstrap() {
   }
   updateClock();
   setInterval(updateClock, 1000);
+  // 自動更新の確認：起動30秒後に1回、そのあとは30分おき
+  setTimeout(checkForUpdate, UPDATE_FIRST_CHECK_MS);
+  setInterval(checkForUpdate, UPDATE_CHECK_INTERVAL_MS);
   // pending タイムアウト＆ペンディング画面の自動更新
   setInterval(async () => {
     await checkTimeouts();
+    await checkSessionEnding();  // 【2026-08-08 追加】閉じ損ねたセッションを毎秒拾って閉じる
     // pending_wait画面の場合、毎秒タイマー更新
     if (state.screen === 'pending_wait') render();
   }, 1000);
