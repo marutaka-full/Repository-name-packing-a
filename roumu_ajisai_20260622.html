@@ -6,7 +6,7 @@
 
 <!-- 版数の目印。自動更新の確認でここだけを読みに行くので、必ず<head>の先頭付近に置くこと。
      版を上げるときは、この content と APP_VERSION と <title> と画面下のフッターの4か所を揃える。 -->
-<meta name="app-version" content="v1.5">
+<meta name="app-version" content="v1.6">
 
 <!-- ===== ホーム画面に追加したときの見た目（アイコン・アプリ名） =====
      画像は外部ファイルではなくこのHTMLの中に埋め込んでいます。
@@ -49,7 +49,7 @@
   } catch (e) {}
 })();
 </script>
-<title>味采 パッケージセンター 打刻システム v1.5</title>
+<title>味采 パッケージセンター 打刻システム v1.6</title>
 <style>
   :root {
     --green: #1d9e75;
@@ -1648,7 +1648,7 @@
 
 <main id="app"></main>
 
-<div class="footer-note">味采版 v1.5（まる労務 v0.4 ベース）<span id="storage-mode-note"></span> ／ <a href="javascript:if(confirm('全データを初期化してリロードします。よろしいですか？')){localStorage.clear();location.hash='';location.reload();}" style="color:#999; text-decoration:underline; font-size:0.85rem;">🆘 緊急リセット</a></div>
+<div class="footer-note">味采版 v1.6（まる労務 v0.4 ベース）<span id="storage-mode-note"></span> ／ <a href="javascript:if(confirm('全データを初期化してリロードします。よろしいですか？')){localStorage.clear();location.hash='';location.reload();}" style="color:#999; text-decoration:underline; font-size:0.85rem;">🆘 緊急リセット</a></div>
 
 <script>
 // ストレージモードをフッターに表示
@@ -5017,7 +5017,7 @@ function renderTasksMaster() {
         <strong style="font-size:0.95rem;">＋ 品目を追加</strong>
         <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-top:10px;">
           <input type="text" id="new-product-emoji" placeholder="🥬" style="width:56px; text-align:center; font-size:1.2rem; padding:6px;" />
-          <input type="text" id="new-product-name" placeholder="品目名（例：レタス）" style="min-width:180px; padding:6px;" />
+          <input type="text" id="new-product-name" placeholder="品目名（例：ミニトマト）" style="min-width:180px; padding:6px;" />
           <button class="primary-btn" data-action="add-product">追加する</button>
         </div>
       </div>
@@ -5270,7 +5270,7 @@ function renderSitesMaster() {
       <div style="margin-top:16px; padding:14px; background:#f4f6f9; border-radius:8px;">
         <strong style="font-size:0.95rem;">＋ 拠点を追加</strong>
         <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-top:10px;">
-          <input type="text" id="new-site-name" placeholder="拠点名（例：鳥栖支店）" style="min-width:200px; padding:6px;" />
+          <input type="text" id="new-site-name" placeholder="拠点名（例：川口）" style="min-width:200px; padding:6px;" />
           <button class="primary-btn" data-action="add-site">追加する</button>
         </div>
       </div>
@@ -9090,7 +9090,7 @@ function renderQRCode() {
       <div style="display:flex; gap:10px; align-items:end; margin-bottom:16px; flex-wrap:wrap;">
         <div style="flex:1; min-width:300px;">
           <label class="form-label">📎 公開URL</label>
-          <input type="text" id="qr-url-input" value="${url}" placeholder="https://[ユーザー名].github.io/[リポジトリ名]/roumu_v04.html" style="width:100%; padding:10px; font-size:1rem;" />
+          <input type="text" id="qr-url-input" value="${url}" placeholder="https://[ユーザー名].github.io/[リポジトリ名]/roumu_ajisai_20260622.html" style="width:100%; padding:10px; font-size:1rem;" />
         </div>
         <button class="primary-btn" data-action="generate-qr">🔄 QR生成</button>
         <button class="nav-btn" data-action="qr-use-current" style="background:#fafafa;">📍 現在のURL</button>
@@ -9113,10 +9113,10 @@ function renderQRCode() {
         <div style="font-weight:bold; margin-bottom:6px;">📋 デモ機として配布する手順</div>
         <ol style="margin:0; padding-left:20px;">
           <li><a href="https://github.com" target="_blank" style="color:var(--blue);">github.com</a> にアクセス → リポジトリを開く（例：marutaka-full/Repository-name-packing-a）</li>
-          <li>「Add file」→「Upload files」で roumu_v04.html をアップロード</li>
+          <li>「Add file」→「Upload files」で roumu_ajisai_20260622.html をアップロード（同じ名前で上書きすればURLは変わりません）</li>
           <li>「Commit changes」で反映</li>
           <li>Settings → Pages → Source: main / (root) → Save</li>
-          <li>数分後、公開URLが発行される（例：https://marutaka-full.github.io/Repository-name-packing-a/roumu_v04.html）</li>
+          <li>数分後、公開URLが発行される（例：https://marutaka-full.github.io/Repository-name-packing-a/roumu_ajisai_20260622.html）</li>
           <li>上の入力欄に貼り付けて「🔄 QR生成」</li>
           <li>「📥 PNGダウンロード」でQR画像を保存</li>
           <li>パンフレット・名刺・展示パネルに使えます 🍊</li>
@@ -11164,7 +11164,7 @@ async function handleClick(e) {
 // サーバー上のHTMLの先頭だけを読みに行き、版数が自分より新しければ画面上部に帯を出す。
 // 通信できないときは黙って何もしない。打刻の邪魔は一切しない。
 // =========================================================
-const APP_VERSION = 'v1.5';
+const APP_VERSION = 'v1.6';
 const UPDATE_CHECK_INTERVAL_MS = 30 * 60 * 1000;   // 30分おきに確認
 const UPDATE_FIRST_CHECK_MS = 30 * 1000;           // 起動30秒後に1回目
 
