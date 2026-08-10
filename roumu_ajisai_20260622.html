@@ -6,7 +6,7 @@
 
 <!-- 版数の目印。自動更新の確認でここだけを読みに行くので、必ず<head>の先頭付近に置くこと。
      版を上げるときは、この content と APP_VERSION と <title> と画面下のフッターの4か所を揃える。 -->
-<meta name="app-version" content="v1.6">
+<meta name="app-version" content="v1.7">
 
 <!-- ===== ホーム画面に追加したときの見た目（アイコン・アプリ名） =====
      画像は外部ファイルではなくこのHTMLの中に埋め込んでいます。
@@ -49,7 +49,7 @@
   } catch (e) {}
 })();
 </script>
-<title>味采 パッケージセンター 打刻システム v1.6</title>
+<title>味采 パッケージセンター 打刻システム v1.7</title>
 <style>
   :root {
     --green: #1d9e75;
@@ -1648,7 +1648,7 @@
 
 <main id="app"></main>
 
-<div class="footer-note">味采版 v1.6（まる労務 v0.4 ベース）<span id="storage-mode-note"></span> ／ <a href="javascript:if(confirm('全データを初期化してリロードします。よろしいですか？')){localStorage.clear();location.hash='';location.reload();}" style="color:#999; text-decoration:underline; font-size:0.85rem;">🆘 緊急リセット</a></div>
+<div class="footer-note">味采版 v1.7（まる労務 v0.4 ベース）<span id="storage-mode-note"></span> ／ <a href="javascript:resetAppData()" style="color:#999; text-decoration:underline; font-size:0.85rem;">🆘 緊急リセット</a></div>
 
 <script>
 // ストレージモードをフッターに表示
@@ -1975,6 +1975,29 @@ const DEFAULT_APP_SETTINGS = {
 
 const TIMEOUT_MS = 3 * 60 * 1000;  // ペア提案タイムアウト：3分
 
+// =========================================================
+// 保存名の名札（2026-08-10 対策）
+// この端末の保管庫は「https://〇〇.github.io」単位で共有される。リポジトリが違っても共有される。
+// 名札を付けないと、同じアカウントで公開している別アプリ（ファス版など）と
+// 従業員・拠点・打刻を互いに上書きしてしまう。
+// 保存名は必ず nsKey() を通すこと。
+// =========================================================
+const APP_NS = 'ajisai_';
+function nsKey(key) { return APP_NS + key; }
+
+// この味采アプリの保存分だけを消す。他のアプリのデータには触れない。
+function clearAppData() {
+  try {
+    for (const key of Object.values(STORAGE_KEYS)) localStorage.removeItem(nsKey(key));
+  } catch (e) {}
+}
+function resetAppData() {
+  if (!confirm('味采の全データを初期化してリロードします。よろしいですか？\n※ この端末の他のアプリのデータには触れません。')) return;
+  clearAppData();
+  location.hash = '';
+  location.reload();
+}
+
 // ストレージ抽象化：Claude.ai 内 → window.storage、ローカルブラウザ → localStorage
 const HAS_WINDOW_STORAGE = (typeof window !== 'undefined') 
   && (typeof window.storage !== 'undefined') 
@@ -1983,10 +2006,10 @@ const HAS_WINDOW_STORAGE = (typeof window !== 'undefined')
 async function loadData(key, defaultValue) {
   try {
     if (HAS_WINDOW_STORAGE) {
-      const r = await window.storage.get(key);
+      const r = await window.storage.get(nsKey(key));
       if (r && r.value) return JSON.parse(r.value);
     } else {
-      const v = localStorage.getItem(key);
+      const v = localStorage.getItem(nsKey(key));
       if (v) return JSON.parse(v);
     }
   } catch (e) {}
@@ -1995,9 +2018,9 @@ async function loadData(key, defaultValue) {
 async function saveData(key, value) {
   try {
     if (HAS_WINDOW_STORAGE) {
-      await window.storage.set(key, JSON.stringify(value));
+      await window.storage.set(nsKey(key), JSON.stringify(value));
     } else {
-      localStorage.setItem(key, JSON.stringify(value));
+      localStorage.setItem(nsKey(key), JSON.stringify(value));
     }
   } catch (e) {
     console.error('保存エラー:', e);
@@ -2118,7 +2141,7 @@ function estimateStorageBytes() {
   let total = 0;
   for (const key of Object.values(STORAGE_KEYS)) {
     try {
-      const v = HAS_WINDOW_STORAGE ? null : localStorage.getItem(key);
+      const v = HAS_WINDOW_STORAGE ? null : localStorage.getItem(nsKey(key));
       if (v) total += v.length * 2; // UTF-16換算
     } catch (err) {}
   }
@@ -5356,6 +5379,16 @@ function renderAppSettings() {
       <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
         <button class="primary-btn" data-action="export-backup">📥 全データを書き出す（JSON）</button>
       </div>
+      <div style="margin-top:16px; padding:14px; background:#f4f6f9; border-radius:8px;">
+        <strong style="font-size:0.95rem;">名札を付ける前の古いデータを取り込む</strong>
+        <div class="form-hint" style="margin:8px 0;">
+          v1.6以前は、同じ github.io で公開している他のアプリと保存場所を共有していました。<br>
+          v1.7からは味采専用に分けています。<strong>古い場所に味采の打刻が残っている場合だけ</strong>これを使ってください。<br>
+          ⚠️ 他のアプリのデータが混ざっている場合は、そちらも一緒に入ってきます。
+        </div>
+        <button class="nav-btn" data-action="import-shared-legacy" style="color:#7b1fa2; border-color:#7b1fa2;">📥 古い場所から取り込む</button>
+      </div>
+
       <div style="margin-top:16px; padding:14px; background:#fbedec; border-radius:8px;">
         <strong style="font-size:0.95rem; color:var(--red);">バックアップから戻す</strong>
         <div class="form-hint" style="margin:8px 0;">⚠️ この端末の現在のデータはすべて置き換わります。新しい端末に移すとき、または壊れたときだけ使ってください。</div>
@@ -9820,6 +9853,17 @@ async function handleClick(e) {
     }
     alert('読み込みました。画面を再読み込みします。');
     location.reload();
+  } else if (a === 'import-shared-legacy') {
+    const keys = Object.values(STORAGE_KEYS);
+    let found = 0;
+    for (const k of keys) { try { if (localStorage.getItem(k) !== null) found++; } catch (err) {} }
+    if (found === 0) { alert('この端末に、名札を付ける前の古いデータは見つかりませんでした。'); return; }
+    if (!confirm(`名札を付ける前の古いデータが ${found}件 見つかりました。取り込みます。\n\n⚠️ 味采の現在のデータはすべて置き換わります。\n他のアプリのデータが混ざっている場合は、そちらも入ってきます。\nよろしいですか？`)) return;
+    for (const k of keys) {
+      try { const v = localStorage.getItem(k); if (v !== null) localStorage.setItem(nsKey(k), v); } catch (err) {}
+    }
+    alert('取り込みました。画面を再読み込みします。');
+    location.reload();
   } else if (a === 'archive-punches') {
     const el = document.getElementById('archive-month');
     if (!el || !el.value) { alert('退避する年月を選んでください'); return; }
@@ -11164,7 +11208,7 @@ async function handleClick(e) {
 // サーバー上のHTMLの先頭だけを読みに行き、版数が自分より新しければ画面上部に帯を出す。
 // 通信できないときは黙って何もしない。打刻の邪魔は一切しない。
 // =========================================================
-const APP_VERSION = 'v1.6';
+const APP_VERSION = 'v1.7';
 const UPDATE_CHECK_INTERVAL_MS = 30 * 60 * 1000;   // 30分おきに確認
 const UPDATE_FIRST_CHECK_MS = 30 * 1000;           // 起動30秒後に1回目
 
@@ -11218,9 +11262,9 @@ function updateClock() {
 // ===========================================
 
 async function bootstrap() {
-  // URLハッシュ #reset でlocalStorageを完全リセット
+  // URLハッシュ #reset で味采の保存分だけリセット（他アプリには触れない）
   if (location.hash === '#reset') {
-    localStorage.clear();
+    clearAppData();
     location.hash = '';
     location.reload();
     return;
@@ -11334,7 +11378,7 @@ async function bootstrap() {
         <pre style="background:#ffebee; padding:14px; border-radius:6px; overflow:auto;">${(e && e.message) || e}</pre>
         <p>下のボタンで全データをリセットして再起動できます。<br>
         <strong>※ 従業員マスタや単価マスタなど全てのデータが初期値に戻ります。</strong></p>
-        <button onclick="localStorage.clear(); location.hash=''; location.reload();" 
+        <button onclick="clearAppData(); location.hash=''; location.reload();" 
           style="padding:14px 28px; background:#c62828; color:white; border:none; border-radius:8px; font-size:1.1rem; cursor:pointer; font-weight:bold;">
           🔄 リセットして再起動
         </button>
