@@ -45,7 +45,7 @@
   } catch (e) {}
 })();
 </script>
-<title>ファス パッケージセンター 打刻システム v1.4</title>
+<title>ファス パッケージセンター 打刻システム v1.5</title>
 <style>
   :root {
     --green: #1d9e75;
@@ -1639,7 +1639,7 @@
 
 <main id="app"></main>
 
-<div class="footer-note">ファス版 v1.4（まる労務 v0.4 ベース）<span id="storage-mode-note"></span> ／ <a href="javascript:if(confirm('全データを初期化してリロードします。よろしいですか？')){localStorage.clear();location.hash='';location.reload();}" style="color:#999; text-decoration:underline; font-size:0.85rem;">🆘 緊急リセット</a></div>
+<div class="footer-note">ファス版 v1.5（まる労務 v0.4 ベース）<span id="storage-mode-note"></span> ／ <a href="javascript:if(confirm('全データを初期化してリロードします。よろしいですか？')){localStorage.clear();location.hash='';location.reload();}" style="color:#999; text-decoration:underline; font-size:0.85rem;">🆘 緊急リセット</a></div>
 
 <script>
 // ストレージモードをフッターに表示
@@ -1699,7 +1699,7 @@ const DEFAULT_ADMIN_PIN = '0000';
 // 新しい版を上書きしても、端末のブラウザが古い版をキャッシュしていると気づけない。
 // そこで、同じフォルダに置いた version.json を見にいって、版が違えばお知らせを出す。
 // ★データは消えない：保存先は端末の localStorage で、HTMLを入れ替えても中身はそのまま残る。
-const APP_VERSION = '1.4';
+const APP_VERSION = '1.5';
 const VERSION_FILE = 'version.json';
 const UPDATE_CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;  // 6時間に1回まで（現場の通信を無駄に使わない）
 
@@ -2208,11 +2208,19 @@ function getEmployeeStatus(empId) {
     return { status: 'pending', label: '⏳ペア確認中', pending_id: pending.id, waiting_for: waitingFor };
   }
   // 進行中セッションメンバー
+  // 【2026-08-10 追加】本人がすでに作業終了・休憩・退勤を打っているなら、
+  // セッションが閉じ損ねていても「作業中」とは見なさない。操作不能を防ぐ二重の備え。
   const activeSession = state.active_sessions.find(s => 
     s.ended_at === null && s.members.includes(empId)
   );
   if (activeSession) {
-    return { status: 'working', label: '作業中', session_id: activeSession.id, work_item_id: activeSession.work_item_id };
+    const sessTodayPunches = state.punches
+      .filter(p => p.employee_id === empId && p.timestamp.startsWith(todayStr()))
+      .sort((a, b) => a.timestamp.localeCompare(b.timestamp));
+    const lastOwnPunch = sessTodayPunches[sessTodayPunches.length - 1];
+    if (!lastOwnPunch || !['WORK_END', 'BREAK', 'END'].includes(lastOwnPunch.type)) {
+      return { status: 'working', label: '作業中', session_id: activeSession.id, work_item_id: activeSession.work_item_id };
+    }
   }
   // 今日の打刻ログから判定
   const today = todayStr();
@@ -2635,7 +2643,8 @@ async function checkSessionEnding() {
       const today = todayStr();
       const memberPunches = state.punches
         .filter(p => p.employee_id === memberId && p.timestamp.startsWith(today))
-        .filter(p => p.session_id === session.id || (new Date(p.timestamp) > new Date(session.started_at) && ['WORK_END', 'BREAK', 'END'].includes(p.type)))
+        // 【2026-08-10 修正】「>」だと開始と終了が同じ時刻に並んだとき終了を取りこぼし、セッションが閉じないため「>=」にする
+        .filter(p => p.session_id === session.id || (new Date(p.timestamp) >= new Date(session.started_at) && ['WORK_END', 'BREAK', 'END'].includes(p.type)))
         .sort((a, b) => a.timestamp.localeCompare(b.timestamp));
       const lastPunch = memberPunches[memberPunches.length - 1];
       if (lastPunch && lastPunch.type === 'WORK_START' && lastPunch.session_id === session.id) {
@@ -10838,8 +10847,14 @@ async function handleClick(e) {
     }
     if (!workStartPunch) { alert('作業開始の打刻がありません'); return; }
     // WORK_END打刻
+    // 【2026-08-10 修正】ペア作業のときは、開始したときと同じ session_id を必ず付ける。
+    // 付けずに終わるとセッションが閉じず、本人が「作業中」のまま抜けられなくなっていた。
+    // 休憩・退勤ボタンは以前から session_id を付けて checkSessionEnding も呼んでいたが、
+    // 出来高登録からの作業終了だけが抜けていた。
     const now = new Date().toISOString();
-    await punch('WORK_END', null, null);
+    const endSessionId = workStartPunch.session_id || null;
+    await punch('WORK_END', null, endSessionId);
+    await checkSessionEnding();
     // 単価取得
     const price = state.work_prices.find(p => p.task_id === buf.main_task_id && p.product_id === buf.main_product_id);
     const unitPrice = price ? price.unit_price : 0;
@@ -11290,6 +11305,7 @@ async function bootstrap() {
   // pending タイムアウト＆ペンディング画面の自動更新
   setInterval(async () => {
     await checkTimeouts();
+    await checkSessionEnding();  // 【2026-08-10 追加】閉じ損ねたセッションを毎秒拾って閉じる
     // pending_wait画面の場合、毎秒タイマー更新
     if (state.screen === 'pending_wait') render();
   }, 1000);
