@@ -6,7 +6,7 @@
 
 <!-- 版数の目印。自動更新の確認でここだけを読みに行くので、必ず<head>の先頭付近に置くこと。
      版を上げるときは、この content と APP_VERSION と <title> と画面下のフッターの4か所を揃える。 -->
-<meta name="app-version" content="v1.7">
+<meta name="app-version" content="v1.8">
 
 <!-- ===== ホーム画面に追加したときの見た目（アイコン・アプリ名） =====
      画像は外部ファイルではなくこのHTMLの中に埋め込んでいます。
@@ -49,7 +49,7 @@
   } catch (e) {}
 })();
 </script>
-<title>味采 パッケージセンター 打刻システム v1.7</title>
+<title>味采 パッケージセンター 打刻システム v1.8</title>
 <style>
   :root {
     --green: #1d9e75;
@@ -1648,7 +1648,7 @@
 
 <main id="app"></main>
 
-<div class="footer-note">味采版 v1.7（まる労務 v0.4 ベース）<span id="storage-mode-note"></span> ／ <a href="javascript:resetAppData()" style="color:#999; text-decoration:underline; font-size:0.85rem;">🆘 緊急リセット</a></div>
+<div class="footer-note">味采版 v1.8（まる労務 v0.4 ベース）<span id="storage-mode-note"></span> ／ <a href="javascript:resetAppData()" style="color:#999; text-decoration:underline; font-size:0.85rem;">🆘 緊急リセット</a></div>
 
 <script>
 // ストレージモードをフッターに表示
@@ -1996,6 +1996,77 @@ function resetAppData() {
   clearAppData();
   location.hash = '';
   location.reload();
+}
+
+// =========================================================
+// 【2026-08-11 追加】新年度スタートの一度きりの初期化
+// 目的：テスト期間（2026年8月）の実績を、9月の本番開始前に自動で空にする。
+//       現場での操作は不要。9月1日以降にアプリを開いた最初の1回だけ動く。
+//
+// 消すもの：打刻・作業記録・作業中セッション・打刻修正履歴・勤務計画変更まわり
+// 残すもの：従業員・単価・包材費・品目・作業・拠点・管理パスワード・各種設定
+//
+// あわせて ajisai_pc_ の置き忘れ（2026-08-05 の一時的な保存場所）を掃除する。
+// ※ 名札なしの素のキーは消さない。同じ場所にある他の野菜アプリが
+//    同じ名前を使っている可能性があり、巻き添えで消す危険があるため。
+//
+// 一度動いたら印（ajisai__fy_reset）を残し、二度と動かない。
+// =========================================================
+const FY_RESET_ID   = 'fy2026_09';   // 実行済みの印。次にやるときは別の文字にする
+const FY_RESET_FROM = '2026-09-01';  // この日以降の初回起動で発動する
+
+// 消す対象＝実績のみ。マスタは入れないこと。
+const FY_RESET_CLEAR = [
+  STORAGE_KEYS.PUNCHES,
+  STORAGE_KEYS.WORK_RECORDS,
+  STORAGE_KEYS.PENDING_SESSIONS,
+  STORAGE_KEYS.ACTIVE_SESSIONS,
+  STORAGE_KEYS.PUNCH_EDITS,
+  STORAGE_KEYS.CHANGE_REQUESTS,
+  STORAGE_KEYS.CHANGE_HISTORY,
+  STORAGE_KEYS.EMPLOYEE_NOTIFICATIONS
+];
+
+function fyTodayStr() {
+  const d = new Date();
+  const p = n => String(n).padStart(2, '0');
+  return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate());
+}
+
+// 戻り値：実行したら記録オブジェクト、しなければ null
+function runNewYearResetOnce() {
+  try {
+    if (typeof localStorage === 'undefined') return null;
+    if (localStorage.getItem(APP_NS + '_fy_reset') === FY_RESET_ID) return null; // 実行済み
+    if (fyTodayStr() < FY_RESET_FROM) return null;                               // まだその日が来ていない
+
+    const log = { id: FY_RESET_ID, at: new Date().toISOString(), cleared: {}, removed_pc: 0 };
+
+    // ① 実績を空にする（マスタには触れない）
+    for (const k of FY_RESET_CLEAR) {
+      let n = 0;
+      try {
+        const a = JSON.parse(localStorage.getItem(nsKey(k)));
+        if (Array.isArray(a)) n = a.length;
+      } catch (e) {}
+      if (n > 0) log.cleared[k] = n;
+      localStorage.setItem(nsKey(k), '[]');
+    }
+
+    // ② ajisai_pc_ の置き忘れを掃除（味采専用と確定しているキーのみ）
+    for (const k of Object.values(STORAGE_KEYS)) {
+      const old = 'ajisai_pc_' + k;
+      if (localStorage.getItem(old) !== null) { localStorage.removeItem(old); log.removed_pc++; }
+    }
+
+    localStorage.setItem(APP_NS + '_fy_reset', FY_RESET_ID);
+    localStorage.setItem(APP_NS + '_fy_reset_log', JSON.stringify(log));
+    console.log('[味采] 新年度リセットを実行しました', log);
+    return log;
+  } catch (e) {
+    console.error('[味采] 新年度リセットに失敗', e);
+    return null;
+  }
 }
 
 // ストレージ抽象化：Claude.ai 内 → window.storage、ローカルブラウザ → localStorage
@@ -11208,7 +11279,7 @@ async function handleClick(e) {
 // サーバー上のHTMLの先頭だけを読みに行き、版数が自分より新しければ画面上部に帯を出す。
 // 通信できないときは黙って何もしない。打刻の邪魔は一切しない。
 // =========================================================
-const APP_VERSION = 'v1.7';
+const APP_VERSION = 'v1.8';
 const UPDATE_CHECK_INTERVAL_MS = 30 * 60 * 1000;   // 30分おきに確認
 const UPDATE_FIRST_CHECK_MS = 30 * 1000;           // 起動30秒後に1回目
 
@@ -11269,6 +11340,9 @@ async function bootstrap() {
     location.reload();
     return;
   }
+  // 新年度スタートの一度きりの初期化。既定値を入れる前に実行する。
+  runNewYearResetOnce();
+
   try {
     await initializeData();
     state.employees = await loadData(STORAGE_KEYS.EMPLOYEES, []);
