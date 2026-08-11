@@ -6,7 +6,7 @@
 
 <!-- 版数の目印。自動更新の確認でここだけを読みに行くので、必ず<head>の先頭付近に置くこと。
      版を上げるときは、この content と APP_VERSION と <title> と画面下のフッターの4か所を揃える。 -->
-<meta name="app-version" content="v1.8">
+<meta name="app-version" content="v1.9">
 
 <!-- ===== ホーム画面に追加したときの見た目（アイコン・アプリ名） =====
      画像は外部ファイルではなくこのHTMLの中に埋め込んでいます。
@@ -49,7 +49,7 @@
   } catch (e) {}
 })();
 </script>
-<title>味采 パッケージセンター 打刻システム v1.8</title>
+<title>味采 パッケージセンター 打刻システム v1.9</title>
 <style>
   :root {
     --green: #1d9e75;
@@ -1648,7 +1648,7 @@
 
 <main id="app"></main>
 
-<div class="footer-note">味采版 v1.8（まる労務 v0.4 ベース）<span id="storage-mode-note"></span> ／ <a href="javascript:resetAppData()" style="color:#999; text-decoration:underline; font-size:0.85rem;">🆘 緊急リセット</a></div>
+<div class="footer-note">味采版 v1.9（まる労務 v0.4 ベース）<span id="storage-mode-note"></span> ／ <a href="javascript:resetAppData()" style="color:#999; text-decoration:underline; font-size:0.85rem;">🆘 緊急リセット</a></div>
 
 <script>
 // ストレージモードをフッターに表示
@@ -2193,6 +2193,32 @@ function todayStr() {
   const d = new Date();
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
+
+// =========================================================
+// 【2026-08-11 修正】打刻の日付の食い違い（時差）
+//
+// 打刻は new Date().toISOString() で保存される。これは世界標準時（UTC）。
+// 一方で集計は todayStr() が返す「日本時間の日付」で絞り込んでいた。
+// 日本はUTCより9時間進んでいるので、
+//   日本時間 2026-09-01 08:00 の打刻 → 保存される値は 2026-08-31T23:00:00.000Z
+// となり、"2026-09-01" では始まらないため、その日の集計から抜け落ちていた。
+//
+// つまり朝9時より前の打刻がすべて消えていた。出勤打刻は8時台なので、
+// 出勤が見つからず、その日の勤務も賃金も丸ごと表示されない状態だった。
+//
+// 保存の形式は変えない（これまでの打刻もそのまま使える）。
+// 比較するときに、その打刻が「日本時間で何月何日か」に直してから突き合わせる。
+// =========================================================
+function localDateStr(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return '';
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+// その打刻が指定の日（YYYY-MM-DD）のものか
+function isOnDate(iso, dateStr) { return !!iso && localDateStr(iso) === dateStr; }
+// その打刻が指定の月（YYYY-MM）のものか
+function isInMonth(iso, ym) { return !!iso && localDateStr(iso).indexOf(ym) === 0; }
 // テキストファイルをダウンロードさせる（バックアップ・CSV退避で使用）
 function downloadTextFile(filename, text, mime) {
   const blob = new Blob([text], { type: (mime || 'text/plain') + ';charset=utf-8' });
@@ -2268,7 +2294,7 @@ function getEmployeeStatus(empId) {
   );
   if (activeSession) {
     const sessTodayPunches = state.punches
-      .filter(p => p.employee_id === empId && p.timestamp.startsWith(todayStr()))
+      .filter(p => p.employee_id === empId && isOnDate(p.timestamp, todayStr()))
       .sort((a, b) => a.timestamp.localeCompare(b.timestamp));
     const lastOwnPunch = sessTodayPunches[sessTodayPunches.length - 1];
     if (!lastOwnPunch || !['WORK_END', 'BREAK', 'END'].includes(lastOwnPunch.type)) {
@@ -2278,7 +2304,7 @@ function getEmployeeStatus(empId) {
   // 今日の打刻ログから判定
   const today = todayStr();
   const todayPunches = state.punches
-    .filter(p => p.employee_id === empId && p.timestamp.startsWith(today))
+    .filter(p => p.employee_id === empId && isOnDate(p.timestamp, today))
     .sort((a, b) => a.timestamp.localeCompare(b.timestamp));
   if (todayPunches.length === 0) return { status: 'off', label: '未出勤' };
   const last = todayPunches[todayPunches.length - 1];
@@ -2295,7 +2321,7 @@ function getEmployeeStatus(empId) {
 function getTodayTotals(empId) {
   const today = todayStr();
   const todayPunches = state.punches
-    .filter(p => p.employee_id === empId && p.timestamp.startsWith(today))
+    .filter(p => p.employee_id === empId && isOnDate(p.timestamp, today))
     .sort((a, b) => a.timestamp.localeCompare(b.timestamp));
   let workMinutes = 0, breakMinutes = 0, lastStart = null, lastBreak = null;
   for (const p of todayPunches) {
@@ -2695,7 +2721,7 @@ async function checkSessionEnding() {
     for (const memberId of session.members) {
       const today = todayStr();
       const memberPunches = state.punches
-        .filter(p => p.employee_id === memberId && p.timestamp.startsWith(today))
+        .filter(p => p.employee_id === memberId && isOnDate(p.timestamp, today))
         // 【2026-08-08 修正】旧版が残した session_id なしの終了打刻も拾えるようにする。
         // 「>」だと開始と終了が同じ時刻に並んだときに終了を取りこぼし、セッションが閉じないため「>=」にする。
         .filter(p => p.session_id === session.id || (new Date(p.timestamp) >= new Date(session.started_at) && ['WORK_END', 'BREAK', 'END'].includes(p.type)))
@@ -2899,7 +2925,7 @@ function renderPersonal() {
 
   const today = todayStr();
   const todayPunches = state.punches
-    .filter(p => p.employee_id === emp.id && p.timestamp.startsWith(today))
+    .filter(p => p.employee_id === emp.id && isOnDate(p.timestamp, today))
     .sort((a, b) => a.timestamp.localeCompare(b.timestamp));
 
   let html = `
@@ -3317,7 +3343,7 @@ function renderMismatchAlert() {
 function calcDayLaborSummary(employeeId, dateObj) {
   const dateStr = isoDateOnly(dateObj);
   const punches = state.punches
-    .filter(p => p.employee_id === employeeId && p.timestamp.startsWith(dateStr))
+    .filter(p => p.employee_id === employeeId && isOnDate(p.timestamp, dateStr))
     .sort((a, b) => a.timestamp.localeCompare(b.timestamp));
   if (punches.length === 0) return null;
   const start = punches.find(p => p.type === 'START');
@@ -3744,7 +3770,7 @@ function renderReportCharge() {
   const baseDate = state._reportDate;
   const dateStr = isoDateOnly(baseDate);
   const records = state.work_records
-    .filter(r => r.work_started_at && r.work_started_at.startsWith(dateStr))
+    .filter(r => isOnDate(r.work_started_at, dateStr))
     .sort((a, b) => a.work_started_at.localeCompare(b.work_started_at));
   
   // 日付ナビ
@@ -3876,7 +3902,7 @@ function renderReportVolume() {
   const dateStr = isoDateOnly(baseDate);
   // 対象日のwork_records
   const records = state.work_records
-    .filter(r => r.work_started_at && r.work_started_at.startsWith(dateStr))
+    .filter(r => isOnDate(r.work_started_at, dateStr))
     .sort((a, b) => a.work_started_at.localeCompare(b.work_started_at));
   
   // 日付ナビ
@@ -4344,8 +4370,8 @@ function calcMonthlyVolumeSum(employeeId, year, month) {
   const records = state.work_records.filter(r => 
     r.employee_id === employeeId && 
     r.work_started_at && 
-    r.work_started_at >= startStr && 
-    r.work_started_at <= endStr + 'T23:59:59'
+    localDateStr(r.work_started_at) >= startStr && 
+    localDateStr(r.work_started_at) <= endStr
   );
   let totalRevenue = 0;
   let recordCount = records.length;
@@ -4569,7 +4595,7 @@ function renderMonthlyTaskDiagnosis(ym) {
   const startStr = `${ym.year}-${String(ym.month).padStart(2,'0')}-01`;
   const endStr = `${ym.year}-${String(ym.month).padStart(2,'0')}-${String(lastDay).padStart(2,'0')}`;
   const records = state.work_records.filter(r => 
-    r.work_started_at && r.work_started_at >= startStr && r.work_started_at <= endStr + 'T23:59:59'
+    r.work_started_at && localDateStr(r.work_started_at) >= startStr && localDateStr(r.work_started_at) <= endStr
   );
   if (records.length === 0) {
     return `<div class="empty-message" style="padding:30px;">この月の作業記録はありません</div>`;
@@ -4684,7 +4710,7 @@ function renderMonthlyCompare(ym) {
   const startStr = `${ym.year}-${String(ym.month).padStart(2,'0')}-01`;
   const endStr = `${ym.year}-${String(ym.month).padStart(2,'0')}-${String(lastDay).padStart(2,'0')}`;
   const records = state.work_records.filter(r => 
-    r.work_started_at && r.work_started_at >= startStr && r.work_started_at <= endStr + 'T23:59:59'
+    r.work_started_at && localDateStr(r.work_started_at) >= startStr && localDateStr(r.work_started_at) <= endStr
   );
   if (records.length === 0) {
     return `<div class="empty-message" style="padding:30px;">この月の作業記録はありません</div>`;
@@ -4812,7 +4838,7 @@ function renderWorkRegister() {
   // 直近のWORK_STARTから経過時間を計算
   const today = todayStr();
   const todayPunches = state.punches
-    .filter(p => p.employee_id === emp.id && p.timestamp.startsWith(today))
+    .filter(p => p.employee_id === emp.id && isOnDate(p.timestamp, today))
     .sort((a, b) => a.timestamp.localeCompare(b.timestamp));
   // 最後のWORK_STARTを探す
   let workStartPunch = null;
@@ -5668,7 +5694,7 @@ function renderAppSettings() {
       </div>
       <div style="display:flex; gap:10px; flex-wrap:wrap;">
         <button class="nav-btn" data-action="clear-today-punches" style="color:var(--orange); border-color:var(--orange);">
-          🗑️ 本日の打刻をクリア（${state.punches.filter(p => p.timestamp.startsWith(todayStr())).length}件）
+          🗑️ 本日の打刻をクリア（${state.punches.filter(p => isOnDate(p.timestamp, todayStr())).length}件）
         </button>
         <button class="nav-btn" data-action="clear-all-punches" style="color:var(--red); border-color:var(--red);">
           🗑️ 全ての打刻＋作業記録をクリア（打刻${state.punches.length}件・記録${state.work_records.length}件）
@@ -6756,7 +6782,7 @@ function renderPunchFix() {
   const ATT = ['START', 'BREAK', 'END'];
   const rows = [];
   state.punches.forEach((p, idx) => {
-    if (p.employee_id === state._fixEmpId && p.timestamp.startsWith(dateStr) && ATT.includes(p.type)) {
+    if (p.employee_id === state._fixEmpId && isOnDate(p.timestamp, dateStr) && ATT.includes(p.type)) {
       rows.push({ p, idx });
     }
   });
@@ -6861,7 +6887,7 @@ function renderPunchLogs() {
   const dateStr = isoDateOnly(state._logsDate);
   // 当日打刻を取得（フィルタ適用前）
   const allPunches = state.punches
-    .filter(p => p.timestamp.startsWith(dateStr))
+    .filter(p => isOnDate(p.timestamp, dateStr))
     .sort((a, b) => a.timestamp.localeCompare(b.timestamp));
   // フィルタ
   const filter = state._logsFilter;
@@ -7275,7 +7301,7 @@ function getPlanChangeCount(empId, range) {
   if (!state.change_history) return 0;
   const now = new Date();
   const ym = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-  return state.change_history.filter(h => h.emp_id === empId && h.timestamp.startsWith(ym)).length;
+  return state.change_history.filter(h => h.emp_id === empId && isInMonth(h.timestamp, ym)).length;
 }
 
 // 個人の承認待ち申請件数（change_requests未実装のため現時点は0返却）
@@ -9268,7 +9294,7 @@ function renderAdminLock() {
 function renderAdmin() {
   const today = todayStr();
   const todayLogs = state.punches
-    .filter(p => p.timestamp.startsWith(today))
+    .filter(p => isOnDate(p.timestamp, today))
     .sort((a, b) => b.timestamp.localeCompare(a.timestamp));
   const summary = state.employees.filter(e => (e.status || 'active') === 'active').map(emp => {
     const totals = getTodayTotals(emp.id);
@@ -9940,8 +9966,8 @@ async function handleClick(e) {
     if (!el || !el.value) { alert('退避する年月を選んでください'); return; }
     const cutoff = el.value; // YYYY-MM。この月の末日までを退避対象にする
     const boundary = cutoff + '-32';
-    const oldPunches = state.punches.filter(p => p.timestamp < boundary);
-    const oldRecords = state.work_records.filter(r => (r.work_started_at || '') < boundary);
+    const oldPunches = state.punches.filter(p => localDateStr(p.timestamp) < boundary);
+    const oldRecords = state.work_records.filter(r => localDateStr(r.work_started_at) < boundary);
     if (oldPunches.length === 0 && oldRecords.length === 0) { alert(`${cutoff} 以前のデータはありません。`); return; }
     if (!confirm(`${cutoff} 以前を退避します。\n打刻 ${oldPunches.length} 件・作業記録 ${oldRecords.length} 件をCSVで書き出したうえで、この端末から削除します。\n\n⚠️ 書き出したCSVは必ず保管してください。復元はできません。`)) return;
     // 打刻CSV
@@ -9958,8 +9984,8 @@ async function handleClick(e) {
       csv2 += [r.work_started_at || '', r.work_ended_at || '', r.employee_id, emp ? emp.name : '', r.task_id || '', r.product_id || '', r.quantity || 0, r.unit_price || 0].map(csvCell).join(',') + '\n';
     }
     if (oldRecords.length > 0) downloadTextFile(`ajisai_records_${cutoff}以前_${todayStr()}.csv`, csv2, 'text/csv');
-    state.punches = state.punches.filter(p => p.timestamp >= boundary);
-    state.work_records = state.work_records.filter(r => (r.work_started_at || '') >= boundary);
+    state.punches = state.punches.filter(p => localDateStr(p.timestamp) >= boundary);
+    state.work_records = state.work_records.filter(r => localDateStr(r.work_started_at) >= boundary);
     await saveData(STORAGE_KEYS.PUNCHES, state.punches);
     await saveData(STORAGE_KEYS.WORK_RECORDS, state.work_records);
     alert(`退避しました。残り 打刻 ${state.punches.length} 件・記録 ${state.work_records.length} 件。`);
@@ -10649,7 +10675,7 @@ async function handleClick(e) {
   } else if (a === 'clear-today-punches') {
     const today = todayStr();
     const before = state.punches.length;
-    state.punches = state.punches.filter(p => !p.timestamp.startsWith(today));
+    state.punches = state.punches.filter(p => !isOnDate(p.timestamp, today));
     const removed = before - state.punches.length;
     if (!confirm(`本日の打刻 ${removed} 件を削除します。\nよろしいですか？`)) { 
       state.punches = await loadData(STORAGE_KEYS.PUNCHES, []);
@@ -10657,7 +10683,7 @@ async function handleClick(e) {
     }
     await saveData(STORAGE_KEYS.PUNCHES, state.punches);
     // 作業記録の本日分も削除
-    state.work_records = state.work_records.filter(r => !r.work_started_at || !r.work_started_at.startsWith(today));
+    state.work_records = state.work_records.filter(r => !isOnDate(r.work_started_at, today));
     await saveData(STORAGE_KEYS.WORK_RECORDS, state.work_records);
     // セッションもクリア
     state.pending_sessions = [];
@@ -10898,7 +10924,7 @@ async function handleClick(e) {
     const today = todayStr();
     // 最後のWORK_STARTを取得
     const todayPunches = state.punches
-      .filter(p => p.employee_id === emp.id && p.timestamp.startsWith(today))
+      .filter(p => p.employee_id === emp.id && isOnDate(p.timestamp, today))
       .sort((a2, b2) => a2.timestamp.localeCompare(b2.timestamp));
     let workStartPunch = null;
     for (let i = todayPunches.length - 1; i >= 0; i--) {
@@ -11279,7 +11305,7 @@ async function handleClick(e) {
 // サーバー上のHTMLの先頭だけを読みに行き、版数が自分より新しければ画面上部に帯を出す。
 // 通信できないときは黙って何もしない。打刻の邪魔は一切しない。
 // =========================================================
-const APP_VERSION = 'v1.8';
+const APP_VERSION = 'v1.9';
 const UPDATE_CHECK_INTERVAL_MS = 30 * 60 * 1000;   // 30分おきに確認
 const UPDATE_FIRST_CHECK_MS = 30 * 1000;           // 起動30秒後に1回目
 
