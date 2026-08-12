@@ -6,7 +6,7 @@
 
 <!-- 版数の目印。自動更新の確認でここだけを読みに行くので、必ず<head>の先頭付近に置くこと。
      版を上げるときは、この content と APP_VERSION と <title> と画面下のフッターの4か所を揃える。 -->
-<meta name="app-version" content="v1.9">
+<meta name="app-version" content="v2.0">
 
 <!-- ===== ホーム画面に追加したときの見た目（アイコン・アプリ名） =====
      画像は外部ファイルではなくこのHTMLの中に埋め込んでいます。
@@ -49,7 +49,7 @@
   } catch (e) {}
 })();
 </script>
-<title>味采 パッケージセンター 打刻システム v1.9</title>
+<title>味采 パッケージセンター 打刻システム v2.0</title>
 <style>
   :root {
     --green: #1d9e75;
@@ -1648,7 +1648,7 @@
 
 <main id="app"></main>
 
-<div class="footer-note">味采版 v1.9（まる労務 v0.4 ベース）<span id="storage-mode-note"></span> ／ <a href="javascript:resetAppData()" style="color:#999; text-decoration:underline; font-size:0.85rem;">🆘 緊急リセット</a></div>
+<div class="footer-note">味采版 v2.0（まる労務 v0.4 ベース）<span id="storage-mode-note"></span> ／ <a href="javascript:resetAppData()" style="color:#999; text-decoration:underline; font-size:0.85rem;">🆘 緊急リセット</a></div>
 
 <script>
 // ストレージモードをフッターに表示
@@ -1996,6 +1996,120 @@ function resetAppData() {
   clearAppData();
   location.hash = '';
   location.reload();
+}
+
+// =========================================================
+// 【2026-08-12 追加】名札を付ける前のデータの取りこぼしを防ぐ
+//
+// 2026-08-10 の v1.7 で保存名に ajisai_ の名札を付けた。
+// それより前に登録した従業員名や打刻は、名札なしの古い場所に残っている。
+// v1.7 以降のアプリは新しい場所しか見ないので、端末が版を上げた瞬間に
+// 「登録したものが消えた」ように見えてしまう。実際に川口で起きた。
+//
+// これを防ぐため、起動時に古い場所を確認する。
+//   ・古い場所に中身がある
+//   ・新しい場所は空（まだ何も登録していない）
+// この2つが揃ったときだけ、初期値を作る前に画面で知らせて選んでもらう。
+//
+// 勝手に取り込むことはしない。現場が何を選んだか分かるようにする。
+// =========================================================
+const LEGACY_ASK_KEY = APP_NS + '_legacy_asked';   // 一度答えたら二度は聞かない
+
+// 古い場所（名札なし）に何が入っているかを数える
+function scanLegacy() {
+  const out = { keys: 0, employees: 0, punches: 0, records: 0, detail: {} };
+  try {
+    for (const k of Object.values(STORAGE_KEYS)) {
+      const v = localStorage.getItem(k);
+      if (v === null) continue;
+      out.keys++;
+      let n = 0;
+      try { const a = JSON.parse(v); if (Array.isArray(a)) n = a.length; } catch (e) {}
+      if (n > 0) out.detail[k] = n;
+      if (k === STORAGE_KEYS.EMPLOYEES) out.employees = n;
+      if (k === STORAGE_KEYS.PUNCHES) out.punches = n;
+      if (k === STORAGE_KEYS.WORK_RECORDS) out.records = n;
+    }
+  } catch (e) {}
+  return out;
+}
+
+// いまの場所が「まだ何も登録していない」状態かどうか。
+// 従業員・打刻・作業記録がすべて空なら、初期値のままとみなす。
+function isFreshHere() {
+  try {
+    for (const k of [STORAGE_KEYS.EMPLOYEES, STORAGE_KEYS.PUNCHES, STORAGE_KEYS.WORK_RECORDS]) {
+      const v = localStorage.getItem(nsKey(k));
+      if (v === null) continue;
+      const a = JSON.parse(v);
+      if (Array.isArray(a) && a.length > 0) return false;
+    }
+    return true;
+  } catch (e) { return false; }
+}
+
+// 聞くべきか判定する
+function shouldAskLegacy() {
+  try {
+    if (localStorage.getItem(LEGACY_ASK_KEY)) return null;   // もう答えている
+    if (!isFreshHere()) return null;                          // すでに使い始めている
+    const lg = scanLegacy();
+    if (lg.employees === 0 && lg.punches === 0 && lg.records === 0) return null;  // 古い場所も空
+    return lg;
+  } catch (e) { return null; }
+}
+
+// 古い場所から取り込む。空いているところだけ埋める（上書きしない）。
+function importLegacy(overwrite) {
+  const log = { at: new Date().toISOString(), copied: {}, skipped: {} };
+  try {
+    for (const k of Object.values(STORAGE_KEYS)) {
+      const old = localStorage.getItem(k);
+      if (old === null) continue;
+      const cur = localStorage.getItem(nsKey(k));
+      let curEmpty = true;
+      if (cur !== null) {
+        try { const a = JSON.parse(cur); curEmpty = Array.isArray(a) ? a.length === 0 : (a === null || a === undefined); }
+        catch (e) { curEmpty = false; }
+      }
+      if (overwrite || curEmpty) {
+        localStorage.setItem(nsKey(k), old);
+        let n = 0; try { const a = JSON.parse(old); if (Array.isArray(a)) n = a.length; } catch (e) {}
+        log.copied[k] = n;
+      } else {
+        log.skipped[k] = true;   // すでに中身があるので触らない
+      }
+    }
+    localStorage.setItem(APP_NS + '_legacy_import_log', JSON.stringify(log));
+  } catch (e) {}
+  return log;
+}
+
+// 起動時に出す確認画面。ここで選ぶまで初期値は作らない。
+function renderLegacyAsk(lg) {
+  const rows = [];
+  if (lg.employees > 0) rows.push(`従業員 ${lg.employees}名`);
+  if (lg.punches > 0) rows.push(`打刻 ${lg.punches}件`);
+  if (lg.records > 0) rows.push(`作業記録 ${lg.records}件`);
+  document.getElementById('app').innerHTML = `
+    <div class="card" style="max-width:560px;margin:24px auto;">
+      <h2 style="font-size:1.1rem;margin:0 0 10px;">📦 前に登録したデータが見つかりました</h2>
+      <div style="padding:12px 14px;background:#fff8e1;border-left:5px solid #f9a825;border-radius:6px;font-size:0.92rem;margin-bottom:14px;">
+        <strong>${rows.join('　／　')}</strong><br>
+        <span style="color:#666;">アプリの保存場所を変えた前に登録されたものです。この端末の中に残っています。</span>
+      </div>
+      <p style="font-size:0.9rem;color:#555;margin-bottom:14px;">
+        取り込むと、従業員の名前や打刻がそのまま戻ります。<br>
+        いま画面に出ている内容は空なので、失うものはありません。
+      </p>
+      <div style="display:flex;flex-direction:column;gap:8px;">
+        <button class="primary-btn" data-action="legacy-import" style="padding:14px;font-size:1rem;">📥 取り込む（おすすめ）</button>
+        <button class="nav-btn" data-action="legacy-skip" style="padding:12px;">このまま新しく始める</button>
+      </div>
+      <p style="font-size:0.78rem;color:#999;margin-top:12px;">
+        「新しく始める」を選んでも古いデータは消えません。あとから 🔧設定 →「📥 古い場所から取り込む」で戻せます。
+      </p>
+    </div>`;
 }
 
 // =========================================================
@@ -2712,6 +2826,51 @@ async function checkTimeouts() {
 }
 
 // セッション終了判定（全員離脱で）
+// =========================================================
+// 【2026-08-12 追加】作業に何人が何分たずさわったかを復元する
+//
+// これまで作業記録は「出来高を登録した1人ぶん」しか残らず、session_id も null だった。
+// 2人で90分の作業を1件として記録すると、人時が1.5なのか3.0なのか判別できず、
+// 人時生産性が最大2〜3倍ずれていた。
+//
+// ペア開始時に全員の WORK_START へ session_id が付いているので、それを起点に
+// 各人の「抜けた時刻」（作業終了／休憩／退勤のうち最初に来るもの）まで数える。
+// 途中で抜けた人も、その人が実際にいた分だけ数えられる。
+// =========================================================
+function buildWorkMembers(sessionId, soloEmpId, soloStartIso, endIso) {
+  const endT = new Date(endIso).getTime();
+  const out = [];
+  if (!sessionId) {
+    const st = new Date(soloStartIso).getTime();
+    out.push({ employee_id: soloEmpId, joined_at: soloStartIso, left_at: endIso,
+               minutes: Math.max(0, Math.round((endT - st) / 60000)) });
+    return out;
+  }
+  const starts = state.punches.filter(p => p.session_id === sessionId && p.type === 'WORK_START');
+  const seen = {};
+  for (const sp of starts) {
+    if (seen[sp.employee_id]) continue;
+    seen[sp.employee_id] = true;
+    const st = new Date(sp.timestamp).getTime();
+    let leftIso = null;
+    const after = state.punches
+      .filter(p => p.employee_id === sp.employee_id
+                && ['WORK_END', 'BREAK', 'END'].includes(p.type)
+                && new Date(p.timestamp).getTime() >= st)
+      .sort((a, b) => a.timestamp.localeCompare(b.timestamp));
+    if (after.length > 0) leftIso = after[0].timestamp;
+    const lt = leftIso ? new Date(leftIso).getTime() : endT;
+    out.push({ employee_id: sp.employee_id, joined_at: sp.timestamp, left_at: leftIso || endIso,
+               minutes: Math.max(0, Math.round((Math.min(lt, endT) - st) / 60000)) });
+  }
+  if (out.length === 0) {
+    const st = new Date(soloStartIso).getTime();
+    out.push({ employee_id: soloEmpId, joined_at: soloStartIso, left_at: endIso,
+               minutes: Math.max(0, Math.round((endT - st) / 60000)) });
+  }
+  return out;
+}
+
 async function checkSessionEnding() {
   let changed = false;
   for (const session of state.active_sessions) {
@@ -5237,7 +5396,7 @@ function renderPricesMaster() {
           📊 設定済み：<strong>${filledCells} / ${totalCells} 件</strong>
         </div>
         <button class="primary-btn" data-action="save-prices">変更を保存</button>
-        <button class="nav-btn" data-action="load-sample-prices" style="background:#fff3e0; color:var(--orange); border-color:var(--orange);">💡 たたき台を読み込む（${SAMPLE_WORK_PRICES.length}件）</button>
+        <button class="nav-btn" data-action="load-sample-prices" style="background:#fff3e0; color:var(--orange); border-color:var(--orange);">💡 空欄をたたき台で埋める</button>
       </div>
       <div style="overflow-x:auto; -webkit-overflow-scrolling:touch; border:1px solid #e0e0e0; border-radius:6px;">
       <table class="prices-table" style="border-collapse:collapse; min-width:100%;">
@@ -5315,7 +5474,7 @@ function renderMaterialsMaster() {
           📊 設定済み：<strong>${filledCells} / ${totalCells} 件</strong>
         </div>
         <button class="primary-btn" data-action="save-materials">変更を保存</button>
-        <button class="nav-btn" data-action="load-sample-materials" style="background:#fff3e0; color:var(--orange); border-color:var(--orange);">💡 たたき台を読み込む（${DEFAULT_WORK_MATERIALS.length}件）</button>
+        <button class="nav-btn" data-action="load-sample-materials" style="background:#fff3e0; color:var(--orange); border-color:var(--orange);">💡 空欄をたたき台で埋める</button>
       </div>
       <div style="overflow-x:auto; -webkit-overflow-scrolling:touch; border:1px solid #e0e0e0; border-radius:6px;">
       <table class="prices-table" style="border-collapse:collapse; min-width:100%;">
@@ -9950,16 +10109,32 @@ async function handleClick(e) {
     }
     alert('読み込みました。画面を再読み込みします。');
     location.reload();
+  } else if (a === 'legacy-import') {
+    const lg = scanLegacy();
+    const log = importLegacy(false);
+    try { localStorage.setItem(LEGACY_ASK_KEY, 'imported:' + new Date().toISOString()); } catch (err) {}
+    const n = Object.values(log.copied).reduce((x, y) => x + (y || 0), 0);
+    alert(`取り込みました。\n従業員 ${lg.employees}名・打刻 ${lg.punches}件。\n\n画面を読み込み直します。`);
+    location.reload();
+  } else if (a === 'legacy-skip') {
+    if (!confirm('このまま新しく始めます。\n\n古いデータは消えません。あとから 🔧設定 の「📥 古い場所から取り込む」で戻せます。\n\nよろしいですか？')) return;
+    try { localStorage.setItem(LEGACY_ASK_KEY, 'skipped:' + new Date().toISOString()); } catch (err) {}
+    location.reload();
   } else if (a === 'import-shared-legacy') {
-    const keys = Object.values(STORAGE_KEYS);
-    let found = 0;
-    for (const k of keys) { try { if (localStorage.getItem(k) !== null) found++; } catch (err) {} }
-    if (found === 0) { alert('この端末に、名札を付ける前の古いデータは見つかりませんでした。'); return; }
-    if (!confirm(`名札を付ける前の古いデータが ${found}件 見つかりました。取り込みます。\n\n⚠️ 味采の現在のデータはすべて置き換わります。\n他のアプリのデータが混ざっている場合は、そちらも入ってきます。\nよろしいですか？`)) return;
-    for (const k of keys) {
-      try { const v = localStorage.getItem(k); if (v !== null) localStorage.setItem(nsKey(k), v); } catch (err) {}
-    }
-    alert('取り込みました。画面を再読み込みします。');
+    // 【2026-08-12 修正】以前は現在の内容を全部上書きしていた。
+    // その日の打刻がある状態で押すと消えてしまうので、空いているところだけ埋める方式に変えた。
+    const lg = scanLegacy();
+    if (lg.keys === 0) { alert('この端末に、名札を付ける前の古いデータは見つかりませんでした。'); return; }
+    const rows = [];
+    if (lg.employees > 0) rows.push(`従業員 ${lg.employees}名`);
+    if (lg.punches > 0) rows.push(`打刻 ${lg.punches}件`);
+    if (lg.records > 0) rows.push(`作業記録 ${lg.records}件`);
+    const msg = rows.length ? rows.join('／') : `${lg.keys}件`;
+    if (!confirm(`古い場所に ${msg} が見つかりました。\n\n★いま入っているものは残したまま、空いているところだけ埋めます。\n（今日の打刻が消えることはありません）\n\n取り込みますか？`)) return;
+    const log = importLegacy(false);
+    const copied = Object.keys(log.copied).length, skipped = Object.keys(log.skipped).length;
+    try { localStorage.setItem(LEGACY_ASK_KEY, 'imported:' + new Date().toISOString()); } catch (err) {}
+    alert(`取り込みました。\n埋めた項目 ${copied}件／すでに中身があって触らなかった項目 ${skipped}件。\n\n画面を読み込み直します。`);
     location.reload();
   } else if (a === 'archive-punches') {
     const el = document.getElementById('archive-month');
@@ -9978,10 +10153,35 @@ async function handleClick(e) {
     }
     downloadTextFile(`ajisai_punches_${cutoff}以前_${todayStr()}.csv`, csv, 'text/csv');
     // 作業記録CSV
-    let csv2 = '﻿開始,終了,従業員NO,氏名,作業ID,品目ID,数量,単価\n';
+    // 【2026-08-12 修正】r.task_id / r.product_id を読んでいたため、作業IDと品目IDが
+    // 常に空欄で出力されていた。実際の記録は main_task_id / main_product_id。
+    // 退避したCSVは復元できないため、名称・拠点・単位・包材費・人時も列に加える。
+    let csv2 = '﻿開始,終了,拠点,従業員NO,氏名,作業ID,作業名,品目ID,品目名,数量,単位,単価,包材費,人数,延べ人時(分),補助作業(分)\n';
     for (const r of oldRecords) {
+      const tid = r.main_task_id || r.task_id || '';
+      const pid = r.main_product_id || r.product_id || '';
+      const tk = state.work_tasks.find(x => x.id === tid);
+      const pd = state.work_products.find(x => x.id === pid);
+      const mem = Array.isArray(r.members) ? r.members : [];
+      const memCount = mem.length || 1;
+      const pm = (r.total_person_minutes !== undefined && r.total_person_minutes !== null)
+        ? r.total_person_minutes
+        : (r.work_started_at && r.work_ended_at
+            ? Math.max(0, Math.round((new Date(r.work_ended_at) - new Date(r.work_started_at)) / 60000)) * memCount
+            : '');
+      const subMin = Array.isArray(r.sub_tasks) ? r.sub_tasks.reduce((a2, x) => a2 + (x.duration_min || 0), 0) : 0;
+      const names = mem.length
+        ? mem.map(m => { const e = state.employees.find(x => x.id === m.employee_id); return e ? e.name : m.employee_id; }).join('・')
+        : '';
       const emp = state.employees.find(x => x.id === r.employee_id);
-      csv2 += [r.work_started_at || '', r.work_ended_at || '', r.employee_id, emp ? emp.name : '', r.task_id || '', r.product_id || '', r.quantity || 0, r.unit_price || 0].map(csvCell).join(',') + '\n';
+      csv2 += [
+        r.work_started_at || '', r.work_ended_at || '', r.location || '',
+        r.employee_id || '', names || (emp ? emp.name : ''),
+        tid, tk ? tk.name : '', pid, pd ? pd.name : '',
+        r.quantity || 0, r.unit || (tk ? tk.unit : ''),
+        r.unit_price || 0, (r.material_cost !== undefined && r.material_cost !== null) ? r.material_cost : '',
+        memCount, pm, subMin
+      ].map(csvCell).join(',') + '\n';
     }
     if (oldRecords.length > 0) downloadTextFile(`ajisai_records_${cutoff}以前_${todayStr()}.csv`, csv2, 'text/csv');
     state.punches = state.punches.filter(p => localDateStr(p.timestamp) >= boundary);
@@ -10617,35 +10817,56 @@ async function handleClick(e) {
     alert(`包材費を保存しました（${newMaterials.length}件）`);
     render();
   } else if (a === 'load-sample-materials') {
-    if (!confirm(`包材費のたたき台 ${DEFAULT_WORK_MATERIALS.length} 件を読み込みます。\n（現在の包材費は上書きされます）\nよろしいですか？`)) return;
+    // 【2026-08-12 修正】単価と同じく、空欄のみ埋める方式に変更。
+    const cur = {};
+    for (const x of (state.work_materials || [])) cur[`${x.task_id}__${x.product_id}`] = x;
+    const add = DEFAULT_WORK_MATERIALS.filter(x => {
+      const e = cur[`${x.task_id}__${x.product_id}`];
+      return !e || !(e.material_cost > 0);
+    });
+    if (add.length === 0) { alert('空欄はありません。すべての包材費が入っています。'); return; }
+    if (!confirm(`空欄の包材費 ${add.length} 件を、たたき台の値で埋めます。\n\n★すでに入っている ${DEFAULT_WORK_MATERIALS.length - add.length} 件はそのまま残ります。\n\nよろしいですか？`)) return;
+    const merged = DEFAULT_WORK_MATERIALS.map(x => {
+      const e = cur[`${x.task_id}__${x.product_id}`];
+      return (e && e.material_cost > 0) ? e : JSON.parse(JSON.stringify(x));
+    });
+    const mk = new Set(merged.map(x => `${x.task_id}__${x.product_id}`));
+    for (const x of (state.work_materials || [])) if (!mk.has(`${x.task_id}__${x.product_id}`)) merged.push(x);
     const buf = {};
-    for (const m of DEFAULT_WORK_MATERIALS) {
-      const key = `${m.task_id}__${m.product_id}`;
-      buf[key] = m.material_cost;
-    }
+    for (const x of merged) buf[`${x.task_id}__${x.product_id}`] = x.material_cost;
     state._materialsBuf = buf;
-    state.work_materials = JSON.parse(JSON.stringify(DEFAULT_WORK_MATERIALS));
+    state.work_materials = merged;
     await saveData(STORAGE_KEYS.WORK_MATERIALS, state.work_materials);
-    alert(`たたき台を読み込みました（${DEFAULT_WORK_MATERIALS.length}件）`);
+    alert(`空欄 ${add.length} 件を埋めました。入力済みの値は変えていません。`);
     render();
   } else if (a === 'back-tasks-master') {
     state._pricesBuf = null;
     state.screen = 'tasks_master';
     render();
   } else if (a === 'load-sample-prices') {
-    if (!confirm(`単価のたたき台 ${SAMPLE_WORK_PRICES.length} 件を読み込みます。\n（現在入力中の単価は上書きされます）\nよろしいですか？`)) return;
-    // バッファを上書き
+    // 【2026-08-12 修正】以前は全置換だったため、実額を入れたあとに押すと
+    // 入力済みの単価がすべてたたき台に戻ってしまった。空欄のみ埋める方式に変更。
+    const cur = {};
+    for (const x of (state.work_prices || [])) cur[`${x.task_id}__${x.product_id}`] = x;
+    const add = SAMPLE_WORK_PRICES.filter(x => {
+      const e = cur[`${x.task_id}__${x.product_id}`];
+      return !e || !(e.unit_price > 0);
+    });
+    if (add.length === 0) { alert('空欄はありません。すべての単価が入っています。'); return; }
+    if (!confirm(`空欄の単価 ${add.length} 件を、たたき台の値で埋めます。\n\n★すでに入っている ${SAMPLE_WORK_PRICES.length - add.length} 件はそのまま残ります。\n\nよろしいですか？`)) return;
+    const merged = SAMPLE_WORK_PRICES.map(x => {
+      const e = cur[`${x.task_id}__${x.product_id}`];
+      return (e && e.unit_price > 0) ? e : JSON.parse(JSON.stringify(x));
+    });
+    const mk = new Set(merged.map(x => `${x.task_id}__${x.product_id}`));
+    for (const x of (state.work_prices || [])) if (!mk.has(`${x.task_id}__${x.product_id}`)) merged.push(x);
     const buf = {};
-    for (const p of SAMPLE_WORK_PRICES) {
-      const key = `${p.task_id}__${p.product_id}`;
-      buf[key] = p.unit_price;
-    }
+    for (const x of merged) buf[`${x.task_id}__${x.product_id}`] = x.unit_price;
     state._pricesBuf = buf;
-    render();
-    // 一気に保存もする
-    state.work_prices = JSON.parse(JSON.stringify(SAMPLE_WORK_PRICES));
+    state.work_prices = merged;
     await saveData(STORAGE_KEYS.WORK_PRICES, state.work_prices);
-    alert(`たたき台を読み込みました（${SAMPLE_WORK_PRICES.length}件）。\n画面上の値を確認・編集してから「変更を保存」を押すと反映されます。`);
+    render();
+    alert(`空欄 ${add.length} 件を埋めました。入力済みの値は変えていません。\n画面上の値を確認・編集してから「変更を保存」を押してください。`);
   } else if (a === 'save-prices') {
     // 全 input から値を収集
     const newPrices = [];
@@ -10944,7 +11165,14 @@ async function handleClick(e) {
     // 単価取得
     const price = state.work_prices.find(p => p.task_id === buf.main_task_id && p.product_id === buf.main_product_id);
     const unitPrice = price ? price.unit_price : 0;
+    // 【2026-08-12 追加】包材費も記録した瞬間の値を焼き付ける。
+    // 単価だけ焼き付けて包材費を焼かないと、包材を改定したとき過去の採算が動く。
+    const material = state.work_materials.find(m => m.task_id === buf.main_task_id && m.product_id === buf.main_product_id);
+    const materialCost = material ? (material.material_cost || 0) : 0;
     const task = state.work_tasks.find(t => t.id === buf.main_task_id);
+    // 【2026-08-12 追加】何人が何分たずさわったかを復元する
+    const wmembers = buildWorkMembers(endSessionId, emp.id, workStartPunch.timestamp, now);
+    const totalPersonMinutes = wmembers.reduce((a2, m) => a2 + (m.minutes || 0), 0);
     // sub_tasks 整形
     const subTasksArr = [];
     for (const tid of Object.keys(buf.sub_tasks)) {
@@ -10964,8 +11192,13 @@ async function handleClick(e) {
       quantity: parseFloat(buf.quantity),
       unit: task ? task.unit : '',
       unit_price: unitPrice,
+      material_cost: materialCost,
       sub_tasks: subTasksArr,
-      session_id: null,
+      // 【2026-08-12 修正】以前はここが常に null で、ペア作業だと何人でやったか分からなかった
+      session_id: endSessionId,
+      members: wmembers,
+      total_person_minutes: totalPersonMinutes,
+      registered_by: emp.id,
       location: emp.location,
     };
     state.work_records.push(record);
@@ -11305,7 +11538,7 @@ async function handleClick(e) {
 // サーバー上のHTMLの先頭だけを読みに行き、版数が自分より新しければ画面上部に帯を出す。
 // 通信できないときは黙って何もしない。打刻の邪魔は一切しない。
 // =========================================================
-const APP_VERSION = 'v1.9';
+const APP_VERSION = 'v2.0';
 const UPDATE_CHECK_INTERVAL_MS = 30 * 60 * 1000;   // 30分おきに確認
 const UPDATE_FIRST_CHECK_MS = 30 * 1000;           // 起動30秒後に1回目
 
@@ -11368,6 +11601,11 @@ async function bootstrap() {
   }
   // 新年度スタートの一度きりの初期化。既定値を入れる前に実行する。
   runNewYearResetOnce();
+
+  // 【2026-08-12 追加】名札を付ける前のデータが残っていないか確認する。
+  // 初期値を作ってしまうと「消えた」ように見えるので、作る前に聞く。
+  const lg = shouldAskLegacy();
+  if (lg) { renderLegacyAsk(lg); return; }
 
   try {
     await initializeData();
