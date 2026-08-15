@@ -181,9 +181,20 @@ select:focus,input:focus{border-color:#BA7517;}
 </div>
 <script>
 const PRICES=[49,69,79,89,99,100,129,139,149,159,179,199,200,239,249,259,279,299,300,339,359,379,399,499,599,699,799,899,979,1000];
-const BAG=4,LABEL=2,BASE_SEC=20;
+const BAG=5.2,LABEL=2.6,BASE_SEC=20;
 const SPECS=[500,700,1000,1200,1500,2000];
 const AVG_WEIGHT={S:80,M:130,L:170,'2L':230,'3L':300,混在:120};
+// =========================================================
+// 【2026-08-12】包材費を30%引き上げ（社長確定）
+// 2026年5〜6月にポリ袋・OPPフィルムの主要メーカーが一斉値上げ。
+//   日本サニパック  ポリエチレン製品全般 30%以上（5/21着荷分〜）
+//   エフピコチューパ 規格OPP防曇フィルム 35%以上（6/1出荷分〜）
+//   グンゼ          包装用OPPフィルム 改定（6/22出荷分〜）
+// 中東情勢悪化による原油・ナフサ価格の高騰が背景。約800品目で30%以上。
+// 各社の下限である30%を採った。
+// ★これは値上げ率から機械的に計算した暫定値。
+//   直近の請求書・仕入単価表が出てきたら実額に差し替えること。
+// =========================================================
 function laborCost(sec){return Math.round(1200*sec/3600/0.75);}
 function fixedBySpec(specG,isTeiban){if(isTeiban)return BAG+LABEL+laborCost(BASE_SEC);const idx=SPECS.indexOf(specG);return BAG+LABEL+laborCost(BASE_SEC+(idx<0?0:idx)*5);}
 function secStr(specG,isTeiban){if(isTeiban)return BASE_SEC+'秒/袋';const idx=SPECS.indexOf(specG);return(BASE_SEC+(idx<0?0:idx)*5)+'秒/袋';}
