@@ -6,7 +6,7 @@
 
 <!-- 版数の目印。自動更新の確認でここだけを読みに行くので、必ず<head>の先頭付近に置くこと。
      版を上げるときは、この content と APP_VERSION と <title> と画面下のフッターの4か所を揃える。 -->
-<meta name="app-version" content="v2.1">
+<meta name="app-version" content="v2.3">
 
 <!-- ===== ホーム画面に追加したときの見た目（アイコン・アプリ名） =====
      画像は外部ファイルではなくこのHTMLの中に埋め込んでいます。
@@ -49,7 +49,7 @@
   } catch (e) {}
 })();
 </script>
-<title>味采 パッケージセンター 打刻システム v2.1</title>
+<title>味采 パッケージセンター 打刻システム v2.3</title>
 <style>
   :root {
     --green: #1d9e75;
@@ -1648,7 +1648,7 @@
 
 <main id="app"></main>
 
-<div class="footer-note">味采版 v2.1（まる労務 v0.4 ベース）<span id="storage-mode-note"></span> ／ <a href="javascript:resetAppData()" style="color:#999; text-decoration:underline; font-size:0.85rem;">🆘 緊急リセット</a></div>
+<div class="footer-note">味采版 v2.3（まる労務 v0.4 ベース）<span id="storage-mode-note"></span> ／ <a href="javascript:resetAppData()" style="color:#999; text-decoration:underline; font-size:0.85rem;">🆘 緊急リセット</a></div>
 
 <script>
 // ストレージモードをフッターに表示
@@ -1692,6 +1692,9 @@ const STORAGE_KEYS = {
   SITES: 'sites',
   DEVICE_SITE: 'device_site',
   ADMIN_PIN: 'admin_pin',
+  // v2.3 単価の分離（作業賃と包材を分ける）一度きりの移行
+  SPEC_MIGRATION: 'spec_migration',
+  SPEC_MIGRATION_LOG: 'spec_migration_log',
   // 品目をどこまで配布済みか（既存端末に足りない品目を一度だけ足すために使う）
   PRODUCT_SEED: 'product_seed_version',
   // 【2026-08-16 v2.1】新勤怠
@@ -1762,25 +1765,274 @@ const DEFAULT_WORK_TASKS = [
   { id: 'TG07', name: '終業・引継ぎ',     type: 'global', category: '全体寄与', icon: '🌇', unit: '分' },
 ];
 
+// =========================================================
+// 【2026-08-16 v2.3】単価を「作業賃だけ」にする — 社長確定
+//
+// v2.2まで：単価20円 ＝ 袋 ＋ 作業賃 ／ 包材費3円 ＝ シール
+// v2.3から：単価 ＝ 作業賃だけ ／ 包材費 ＝ 袋 ＋ ラベル
+//
+// こうしておくと、包材が上がったとき包材費だけ直せば済む。
+// 人時生産性で作業賃を見るときも、袋代が混ざらない。
+//
+// ★味采の時給は固定値にしない（社長確定 2026-08-16「川口の実際の時給で」）
+//   月間勤務計画に入っている実際の時給から平均を出して使う。
+//   時給を上げれば作業賃も上がる。得意先への請求根拠がそこで連動する。
+// =========================================================
+
+// 包材の単価（2026年8月の30%改定後・パッキングAIと同じ値）
+const PACK_BAG      = 5.2;   // 標準の袋
+const PACK_BAG_LONG = 6.5;   // 長物用の大きい袋（きゅうり）
+const PACK_LABEL    = 2.6;   // ラベル（バックシーラーのシール）
+
+// 規格別の作業賃をつくる作業（いまは袋詰めだけ）
+const SPEC_TASK_ID = 'TH02';
+
+// ★川口（この端末の拠点）の実際の平均時給。月間勤務計画から出す。
+//   対象月に計画が無ければ、直近で見つかった時給を使う。
+//   1件も無ければ 0 を返す（画面で「時給が未設定」と出す）
+function actualAvgWage(year, month) {
+  const site = (typeof currentSite === 'function') ? currentSite() : null;
+  const emps = state.employees.filter(e =>
+    (e.status || 'active') === 'active' && (!site || !e.location || e.location === site));
+  const ids = emps.map(e => e.id);
+  let rates = (state.work_plans || [])
+    .filter(w => ids.includes(w.employee_id) && w.year === year && w.month === month)
+    .map(w => Number(w.hourly_rate) || 0).filter(r => r > 0);
+  if (rates.length === 0) {
+    // 対象月が空なら、その人たちの一番新しい計画から拾う
+    const latest = {};
+    for (const w of (state.work_plans || [])) {
+      if (!ids.includes(w.employee_id)) continue;
+      const key = w.employee_id, ym = w.year * 100 + w.month;
+      if (!latest[key] || latest[key].ym < ym) latest[key] = { ym, rate: Number(w.hourly_rate) || 0 };
+    }
+    rates = Object.values(latest).map(x => x.rate).filter(r => r > 0);
+  }
+  if (rates.length === 0) return 0;
+  return Math.round(rates.reduce((s, r) => s + r, 0) / rates.length);
+}
+// 今月の平均時給
+function currentAvgWage() {
+  const d = new Date();
+  return actualAvgWage(d.getFullYear(), d.getMonth() + 1);
+}
+// 作業賃 ＝ 時給 × 秒 ÷ 3600 ÷ 稼働率
+function wageOfSec(sec, wage) {
+  const w = (wage === undefined || wage === null) ? currentAvgWage() : wage;
+  if (!w) return 0;
+  return Math.round(w * sec / 3600 / PLAN_UTIL);
+}
+
+
+// =========================================================
+// 【2026-08-16 v2.3】規格別の単価と包材費をつくる
+//
+//   単価   ＝ 作業賃だけ（時給 × 秒 ÷ 3600 ÷ 稼働率0.75）
+//   包材費 ＝ 袋 ＋ ラベル
+//
+// ★時給は固定値ではない
+//   呼ばれたときの「川口の実際の平均時給」で計算する。
+//   時給を変えたら、たたき台を作り直せば単価も追随する。
+// =========================================================
+function buildSpecPrices(wage) {
+  const w = (wage === undefined || wage === null) ? currentAvgWage() : wage;
+  const prices = [], materials = [];
+  const task = state.work_tasks.find(t => t.id === SPEC_TASK_ID)
+            || DEFAULT_WORK_TASKS.find(t => t.id === SPEC_TASK_ID);
+  const unit = task ? task.unit : '袋';
+  for (const p of state.work_products) {
+    if (!Array.isArray(p.specs) || p.specs.length === 0) continue;
+    const bag = (typeof p.bag === 'number') ? p.bag : PACK_BAG;
+    for (const sp of p.specs) {
+      prices.push({ task_id: SPEC_TASK_ID, product_id: p.id, spec_id: sp.id,
+        unit_price: wageOfSec(sp.sec, w), unit, sec: sp.sec, src: sp.src, wage_used: w });
+      materials.push({ task_id: SPEC_TASK_ID, product_id: p.id, spec_id: sp.id,
+        material_cost: Math.round((bag + PACK_LABEL) * 10) / 10, unit,
+        breakdown: `袋${bag}円＋ラベル${PACK_LABEL}円` });
+    }
+  }
+  return { prices, materials, wage: w };
+}
+
+// 単価・包材費のさがし方（規格つき → 規格なし の順）
+function findWorkPrice(taskId, productId, specId) {
+  if (!taskId || !productId) return null;
+  const sid = specId || '';
+  if (sid) {
+    const hit = state.work_prices.find(p =>
+      p.task_id === taskId && p.product_id === productId && (p.spec_id || '') === sid);
+    if (hit) return hit;
+  }
+  return state.work_prices.find(p =>
+    p.task_id === taskId && p.product_id === productId && !(p.spec_id || '')) || null;
+}
+function findWorkMaterial(taskId, productId, specId) {
+  if (!taskId || !productId) return null;
+  const sid = specId || '';
+  if (sid) {
+    const hit = state.work_materials.find(m =>
+      m.task_id === taskId && m.product_id === productId && (m.spec_id || '') === sid);
+    if (hit) return hit;
+  }
+  return state.work_materials.find(m =>
+    m.task_id === taskId && m.product_id === productId && !(m.spec_id || '')) || null;
+}
+
+// =========================================================
+// 【2026-08-16 v2.3】単価分離の移行（一度きり・現場の操作は不要）
+//
+// ★川口は本番稼働中。壊さないことを最優先にする。
+//   1. 品目マスタに規格が無ければ足す
+//   2. 規格つきの単価・包材費を足す（既にある行は触らない＝手で直した値を守る）
+//   3. 袋詰めの「規格なし」の古い行を外す
+//      v2.2までの単価は 袋代＋作業賃 が混ざっていたため、
+//      規格つきと並べると袋代を二重に数えてしまう。
+//      外した中身は記録に残すので、あとから確認できる。
+//
+// 作業記録（work_records）は触らない。
+// 単価も包材費も記録した瞬間の値が焼き付けてあるので、過去の採算は動かない。
+// =========================================================
+const SPEC_MIGRATION_ID = 'v23_split_2026_08';
+async function migrateSpecsOnce() {
+  if ((await loadData(STORAGE_KEYS.SPEC_MIGRATION, null)) === SPEC_MIGRATION_ID) return null;
+
+  const products = (await loadData(STORAGE_KEYS.WORK_PRODUCTS, [])) || [];
+  let addedSpecs = 0;
+  for (const p of products) {
+    if (Array.isArray(p.specs) && p.specs.length) continue;
+    const def = DEFAULT_WORK_PRODUCTS.find(d => d.id === p.id) ||
+                DEFAULT_WORK_PRODUCTS.find(d => d.name === p.name);
+    if (def && Array.isArray(def.specs) && def.specs.length) {
+      p.specs = JSON.parse(JSON.stringify(def.specs));
+      if (typeof def.bag === 'number') p.bag = def.bag;
+      addedSpecs++;
+    }
+  }
+  await saveData(STORAGE_KEYS.WORK_PRODUCTS, products);
+  // 規格を足した状態で state を更新してから、たたき台をつくる
+  const keepProducts = state.work_products;
+  state.work_products = products;
+  const seed = buildSpecPrices();
+  state.work_products = keepProducts;
+
+  const specIds = products.filter(p => Array.isArray(p.specs) && p.specs.length).map(p => p.id);
+  const isOldBagRow = r => r.task_id === SPEC_TASK_ID && !(r.spec_id || '') && specIds.includes(r.product_id);
+
+  const prices = (await loadData(STORAGE_KEYS.WORK_PRICES, [])) || [];
+  let addedPrices = 0;
+  for (const row of seed.prices) {
+    const exists = prices.some(p => p.task_id === row.task_id && p.product_id === row.product_id && (p.spec_id || '') === row.spec_id);
+    if (!exists) { prices.push(JSON.parse(JSON.stringify(row))); addedPrices++; }
+  }
+  const removedPrices = prices.filter(isOldBagRow);
+
+  const materials = (await loadData(STORAGE_KEYS.WORK_MATERIALS, [])) || [];
+  let addedMaterials = 0;
+  for (const row of seed.materials) {
+    const exists = materials.some(m => m.task_id === row.task_id && m.product_id === row.product_id && (m.spec_id || '') === row.spec_id);
+    if (!exists) { materials.push(JSON.parse(JSON.stringify(row))); addedMaterials++; }
+  }
+  const removedMaterials = materials.filter(isOldBagRow);
+
+  await saveData(STORAGE_KEYS.WORK_PRICES, prices.filter(p => !isOldBagRow(p)));
+  await saveData(STORAGE_KEYS.WORK_MATERIALS, materials.filter(m => !isOldBagRow(m)));
+
+  const log = {
+    id: SPEC_MIGRATION_ID, at: new Date().toISOString(),
+    wage_used: seed.wage,
+    added_specs: addedSpecs, added_prices: addedPrices, added_materials: addedMaterials,
+    removed_prices: removedPrices, removed_materials: removedMaterials,
+    note: '外した行は v2.2 までの「袋代＋作業賃」が混ざった単価。規格つきの行に置き換えた。',
+  };
+  await saveData(STORAGE_KEYS.SPEC_MIGRATION_LOG, log);
+  await saveData(STORAGE_KEYS.SPEC_MIGRATION, SPEC_MIGRATION_ID);
+  console.log('[味采] 単価の分離を実行しました', log);
+  return log;
+}
+
 // 品目マスタ（純粋な品目のみ）
 const DEFAULT_WORK_PRODUCTS = [
-  { id: 'P01', name: 'きゅうり',   emoji: '🥒' },
-  { id: 'P02', name: 'トマト',     emoji: '🍅' },
-  { id: 'P03', name: 'じゃがいも', emoji: '🥔' },
-  { id: 'P04', name: 'にんじん',   emoji: '🥕' },
-  { id: 'P05', name: '玉ねぎ',     emoji: '🧅' },
-  { id: 'P06', name: '長ネギ',     emoji: '🥬' },
-  { id: 'P07', name: 'みかん',     emoji: '🍊' },
+  { id: 'P01', name: 'きゅうり', emoji: '🥒', bag: PACK_BAG_LONG, specs: [
+      { id:'S1', label:'定番1本', sec:20, src:'kyuuri AI matomeSec(n)=20+n*4' },
+      { id:'S2', label:'2本', sec:28, src:'kyuuri AI matomeSec(n)=20+n*4' },
+      { id:'S3', label:'3本', sec:32, src:'kyuuri AI matomeSec(n)=20+n*4' },
+      { id:'S4', label:'4本', sec:36, src:'kyuuri AI matomeSec(n)=20+n*4' },
+      { id:'S5', label:'5本', sec:40, src:'kyuuri AI matomeSec(n)=20+n*4' },
+  ] },
+  { id: 'P02', name: 'トマト', emoji: '🍅', specs: [
+      { id:'S1', label:'300g', sec:15, src:'tomato AI 15+idx*5' },
+      { id:'S2', label:'400g', sec:20, src:'tomato AI 15+idx*5' },
+      { id:'S3', label:'500g', sec:25, src:'tomato AI 15+idx*5' },
+      { id:'S4', label:'600g', sec:30, src:'tomato AI 15+idx*5' },
+      { id:'S5', label:'800g', sec:35, src:'tomato AI 15+idx*5' },
+  ] },
+  { id: 'P03', name: 'じゃがいも', emoji: '🥔', specs: [
+      { id:'S1', label:'500g', sec:15, src:'jagaimo AI BASE_SEC=15 +5刻み' },
+      { id:'S2', label:'700g', sec:20, src:'jagaimo AI BASE_SEC=15 +5刻み' },
+      { id:'S3', label:'1000g', sec:25, src:'jagaimo AI BASE_SEC=15 +5刻み' },
+      { id:'S4', label:'1200g', sec:30, src:'jagaimo AI BASE_SEC=15 +5刻み' },
+      { id:'S5', label:'1500g', sec:35, src:'jagaimo AI BASE_SEC=15 +5刻み' },
+  ] },
+  { id: 'P04', name: 'にんじん', emoji: '🥕', specs: [
+      { id:'S1', label:'500g', sec:20, src:'ninjin AI BASE_SEC=20 +5刻み' },
+      { id:'S2', label:'700g', sec:25, src:'ninjin AI BASE_SEC=20 +5刻み' },
+      { id:'S3', label:'1000g', sec:30, src:'ninjin AI BASE_SEC=20 +5刻み' },
+      { id:'S4', label:'1200g', sec:35, src:'ninjin AI BASE_SEC=20 +5刻み' },
+      { id:'S5', label:'1500g', sec:40, src:'ninjin AI BASE_SEC=20 +5刻み' },
+      { id:'S6', label:'2000g', sec:45, src:'ninjin AI BASE_SEC=20 +5刻み' },
+  ] },
+  { id: 'P05', name: '玉ねぎ', emoji: '🧅', specs: [
+      { id:'S1', label:'500g', sec:15, src:'tamanegi AI BASE_SEC=15 +5刻み' },
+      { id:'S2', label:'700g', sec:20, src:'tamanegi AI BASE_SEC=15 +5刻み' },
+      { id:'S3', label:'1000g', sec:25, src:'tamanegi AI BASE_SEC=15 +5刻み' },
+      { id:'S4', label:'1200g', sec:30, src:'tamanegi AI BASE_SEC=15 +5刻み' },
+      { id:'S5', label:'1500g', sec:35, src:'tamanegi AI BASE_SEC=15 +5刻み' },
+      { id:'S6', label:'2000g', sec:40, src:'tamanegi AI BASE_SEC=15 +5刻み' },
+  ] },
+  { id: 'P06', name: '長ネギ', emoji: '🥬', specs: [
+      { id:'S1', label:'1本', sec:15, src:'naganegi AI 15+secIdx*5' },
+      { id:'S2', label:'2本', sec:20, src:'naganegi AI 15+secIdx*5' },
+      { id:'S3', label:'3本', sec:25, src:'naganegi AI 15+secIdx*5' },
+      { id:'S4', label:'4本', sec:30, src:'naganegi AI 15+secIdx*5' },
+      { id:'S5', label:'5本', sec:35, src:'naganegi AI 15+secIdx*5' },
+      { id:'S6', label:'6本', sec:40, src:'naganegi AI 15+secIdx*5' },
+  ] },
+  { id: 'P07', name: 'みかん', emoji: '🍊', specs: [
+      { id:'S1', label:'5個', sec:15, src:'mikan AI 袋詰め laborCost(15)' },
+      { id:'S2', label:'10個', sec:15, src:'mikan AI 袋詰め laborCost(15)' },
+      { id:'S3', label:'18個', sec:15, src:'mikan AI 袋詰め laborCost(15)' },
+      { id:'S4', label:'20個', sec:15, src:'mikan AI 袋詰め laborCost(15)' },
+  ] },
   { id: 'P08', name: '大根',       emoji: '🥬' },
-  { id: 'P09', name: 'なす',       emoji: '🍆' },
-  { id: 'P10', name: 'ピーマン',   emoji: '🫑' },
+  { id: 'P09', name: 'なす', emoji: '🍆', specs: [
+      { id:'S1', label:'100g', sec:15, src:'nasu AI 15+idx*5' },
+      { id:'S2', label:'150g', sec:20, src:'nasu AI 15+idx*5' },
+      { id:'S3', label:'200g', sec:25, src:'nasu AI 15+idx*5' },
+      { id:'S4', label:'300g', sec:30, src:'nasu AI 15+idx*5' },
+  ] },
+  { id: 'P10', name: 'ピーマン', emoji: '🫑', specs: [
+      { id:'S1', label:'100g', sec:15, src:'piiman AI 15+specIdx*5' },
+      { id:'S2', label:'150g', sec:20, src:'piiman AI 15+specIdx*5' },
+      { id:'S3', label:'200g', sec:25, src:'piiman AI 15+specIdx*5' },
+      { id:'S4', label:'300g', sec:30, src:'piiman AI 15+specIdx*5' },
+      { id:'S5', label:'400g', sec:35, src:'piiman AI 15+specIdx*5' },
+  ] },
   // ↓ 2026-08-05 追加（現場からの依頼）
-  { id: 'P11', name: 'ミニトマト', emoji: '🍅' },
+  { id: 'P11', name: 'ミニトマト', emoji: '🍅', specs: [
+      { id:'S1', label:'100g', sec:15, src:'miniTomato AI 袋詰め sec=15' },
+      { id:'S2', label:'150g', sec:15, src:'miniTomato AI 袋詰め sec=15' },
+      { id:'S3', label:'200g', sec:15, src:'miniTomato AI 袋詰め sec=15' },
+      { id:'S4', label:'250g', sec:15, src:'miniTomato AI 袋詰め sec=15' },
+  ] },
   { id: 'P12', name: 'エノキ',     emoji: '🍄' },
   { id: 'P13', name: 'リンゴ',     emoji: '🍎' },
   { id: 'P14', name: 'パクチー',   emoji: '🌿' },
   { id: 'P15', name: 'セロリ',     emoji: '🥬' },
-  { id: 'P16', name: 'サツマイモ', emoji: '🍠' },
+  { id: 'P16', name: 'サツマイモ', emoji: '🍠', specs: [
+      { id:'S1', label:'500g', sec:20, src:'★社長指示 2026-08-15（甘藷）' },
+      { id:'S2', label:'800g', sec:30, src:'★社長指示 2026-08-15（甘藷）' },
+      { id:'S3', label:'1000g', sec:40, src:'★社長指示 2026-08-15（甘藷）' },
+  ] },
   { id: 'P17', name: '長芋',       emoji: '🥔' },
   { id: 'P18', name: 'レンコン',   emoji: '🌰' },
   { id: 'P19', name: '里芋',       emoji: '🥔' },
@@ -2284,6 +2536,7 @@ async function initializeData() {
   const sites = await loadData(STORAGE_KEYS.SITES, null);
   if (!sites || sites.length === 0) await saveData(STORAGE_KEYS.SITES, DEFAULT_SITES);
   if (!(await loadData(STORAGE_KEYS.ADMIN_PIN, null))) await saveData(STORAGE_KEYS.ADMIN_PIN, DEFAULT_ADMIN_PIN);
+  await migrateSpecsOnce();   // 【v2.3】単価の分離（一度きり）
 }
 
 // ===========================================
@@ -2996,6 +3249,8 @@ function render() {
   else if (state.screen === 'ot_declare') app.innerHTML = renderOtDeclare();
   else if (state.screen === 'ot_declare_list') app.innerHTML = renderOtDeclareList();
   else if (state.screen === 'work_adjust') app.innerHTML = renderWorkAdjust();
+  else if (state.screen === 'productivity') app.innerHTML = renderProductivity();
+  else if (state.screen === 'spec_prices') app.innerHTML = renderSpecPrices();
   else if (state.screen === 'change_history') app.innerHTML = renderChangeHistoryList();
   else if (state.screen === 'labor_plan_index') app.innerHTML = renderLaborPlanIndex();
   else if (state.screen === 'labor_plan_edit') app.innerHTML = renderLaborPlanEdit();
@@ -4245,6 +4500,880 @@ function renderWorkAdjust() {
   return html;
 }
 
+// =========================================================
+// 【2026-08-16 v2.2】味采には規格（サイズ・入数）がない
+//
+// 規格はファス v1.7 で入れた仕組み。味采にはまだ無い。
+// 品目別の集計は、規格があれば分けて出し、無ければ品目だけでまとめる。
+// 将来 味采にも規格を入れたとき、そのまま動く。
+// =========================================================
+function specsOf(productId) {
+  const p = state.work_products.find(x => x.id === productId);
+  return (p && Array.isArray(p.specs)) ? p.specs : [];
+}
+function specLabel(productId, specId) {
+  if (!specId) return '';
+  const sp = specsOf(productId).find(x => x.id === specId);
+  return sp ? sp.label : specId;
+}
+
+// 想定の稼働率。パッキングAI と同じ考え方（1時間ぶっ通しでは作業できない）
+const PLAN_UTIL = 0.75;
+
+// =========================================================
+// 【2026-08-16 v2.2】人時生産性（社長確定）
+//
+//   人時売上   ＝ 売上（出来高・作業賃） ÷ 総労働時間
+//   人時生産性 ＝ 粗利                   ÷ 総労働時間
+//
+//   この2つは実時給ぶんだけ違う。必ず次の関係が成り立つ。
+//     人時売上 − 実時給 ＝ 人時生産性
+//   （実時給 ＝ 人件費 ÷ 総労働時間）
+//
+// ★センターの概念（社長確定 2026-08-16）
+//     売上 ＝ 出来高（作業賃）
+//     原価 ＝ 人件費          ← 青果の仕入はセンターの原価ではない
+//     粗利 ＝ 売上 − 原価
+//     原価率 ＝ 人件費 ÷ 出来高   … 100%を超えたら赤字
+//     粗利率 ＝ 粗利 ÷ 出来高
+//
+//   総労働時間 … 打刻から出る実労働（拘束 − 休憩）の合計。
+//                 準備・清掃・待ち時間も入る。給料が出ている時間はすべて分母。
+//                 ★ペア作業かどうかは関係ない。打刻は一人ずつ出るため。
+//   人件費     … その総労働時間 × 実時給（月間勤務計画の時給）
+//   出来高     … 作業記録の 数量 × 作業賃単価
+//   粗利       ＝ 出来高 − 人件費
+//
+// 包材費は売上にも費用にも入れない。センターが立て替えて請求する形で
+// 同額が相殺されるため。記録には残してあるので、必要になれば出せる。
+//
+// 期間は 日・週・月。対象は 全体・個人。
+// 週は月曜はじまり（thisWeekStartStr と同じ考え方）。
+// =========================================================
+
+// 日付をまたぐ計算は必ず日本時間の日付文字列で行う（UTCと混ぜない）
+function dateStrAdd(dateStr, days) {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  return isoDateOnly(new Date(y, m - 1, d + days));
+}
+// その日が属する週の月曜
+function weekStartOf(dateStr) {
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const dt = new Date(y, m - 1, d);
+  const back = (dt.getDay() + 6) % 7;      // 月=0, 日=6
+  return isoDateOnly(new Date(y, m - 1, d - back));
+}
+// 期間の日付を並べる
+function daysBetween(fromStr, toStr) {
+  const out = [];
+  let cur = fromStr;
+  let guard = 0;
+  while (cur <= toStr && guard++ < 400) { out.push(cur); cur = dateStrAdd(cur, 1); }
+  return out;
+}
+// 期間の始まり・終わりを出す
+//   kind: 'day' | 'week' | 'month'
+function periodRange(kind, anchorStr) {
+  if (kind === 'day') return { from: anchorStr, to: anchorStr, label: anchorStr };
+  if (kind === 'week') {
+    const s = weekStartOf(anchorStr), e = dateStrAdd(s, 6);
+    return { from: s, to: e, label: `${s} 〜 ${e}` };
+  }
+  const [y, m] = anchorStr.split('-').map(Number);
+  const last = new Date(y, m, 0).getDate();
+  const s = `${y}-${String(m).padStart(2,'0')}-01`;
+  const e = `${y}-${String(m).padStart(2,'0')}-${String(last).padStart(2,'0')}`;
+  return { from: s, to: e, label: `${y}年${m}月` };
+}
+
+// ---- 人時生産性の本体 ----
+// empId を渡すとその人だけ、null なら全体
+function calcLaborProductivity(kind, anchorStr, empId) {
+  const { from, to, label } = periodRange(kind, anchorStr);
+  const emps = empId
+    ? state.employees.filter(e => e.id === empId)
+    : state.employees.filter(e => (e.status || 'active') === 'active');
+
+  // ── 分母と人件費：打刻から出す（総労働時間）
+  let totalNetMin = 0, totalWage = 0, workDays = 0;
+  const byEmp = {};
+  for (const emp of emps) {
+    let mn = 0, wg = 0, dd = 0;
+    for (const ds of daysBetween(from, to)) {
+      const [y, m, d] = ds.split('-').map(Number);
+      const sum = calcDayLaborSummary(emp.id, new Date(y, m - 1, d));
+      if (!sum) continue;
+      mn += sum.netMin; wg += sum.dailyWage; dd++;
+    }
+    if (mn === 0 && dd === 0) continue;
+    byEmp[emp.id] = { emp, netMin: mn, wage: wg, days: dd, revenue: 0, quantity: 0, records: 0 };
+    totalNetMin += mn; totalWage += wg; workDays += dd;
+  }
+
+  // ── 分子の出来高：作業記録から出す
+  //    ペア作業は、かかった時間の比で各人に配る（全体の合計は変わらない）
+  let totalRevenue = 0, totalRecords = 0, unpriced = 0;
+  for (const r of state.work_records) {
+    if (!r.work_started_at) continue;
+    const ds = localDateStr(r.work_started_at);
+    if (ds < from || ds > to) continue;
+    const parts = splitRecordByMember(r);
+    let counted = false;
+    for (const p of parts) {
+      if (empId && p.employee_id !== empId) continue;
+      if (byEmp[p.employee_id]) {
+        byEmp[p.employee_id].revenue += p.revenue;
+        byEmp[p.employee_id].quantity += p.quantity;
+        byEmp[p.employee_id].records += 1;
+      }
+      totalRevenue += p.revenue;
+      counted = true;
+    }
+    if (counted) {
+      totalRecords++;
+      if (!r.unit_price || r.unit_price === 0) unpriced++;
+    }
+  }
+
+  const hours = totalNetMin / 60;
+  const profit = totalRevenue - totalWage;
+  const rows = Object.values(byEmp).map(x => {
+    const h = x.netMin / 60;
+    const pf = x.revenue - x.wage;
+    return { ...x, hours: h, profit: pf,
+             perHour: h > 0 ? pf / h : 0,
+             revPerHour: h > 0 ? x.revenue / h : 0,
+             realRate: h > 0 ? x.wage / h : 0,
+             costRate: x.revenue > 0 ? x.wage / x.revenue * 100 : null,
+             profitRate: x.revenue > 0 ? pf / x.revenue * 100 : null };
+  }).sort((a, b) => b.perHour - a.perHour);
+
+  return {
+    kind, from, to, label,
+    totalNetMin, hours,
+    totalWage, totalRevenue, profit,
+    perHour: hours > 0 ? profit / hours : 0,          // ★人時生産性
+    revPerHour: hours > 0 ? totalRevenue / hours : 0, // 1人時あたりの出来高
+    realRate: hours > 0 ? totalWage / hours : 0,      // 実時給（平均）
+    // ★センターの概念：原価＝人件費
+    costRate: totalRevenue > 0 ? totalWage / totalRevenue * 100 : null,   // 原価率(%)
+    profitRate: totalRevenue > 0 ? profit / totalRevenue * 100 : null,    // 粗利率(%)
+    workDays, totalRecords, unpriced,
+    rows,
+  };
+}
+
+
+// =========================================================
+
+// =========================================================
+// 【2026-08-16 v2.2】品目別の人時売上・人時生産性
+//
+// ★分母が全体とは違うことに注意
+//   全体・個人 … 打刻から出る総労働時間（準備・清掃・待ち時間を含む）
+//   品目別     … 作業記録の人時（その品目に費やした時間だけ）
+//
+//   打刻は「出勤〜退勤」で品目に紐づいていない。品目に紐づくのは作業記録だけ。
+//   そのため準備・清掃・待ち時間は品目に割り振れず、
+//   品目別の合計は全体の総労働時間より必ず小さくなる。
+//   その差は「品目に割り振れない時間」として隠さずに出す。
+//
+//   人時売上   ＝ 売上 ÷ その品目の人時
+//   人時生産性 ＝ 粗利 ÷ その品目の人時
+//   粗利       ＝ 売上 − 人件費（関わった人それぞれの時給で計算）
+// =========================================================
+function calcProductivityByProduct(kind, anchorStr, empId) {
+  const { from, to, label } = periodRange(kind, anchorStr);
+  const byKey = {};
+  let recRevenue = 0, recWage = 0, recMinutes = 0, recCount = 0, unpriced = 0;
+
+  for (const r of state.work_records) {
+    if (!r.work_started_at) continue;
+    const ds = localDateStr(r.work_started_at);
+    if (ds < from || ds > to) continue;
+    const parts = splitRecordByMember(r);
+    const pid = r.main_product_id || '';
+    const sid = r.main_spec_id || '';
+    const key = pid + '__' + sid;
+    for (const p of parts) {
+      if (empId && p.employee_id !== empId) continue;
+      if (!byKey[key]) {
+        const prod = state.work_products.find(x => x.id === pid);
+        byKey[key] = {
+          product_id: pid, spec_id: sid,
+          name: prod ? `${prod.emoji || ''} ${prod.name}` : (pid || '（品目なし）'),
+          specLabel: sid ? specLabel(pid, sid) : '',
+          minutes: 0, revenue: 0, wage: 0, quantity: 0, records: 0,
+          unit: r.unit || '',
+        };
+      }
+      const b = byKey[key];
+      b.minutes += p.minutes;
+      b.revenue += p.revenue;
+      b.wage += p.laborCost;
+      b.quantity += p.quantity;
+      recMinutes += p.minutes;
+      recRevenue += p.revenue;
+      recWage += p.laborCost;
+    }
+    if (parts.length > 0 && (!empId || parts.some(p => p.employee_id === empId))) {
+      byKey[pid + '__' + sid].records += 1;
+      recCount++;
+      if (!r.unit_price || r.unit_price === 0) unpriced++;
+    }
+  }
+
+  const rows = Object.values(byKey).map(b => {
+    const h = b.minutes / 60;
+    const profit = b.revenue - b.wage;
+    return { ...b, hours: h, profit,
+      revPerHour: h > 0 ? b.revenue / h : 0,
+      perHour:    h > 0 ? profit / h : 0,
+      realRate:   h > 0 ? b.wage / h : 0,
+      costRate:   b.revenue > 0 ? b.wage / b.revenue * 100 : null,
+      qtyPerHour: h > 0 ? b.quantity / h : 0 };
+  }).sort((x, y) => y.perHour - x.perHour);
+
+  // ★全体（打刻ベース）と突き合わせて、割り振れない時間を出す
+  const whole = calcLaborProductivity(kind, anchorStr, empId);
+  const unassignedMin = Math.max(0, whole.totalNetMin - recMinutes);
+  const unassignedWage = Math.max(0, whole.totalWage - recWage);
+
+  return {
+    kind, from, to, label, rows,
+    recMinutes, recHours: recMinutes / 60, recRevenue, recWage,
+    recProfit: recRevenue - recWage, recCount, unpriced,
+    wholeNetMin: whole.totalNetMin, wholeHours: whole.hours, wholeWage: whole.totalWage,
+    unassignedMin, unassignedHours: unassignedMin / 60, unassignedWage,
+    assignRate: whole.totalNetMin > 0 ? recMinutes / whole.totalNetMin * 100 : null,
+    whole,
+  };
+}
+
+
+// =========================================================
+// 【2026-08-16 v2.2】稼働率
+//
+// 総労働時間（打刻）を3つに分ける
+//   ① 出来高作業（正味） … 袋詰めなど、稼いでいる時間
+//                          作業記録の人時 − その中に含まれる全体寄与
+//   ② 全体寄与           … 始業準備・清掃・入荷対応など
+//                          作業記録の sub_tasks に内数で入っている
+//   ③ 記録のない時間     … 打刻はあるが作業記録がない時間
+//
+//   ①＋②＋③ ＝ 総労働時間（必ず一致する）
+//
+// 出す率は2つ（社長確定 2026-08-16）
+//   稼働率     ＝ ① ÷ 総労働時間     … パッキングAIの想定0.75と比べられる
+//   記録率     ＝（①＋②）÷ 総労働時間 … 何をしていたか分かる時間の割合
+//
+// ★なぜ①だけを稼働率と呼ぶか
+//   作業賃は「時給 × 秒 ÷ 3600 ÷ 0.75」で決めている。
+//   この0.75は「1時間のうち45分は正味の作業ができる」という前提。
+//   実績の①がこれを下回ると、作業賃が構造的に足りなくなる。
+//
+// ★sub_tasks は内数
+//   作業記録の時間の「中に含まれていた」間接作業として入力する。
+//   足し算ではなく引き算で扱う。二重に数えないこと。
+// =========================================================
+function calcUtilization(kind, anchorStr, empId) {
+  const { from, to, label } = periodRange(kind, anchorStr);
+  const whole = calcLaborProductivity(kind, anchorStr, empId);
+
+  let recMin = 0;          // 作業記録の人時（全体寄与を含む）
+  let subMin = 0;          // うち全体寄与（内数）
+  const byGlobal = {};     // 全体寄与の内訳
+  let recCount = 0;
+
+  for (const r of state.work_records) {
+    if (!r.work_started_at) continue;
+    const ds = localDateStr(r.work_started_at);
+    if (ds < from || ds > to) continue;
+    const parts = splitRecordByMember(r);
+    const mine = empId ? parts.filter(p => p.employee_id === empId) : parts;
+    if (mine.length === 0) continue;
+    const minutes = mine.reduce((s, p) => s + p.minutes, 0);
+    recMin += minutes;
+    recCount++;
+    // 全体寄与は記録全体に対する分数。関わった人の時間比で分ける。
+    const totalAll = parts.reduce((s, p) => s + p.minutes, 0);
+    const share = totalAll > 0 ? minutes / totalAll : 1;
+    for (const stk of (r.sub_tasks || [])) {
+      const mn = (Number(stk.duration_min) || 0) * share;
+      if (mn <= 0) continue;
+      subMin += mn;
+      if (!byGlobal[stk.task_id]) {
+        const t = state.work_tasks.find(x => x.id === stk.task_id);
+        byGlobal[stk.task_id] = { task_id: stk.task_id,
+          name: t ? `${t.icon || ''} ${t.name}` : stk.task_id, minutes: 0 };
+      }
+      byGlobal[stk.task_id].minutes += mn;
+    }
+  }
+
+  // 全体寄与が記録時間を超えることはないはずだが、入力ミスに備えて頭を押さえる
+  if (subMin > recMin) subMin = recMin;
+  const netWorkMin = Math.max(0, recMin - subMin);          // ① 出来高作業（正味）
+  const totalMin = whole.totalNetMin;                        // 総労働時間
+  const unrecordedMin = Math.max(0, totalMin - recMin);      // ③ 記録なし
+
+  const pct = v => totalMin > 0 ? v / totalMin * 100 : null;
+  const planned = PLAN_UTIL * 100;                            // 想定 75%
+  const util = pct(netWorkMin);
+
+  return {
+    kind, from, to, label,
+    totalMin, totalHours: totalMin / 60,
+    netWorkMin, netWorkHours: netWorkMin / 60,
+    subMin, subHours: subMin / 60,
+    unrecordedMin, unrecordedHours: unrecordedMin / 60,
+    recMin, recHours: recMin / 60, recCount,
+    utilRate: util,                                          // 稼働率（①）
+    recordRate: pct(recMin),                                 // 記録率（①＋②）
+    subRate: pct(subMin),
+    unrecordedRate: pct(unrecordedMin),
+    plannedRate: planned,
+    gap: util === null ? null : util - planned,              // 想定との差
+    globals: Object.values(byGlobal).sort((x, y) => y.minutes - x.minutes),
+    whole,
+  };
+}
+
+// =========================================================
+// 【2026-08-16 v2.2】人時生産性の画面
+//   日・週・月 を切り替え、全体と個人を同じ画面で見る
+// =========================================================
+function fmtYen(v) {
+  const n = Math.round(v);
+  return (n < 0 ? '▲' : '') + Math.abs(n).toLocaleString() + '円';
+}
+function prodColor(v) {
+  if (v >= 500) return 'var(--green)';
+  if (v >= 0)   return '#b87b00';
+  return 'var(--red)';
+}
+function renderProductivity() {
+  if (!state._prodKind) state._prodKind = 'month';
+  if (!state._prodAnchor) state._prodAnchor = todayStr();
+  if (!state._prodView) state._prodView = 'all';
+  const kind = state._prodKind, anchor = state._prodAnchor, view = state._prodView;
+  const cur = calcLaborProductivity(kind, anchor, null);
+
+  // 前の期間（比べるため）
+  const prevAnchor = kind === 'day' ? dateStrAdd(anchor, -1)
+                   : kind === 'week' ? dateStrAdd(weekStartOf(anchor), -7)
+                   : (function () { const [y,m]=anchor.split('-').map(Number);
+                       const d=new Date(y,m-2,1); return isoDateOnly(d); })();
+  const prev = calcLaborProductivity(kind, prevAnchor, null);
+  const diff = cur.perHour - prev.perHour;
+
+  const kindName = { day:'日', week:'週', month:'月' }[kind];
+
+  let html = `
+    <div class="nav-row"><button class="nav-btn" data-action="back-admin">← 管理画面へ戻る</button></div>
+    <div class="card">
+      <h2>📈 人時売上 と 人時生産性</h2>
+      <div class="form-hint" style="margin-bottom:12px;">
+        <strong>人時売上 ＝ 売上 ÷ 総労働時間</strong>　／　<strong>人時生産性 ＝ 粗利 ÷ 総労働時間</strong><br>
+        センターの <strong>売上＝出来高</strong>、<strong>原価＝人件費</strong>、粗利＝売上−原価。<br>
+        この2つは実時給ぶんだけ違います。<strong>人時売上 − 実時給 ＝ 人時生産性</strong>。<br>
+        <span style="color:#888;">※v2.3から単価は作業賃だけです。袋代は包材費に移しました。</span><br>
+        総労働時間は打刻から出した実労働（拘束−休憩）です。準備・清掃・待ち時間も入ります。
+      </div>
+      <div class="shift-tabs" style="margin-bottom:10px;">
+        ${['day','week','month'].map(k => `
+          <button class="shift-tab${kind===k?' active':''}" data-action="prod-kind" data-kind="${k}">${{day:'日',week:'週',month:'月'}[k]}</button>`).join('')}
+      </div>
+      <div class="shift-tabs" style="margin-bottom:10px;">
+        <button class="shift-tab${view==='all'?' active':''}" data-action="prod-view" data-view="all">👥 全体・個人</button>
+        <button class="shift-tab${view==='product'?' active':''}" data-action="prod-view" data-view="product">🥬 品目別</button>
+        <button class="shift-tab${view==='util'?' active':''}" data-action="prod-view" data-view="util">⏱ 稼働率</button>
+      </div>
+      <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+        <button class="nav-btn" data-action="prod-prev">← 前の${kindName}</button>
+        <strong style="font-size:1.05rem;">${cur.label}</strong>
+        <button class="nav-btn" data-action="prod-next">次の${kindName} →</button>
+        <button class="nav-btn" data-action="prod-today" style="margin-left:auto;">今日へ</button>
+      </div>
+    </div>`;
+
+  if (cur.hours === 0) {
+    return html + `<div class="card"><div class="empty-message" style="padding:30px;">
+      この${kindName}は打刻がありません</div></div>`;
+  }
+
+  // ── 人時売上 − 実時給 ＝ 人時生産性 を縦に並べて見せる
+  const diffRev = cur.revPerHour - prev.revPerHour;
+  html += `
+    <div class="card" style="background:${cur.perHour >= 0 ? 'var(--green-bg)' : '#ffebee'};">
+      <div style="display:grid; grid-template-columns:1fr; gap:2px; max-width:520px; margin:0 auto;">
+
+        <div style="display:flex; align-items:baseline; justify-content:space-between; padding:10px 16px; background:rgba(255,255,255,0.75); border-radius:8px 8px 0 0;">
+          <div>
+            <div style="font-size:1rem; font-weight:bold;">人時売上</div>
+            <div style="font-size:0.75rem; color:#888;">売上 ÷ 総労働時間</div>
+          </div>
+          <div style="text-align:right;">
+            <div style="font-size:2.1rem; font-weight:bold; color:#1565c0; line-height:1.1;">${fmtYen(cur.revPerHour)}</div>
+            <div style="font-size:0.75rem; color:#888;">前の${kindName} ${fmtYen(prev.revPerHour)}
+              ${prev.hours > 0 ? `<span style="color:${diffRev>=0?'var(--green)':'var(--red)'};">（${diffRev>=0?'+':'−'}${Math.abs(Math.round(diffRev)).toLocaleString()}）</span>` : ''}</div>
+          </div>
+        </div>
+
+        <div style="display:flex; align-items:baseline; justify-content:space-between; padding:10px 16px; background:rgba(255,255,255,0.55);">
+          <div>
+            <div style="font-size:1rem; font-weight:bold; color:var(--orange);">− 実時給</div>
+            <div style="font-size:0.75rem; color:#888;">人件費 ÷ 総労働時間</div>
+          </div>
+          <div style="font-size:1.7rem; font-weight:bold; color:var(--orange);">${fmtYen(cur.realRate)}</div>
+        </div>
+
+        <div style="display:flex; align-items:baseline; justify-content:space-between; padding:14px 16px; background:rgba(255,255,255,0.9); border-top:3px solid #999; border-radius:0 0 8px 8px;">
+          <div>
+            <div style="font-size:1.05rem; font-weight:bold;">＝ 人時生産性</div>
+            <div style="font-size:0.75rem; color:#888;">粗利 ÷ 総労働時間</div>
+          </div>
+          <div style="text-align:right;">
+            <div style="font-size:2.6rem; font-weight:bold; color:${prodColor(cur.perHour)}; line-height:1.1;">${fmtYen(cur.perHour)}</div>
+            <div style="font-size:0.75rem; color:#888;">前の${kindName} ${fmtYen(prev.perHour)}
+              ${prev.hours > 0 ? `<span style="color:${diff>=0?'var(--green)':'var(--red)'}; font-weight:bold;">（${diff>=0?'+':'−'}${Math.abs(Math.round(diff)).toLocaleString()}）</span>` : ''}</div>
+          </div>
+        </div>
+
+      </div>
+      <div style="text-align:center; margin-top:12px; font-size:0.9rem; color:${cur.perHour >= 0 ? 'var(--green)' : 'var(--red)'}; font-weight:bold;">
+        ${cur.perHour >= 0
+          ? '1人時あたり ' + fmtYen(cur.perHour) + ' がセンターに残っています'
+          : '1人時あたり ' + fmtYen(Math.abs(cur.perHour)) + ' 足りていません'}
+      </div>
+    </div>`;
+
+  // ── 内訳
+  html += `
+    <div class="card">
+      <table style="width:100%; font-size:0.95rem;">
+        <tr><td style="padding:8px 0; color:#666;">売上（出来高・作業賃）</td>
+            <td style="text-align:right; font-weight:bold;">${fmtYen(cur.totalRevenue)}</td>
+            <td style="text-align:right; color:#888; width:90px;">100%</td></tr>
+        <tr><td style="padding:8px 0; color:#666;">原価（人件費）</td>
+            <td style="text-align:right; font-weight:bold; color:var(--orange);">− ${fmtYen(cur.totalWage)}</td>
+            <td style="text-align:right; font-weight:bold; color:${cur.costRate === null ? '#888' : (cur.costRate > 100 ? 'var(--red)' : 'var(--green)')};">
+              ${cur.costRate === null ? '—' : cur.costRate.toFixed(0) + '%'}</td></tr>
+        <tr style="border-top:2px solid #ddd;">
+            <td style="padding:10px 0; font-weight:bold;">粗利</td>
+            <td style="text-align:right; font-weight:bold; font-size:1.15rem; color:${prodColor(cur.profit)};">${fmtYen(cur.profit)}</td>
+            <td style="text-align:right; font-weight:bold; color:${prodColor(cur.profit)};">
+              ${cur.profitRate === null ? '—' : cur.profitRate.toFixed(0) + '%'}</td></tr>
+        <tr><td style="padding:8px 0; color:#666;">総労働時間</td>
+            <td style="text-align:right; font-weight:bold;">${cur.hours.toFixed(1)} 時間</td><td></td></tr>
+      </table>
+      ${cur.costRate !== null ? `<div style="margin-top:12px; padding:10px 12px; border-radius:6px; font-size:0.92rem;
+        background:${cur.costRate > 100 ? '#ffebee' : 'var(--green-bg)'};">
+        <strong>原価率 ${cur.costRate.toFixed(0)}%</strong>
+        ${cur.costRate > 100
+          ? `<span style="color:var(--red); font-weight:bold;">　★100%を超えています。作業賃で人件費をまかなえていません</span>`
+          : `<span style="color:var(--green); font-weight:bold;">　粗利率 ${cur.profitRate.toFixed(0)}% がセンターに残ります</span>`}
+      </div>` : ''}
+      <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:10px; margin-top:14px;">
+        <div style="background:#fafafa; padding:10px; border-radius:6px;">
+          <div style="font-size:0.78rem; color:#888;">のべ出勤日数</div>
+          <div style="font-size:1.2rem; font-weight:bold;">${cur.workDays} 日</div></div>
+        <div style="background:#fafafa; padding:10px; border-radius:6px;">
+          <div style="font-size:0.78rem; color:#888;">作業記録</div>
+          <div style="font-size:1.2rem; font-weight:bold;">${cur.totalRecords} 件</div></div>
+      </div>
+      ${cur.unpriced > 0 ? `<div style="margin-top:10px; padding:8px 12px; background:#fff3e0; border-radius:6px; font-size:0.85rem; color:#e65100;">
+        ⚠️ 単価が入っていない記録が ${cur.unpriced} 件あります。そのぶん出来高が少なく出ています。</div>` : ''}
+    </div>`;
+
+
+  // ── 稼働率
+  if (view === 'util') {
+    const u = calcUtilization(kind, anchor, null);
+    if (u.totalMin === 0) {
+      return html + `<div class="card"><div class="empty-message" style="padding:30px;">この${kindName}は打刻がありません</div></div>`;
+    }
+    const w1 = u.utilRate || 0, w2 = u.subRate || 0, w3 = u.unrecordedRate || 0;
+    const gapOk = u.gap !== null && u.gap >= 0;
+    html += `
+      <div class="card">
+        <h3 style="margin-top:0;">⏱ 稼働率</h3>
+        <div class="form-hint" style="margin-bottom:14px;">
+          総労働時間を3つに分けています。<strong>① ＋ ② ＋ ③ ＝ 総労働時間</strong>。<br>
+          <strong>稼働率 ＝ ① ÷ 総労働時間</strong>　／　<strong>記録率 ＝（①＋②）÷ 総労働時間</strong>
+        </div>
+
+        <div style="display:flex; height:46px; border-radius:8px; overflow:hidden; border:1px solid #ccc; margin-bottom:8px;">
+          <div style="width:${w1}%; background:var(--green); display:flex; align-items:center; justify-content:center; color:#fff; font-weight:bold; font-size:0.85rem;">${w1 >= 8 ? w1.toFixed(0)+'%' : ''}</div>
+          <div style="width:${w2}%; background:#90a4ae; display:flex; align-items:center; justify-content:center; color:#fff; font-size:0.8rem;">${w2 >= 8 ? w2.toFixed(0)+'%' : ''}</div>
+          <div style="width:${w3}%; background:#ffe0b2; display:flex; align-items:center; justify-content:center; color:#e65100; font-weight:bold; font-size:0.85rem;">${w3 >= 8 ? w3.toFixed(0)+'%' : ''}</div>
+        </div>
+        <div style="position:relative; height:22px; margin-bottom:16px;">
+          <div style="position:absolute; left:${u.plannedRate}%; top:-8px; transform:translateX(-50%); font-size:0.75rem; color:#c62828; white-space:nowrap;">
+            ▲ 想定 ${u.plannedRate.toFixed(0)}%</div>
+        </div>
+
+        <table style="width:100%; font-size:0.95rem;">
+          <tr><td style="padding:8px 0;"><span style="display:inline-block; width:14px; height:14px; background:var(--green); border-radius:3px; vertical-align:middle;"></span>
+              ① 出来高作業（正味）</td>
+              <td style="text-align:right; font-weight:bold;">${u.netWorkHours.toFixed(1)} h</td>
+              <td style="text-align:right; font-weight:bold; width:80px; color:var(--green);">${w1.toFixed(0)}%</td></tr>
+          <tr><td style="padding:8px 0;"><span style="display:inline-block; width:14px; height:14px; background:#90a4ae; border-radius:3px; vertical-align:middle;"></span>
+              ② 全体寄与（準備・清掃など）</td>
+              <td style="text-align:right; font-weight:bold;">${u.subHours.toFixed(1)} h</td>
+              <td style="text-align:right; font-weight:bold; width:80px; color:#607d8b;">${w2.toFixed(0)}%</td></tr>
+          <tr><td style="padding:8px 0;"><span style="display:inline-block; width:14px; height:14px; background:#ffe0b2; border:1px solid #ffb74d; border-radius:3px; vertical-align:middle;"></span>
+              ③ 記録のない時間</td>
+              <td style="text-align:right; font-weight:bold; color:var(--orange);">${u.unrecordedHours.toFixed(1)} h</td>
+              <td style="text-align:right; font-weight:bold; width:80px; color:var(--orange);">${w3.toFixed(0)}%</td></tr>
+          <tr style="border-top:2px solid #ddd;"><td style="padding:10px 0; font-weight:bold;">総労働時間</td>
+              <td style="text-align:right; font-weight:bold;">${u.totalHours.toFixed(1)} h</td>
+              <td style="text-align:right; font-weight:bold; width:80px;">100%</td></tr>
+        </table>
+
+        <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(190px,1fr)); gap:10px; margin-top:16px;">
+          <div style="background:${gapOk ? 'var(--green-bg)' : '#ffebee'}; padding:14px; border-radius:8px; text-align:center;">
+            <div style="font-size:0.8rem; color:#666;">稼働率（①）</div>
+            <div style="font-size:2.2rem; font-weight:bold; color:${gapOk ? 'var(--green)' : 'var(--red)'}; line-height:1.15;">${w1.toFixed(0)}%</div>
+            <div style="font-size:0.8rem; color:#666;">想定 ${u.plannedRate.toFixed(0)}% に対して
+              <strong style="color:${gapOk ? 'var(--green)' : 'var(--red)'};">${u.gap >= 0 ? '+' : '−'}${Math.abs(u.gap).toFixed(0)} ポイント</strong></div>
+          </div>
+          <div style="background:#fafafa; padding:14px; border-radius:8px; text-align:center;">
+            <div style="font-size:0.8rem; color:#666;">記録率（①＋②）</div>
+            <div style="font-size:2.2rem; font-weight:bold; line-height:1.15;">${u.recordRate.toFixed(0)}%</div>
+            <div style="font-size:0.8rem; color:#666;">何をしていたか分かる時間</div>
+          </div>
+        </div>
+
+        ${!gapOk ? `<div style="margin-top:14px; padding:12px; background:#ffebee; border-radius:8px; font-size:0.92rem;">
+          <strong style="color:var(--red);">★作業賃は稼働率${u.plannedRate.toFixed(0)}%を前提に決めています。</strong><br>
+          実績が${w1.toFixed(0)}%だと、そのぶん作業賃が足りなくなります。
+          この${kindName}の不足は <strong>${((u.plannedRate - w1) / 100 * u.totalHours).toFixed(1)} 時間</strong>ぶんです。
+        </div>` : `<div style="margin-top:14px; padding:12px; background:var(--green-bg); border-radius:8px; font-size:0.92rem;">
+          想定の${u.plannedRate.toFixed(0)}%を上回っています。作業賃の前提どおりに動けています。
+        </div>`}
+
+        ${w3 >= 20 ? `<div style="margin-top:10px; padding:12px; background:#fff8e1; border-radius:8px; font-size:0.92rem;">
+          <strong style="color:#b87b00;">記録のない時間が ${w3.toFixed(0)}% あります。</strong><br>
+          打刻はあるのに、何をしていたかが残っていません。出来高の登録もれか、
+          作業のない待ち時間です。ここが分からないと、どこを直せばよいか決められません。
+        </div>` : ''}
+      </div>`;
+
+    if (u.globals.length > 0) {
+      html += `<div class="card">
+        <h3 style="margin-top:0;">🌍 全体寄与の内訳</h3>
+        <table style="width:100%; font-size:0.92rem;"><tbody>`;
+      for (const g of u.globals) {
+        const p = u.totalMin > 0 ? g.minutes / u.totalMin * 100 : 0;
+        html += `<tr>
+          <td style="padding:6px 0;">${g.name}</td>
+          <td style="text-align:right; font-weight:bold;">${(g.minutes / 60).toFixed(1)} h</td>
+          <td style="text-align:right; width:70px; color:#666;">${p.toFixed(1)}%</td></tr>`;
+      }
+      html += `</tbody></table></div>`;
+    }
+
+    // 個人別の稼働率
+    const rows = [];
+    for (const emp of state.employees.filter(e => (e.status || 'active') === 'active')) {
+      const ue = calcUtilization(kind, anchor, emp.id);
+      if (ue.totalMin === 0) continue;
+      rows.push({ emp, ...ue });
+    }
+    rows.sort((x, y) => (y.utilRate || 0) - (x.utilRate || 0));
+    if (rows.length > 0) {
+      html += `<div class="card">
+        <h3 style="margin-top:0;">👤 個人別の稼働率</h3>
+        <div style="overflow-x:auto;">
+        <table style="width:100%; min-width:620px; font-size:0.9rem; border-collapse:collapse;">
+          <thead><tr style="background:var(--green-bg);">
+            <th style="text-align:left; padding:8px;">従業員</th>
+            <th style="text-align:right; padding:8px;">総労働</th>
+            <th style="text-align:right; padding:8px;">① 出来高</th>
+            <th style="text-align:right; padding:8px;">② 全体寄与</th>
+            <th style="text-align:right; padding:8px;">③ 記録なし</th>
+            <th style="text-align:right; padding:8px; background:#e8eaf6;">稼働率</th>
+          </tr></thead><tbody>`;
+      for (const r of rows) {
+        const ok2 = (r.utilRate || 0) >= r.plannedRate;
+        html += `<tr>
+          <td style="padding:8px;">${r.emp.emoji || ''} ${r.emp.name}</td>
+          <td style="text-align:right;">${r.totalHours.toFixed(1)}h</td>
+          <td style="text-align:right; color:var(--green);">${r.netWorkHours.toFixed(1)}h</td>
+          <td style="text-align:right; color:#607d8b;">${r.subHours.toFixed(1)}h</td>
+          <td style="text-align:right; color:var(--orange);">${r.unrecordedHours.toFixed(1)}h</td>
+          <td style="text-align:right; font-weight:bold; font-size:1.02rem; background:#f5f6fb; color:${ok2 ? 'var(--green)' : 'var(--red)'};">
+            ${(r.utilRate || 0).toFixed(0)}%</td>
+        </tr>`;
+      }
+      html += `</tbody></table></div>
+        <div class="form-hint" style="margin-top:10px;">
+          想定 ${u.plannedRate.toFixed(0)}% を下回ると赤で出ます。
+        </div></div>`;
+    }
+    return html;
+  }
+
+  // ── 品目別
+  if (view === 'product') {
+    const pb = calcProductivityByProduct(kind, anchor, null);
+    html += `
+      <div class="card">
+        <h3 style="margin-top:0;">🥬 品目別</h3>
+        <div class="form-hint" style="margin-bottom:12px;">
+          ここだけ<strong>分母が違います</strong>。品目別は作業記録の人時（その品目に費やした時間）で割っています。<br>
+          打刻は品目に紐づかないため、<strong>準備・清掃・待ち時間は品目に割り振れません</strong>。
+        </div>
+        <div style="display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:10px; margin-bottom:14px;">
+          <div style="background:#e3f2fd; padding:10px; border-radius:6px;">
+            <div style="font-size:0.78rem; color:#666;">品目に割り振れた時間</div>
+            <div style="font-size:1.25rem; font-weight:bold;">${pb.recHours.toFixed(1)} h</div>
+            <div style="font-size:0.75rem; color:#888;">${pb.assignRate === null ? '' : '総労働の ' + pb.assignRate.toFixed(0) + '%'}</div></div>
+          <div style="background:#fff3e0; padding:10px; border-radius:6px;">
+            <div style="font-size:0.78rem; color:#666;">割り振れない時間</div>
+            <div style="font-size:1.25rem; font-weight:bold; color:var(--orange);">${pb.unassignedHours.toFixed(1)} h</div>
+            <div style="font-size:0.75rem; color:#888;">準備・清掃・待ちなど</div></div>
+          <div style="background:#fafafa; padding:10px; border-radius:6px;">
+            <div style="font-size:0.78rem; color:#666;">総労働時間</div>
+            <div style="font-size:1.25rem; font-weight:bold;">${pb.wholeHours.toFixed(1)} h</div>
+            <div style="font-size:0.75rem; color:#888;">打刻から</div></div>
+          <div style="background:#fafafa; padding:10px; border-radius:6px;">
+            <div style="font-size:0.78rem; color:#666;">割り振れない分の人件費</div>
+            <div style="font-size:1.25rem; font-weight:bold; color:var(--orange);">${fmtYen(pb.unassignedWage)}</div>
+            <div style="font-size:0.75rem; color:#888;">品目に乗っていない</div></div>
+        </div>`;
+    if (pb.rows.length === 0) {
+      html += `<div class="empty-message" style="padding:26px;">この${kindName}は作業記録がありません</div></div>`;
+      return html;
+    }
+    html += `
+      <div style="overflow-x:auto;">
+      <table style="width:100%; min-width:760px; font-size:0.9rem; border-collapse:collapse;">
+        <thead><tr style="background:var(--green-bg);">
+          <th style="text-align:left; padding:8px;">品目</th>
+          <th style="text-align:right; padding:8px;">人時</th>
+          <th style="text-align:right; padding:8px;">出来高</th>
+          <th style="text-align:right; padding:8px;">売上</th>
+          <th style="text-align:right; padding:8px;">原価</th>
+          <th style="text-align:right; padding:8px;">原価率</th>
+          <th style="text-align:right; padding:8px; background:#e3f2fd;">人時売上</th>
+          <th style="text-align:right; padding:8px;">実時給</th>
+          <th style="text-align:right; padding:8px; background:#e8eaf6;">人時生産性</th>
+        </tr></thead><tbody>`;
+    for (const r of pb.rows) {
+      html += `<tr>
+        <td style="padding:8px;">${r.name}${r.specLabel ? `<div style="font-size:0.75rem; color:#888;">${r.specLabel}</div>` : ''}</td>
+        <td style="text-align:right;">${r.hours.toFixed(1)}h</td>
+        <td style="text-align:right;">${Math.round(r.quantity).toLocaleString()}${r.unit}
+          <div style="font-size:0.72rem; color:#888;">${r.qtyPerHour.toFixed(0)}${r.unit}/h</div></td>
+        <td style="text-align:right;">${fmtYen(r.revenue)}</td>
+        <td style="text-align:right; color:var(--orange);">${fmtYen(r.wage)}</td>
+        <td style="text-align:right; font-weight:bold; color:${r.costRate === null ? '#bbb' : (r.costRate > 100 ? 'var(--red)' : 'var(--green)')};">
+          ${r.costRate === null ? '—' : r.costRate.toFixed(0) + '%'}</td>
+        <td style="text-align:right; font-weight:bold; color:#1565c0; background:#f2f8fd;">${fmtYen(r.revPerHour)}</td>
+        <td style="text-align:right; color:var(--orange);">${fmtYen(r.realRate)}</td>
+        <td style="text-align:right; font-weight:bold; font-size:1.02rem; color:${prodColor(r.perHour)}; background:#f5f6fb;">${fmtYen(r.perHour)}</td>
+      </tr>`;
+    }
+    // 割り振れない時間の行
+    html += `<tr style="background:#fff8e1;">
+      <td style="padding:8px; color:#b87b00;">（品目に割り振れない）<div style="font-size:0.75rem; color:#888;">準備・清掃・待ちなど</div></td>
+      <td style="text-align:right; color:#b87b00;">${pb.unassignedHours.toFixed(1)}h</td>
+      <td style="text-align:right; color:#bbb;">—</td>
+      <td style="text-align:right; color:#bbb;">—</td>
+      <td style="text-align:right; color:var(--orange);">${fmtYen(pb.unassignedWage)}</td>
+      <td colspan="4" style="text-align:right; color:#888; font-size:0.85rem; padding-right:8px;">この分は品目の数字に入っていません</td>
+    </tr>`;
+    html += `<tr style="background:#eceff1; font-weight:bold;">
+      <td style="padding:10px 8px;">合計（センター全体）</td>
+      <td style="text-align:right;">${pb.wholeHours.toFixed(1)}h</td>
+      <td style="text-align:right; color:#bbb;">—</td>
+      <td style="text-align:right;">${fmtYen(pb.recRevenue)}</td>
+      <td style="text-align:right; color:var(--orange);">${fmtYen(pb.wholeWage)}</td>
+      <td style="text-align:right; color:${cur.costRate === null ? '#888' : (cur.costRate > 100 ? 'var(--red)' : 'var(--green)')};">
+        ${cur.costRate === null ? '—' : cur.costRate.toFixed(0) + '%'}</td>
+      <td style="text-align:right; color:#1565c0;">${fmtYen(cur.revPerHour)}</td>
+      <td style="text-align:right; color:var(--orange);">${fmtYen(cur.realRate)}</td>
+      <td style="text-align:right; color:${prodColor(cur.perHour)};">${fmtYen(cur.perHour)}</td>
+    </tr>`;
+    html += `</tbody></table></div>`;
+    if (pb.rows.length >= 2) {
+      const t = pb.rows[0], b2 = pb.rows[pb.rows.length - 1];
+      html += `<div style="margin-top:12px; padding:10px 12px; background:#fff8e1; border-radius:6px; font-size:0.9rem;">
+        いちばん稼ぐ品目 <strong>${t.name}${t.specLabel ? '（'+t.specLabel+'）' : ''}</strong> ${fmtYen(t.perHour)}／人時<br>
+        いちばん稼げない品目 <strong>${b2.name}${b2.specLabel ? '（'+b2.specLabel+'）' : ''}</strong> ${fmtYen(b2.perHour)}／人時
+        <br><span style="color:#666;">赤字の品目は、単価が実態に合っていないか、時間がかかりすぎています。</span></div>`;
+    }
+    html += `</div>`;
+    return html;
+  }
+
+  // ── 個人別
+  html += `
+    <div class="card">
+      <h3 style="margin-top:0;">👤 個人別</h3>
+      <div class="form-hint" style="margin-bottom:10px;">
+        ペア作業の出来高は、かかった時間の比で分けています。
+      </div>
+      <div style="overflow-x:auto;">
+      <table style="width:100%; min-width:620px; font-size:0.9rem; border-collapse:collapse;">
+        <thead><tr style="background:var(--green-bg);">
+          <th style="text-align:left; padding:8px;">従業員</th>
+          <th style="text-align:right; padding:8px;">総労働</th>
+          <th style="text-align:right; padding:8px;">出来高</th>
+          <th style="text-align:right; padding:8px;">原価<br><span style="font-weight:normal; font-size:0.78rem;">(人件費)</span></th>
+          <th style="text-align:right; padding:8px;">粗利</th>
+          <th style="text-align:right; padding:8px;">原価率</th>
+          <th style="text-align:right; padding:8px; background:#e3f2fd;">人時売上</th>
+          <th style="text-align:right; padding:8px;">実時給</th>
+          <th style="text-align:right; padding:8px; background:#e8eaf6;">人時生産性</th>
+        </tr></thead><tbody>`;
+  for (const r of cur.rows) {
+    html += `<tr>
+      <td style="padding:8px;">${r.emp.emoji || ''} ${r.emp.name}
+        <div style="font-size:0.75rem; color:#888;">${r.days}日 ／ ${r.records}件</div></td>
+      <td style="text-align:right;">${r.hours.toFixed(1)}h</td>
+      <td style="text-align:right;">${fmtYen(r.revenue)}</td>
+      <td style="text-align:right; color:var(--orange);">${fmtYen(r.wage)}</td>
+      <td style="text-align:right; color:${prodColor(r.profit)};">${fmtYen(r.profit)}</td>
+      <td style="text-align:right; font-weight:bold; color:${r.costRate === null ? '#bbb' : (r.costRate > 100 ? 'var(--red)' : 'var(--green)')};">
+        ${r.costRate === null ? '—' : r.costRate.toFixed(0) + '%'}</td>
+      <td style="text-align:right; font-weight:bold; color:#1565c0; background:#f2f8fd;">${fmtYen(r.revPerHour)}</td>
+      <td style="text-align:right; color:var(--orange);">${fmtYen(r.realRate)}</td>
+      <td style="text-align:right; font-weight:bold; font-size:1.02rem; color:${prodColor(r.perHour)}; background:#f5f6fb;">${fmtYen(r.perHour)}</td>
+    </tr>`;
+  }
+  html += `</tbody></table></div>`;
+  if (cur.rows.length >= 2) {
+    const top = cur.rows[0], bot = cur.rows[cur.rows.length - 1];
+    html += `<div style="margin-top:12px; padding:10px 12px; background:#fff8e1; border-radius:6px; font-size:0.9rem;">
+      いちばん上 <strong>${top.emp.name}</strong> ${fmtYen(top.perHour)} ／
+      いちばん下 <strong>${bot.emp.name}</strong> ${fmtYen(bot.perHour)}
+      <br><span style="color:#666;">差 ${fmtYen(top.perHour - bot.perHour)}／人時。
+      速い人のやり方をそろえると、全体が上がります。</span></div>`;
+  }
+  html += `</div>`;
+  return html;
+}
+
+
+// =========================================================
+
+
+// =========================================================
+// 【2026-08-16 v2.3】規格別の単価（作業賃）の画面
+//
+// ★確定単価表との違いを並べて見せる
+//   確定単価表 … 実績から逆算。時給1,100円・稼働100%
+//   規格別     … いまの実時給 × 秒 ÷ 3600 ÷ 稼働0.75
+//   同じ仕事でも、稼働率の前提が違うと必要な単価が変わる。
+// =========================================================
+function renderSpecPrices() {
+  const wage = currentAvgWage();
+  const withSpecs = state.work_products.filter(p => Array.isArray(p.specs) && p.specs.length > 0);
+  const task = state.work_tasks.find(t => t.id === SPEC_TASK_ID);
+  const unit = task ? task.unit : '袋';
+
+  let html = `
+    <div class="nav-row"><button class="nav-btn" data-action="back-admin">← 管理画面へ戻る</button></div>
+    <div class="card">
+      <h2>📏 規格別の単価（作業賃）</h2>
+      <div class="form-hint" style="margin-bottom:12px;">
+        <strong>単価は作業賃だけです。袋代は包材費マスタに入っています。</strong><br>
+        作業賃 ＝ 時給 × 秒 ÷ 3600 ÷ 稼働率${PLAN_UTIL}
+      </div>
+      <div style="display:flex; gap:12px; flex-wrap:wrap; align-items:center; margin-bottom:8px;">
+        <div style="background:${wage ? 'var(--green-bg)' : '#ffebee'}; padding:10px 16px; border-radius:8px;">
+          <span style="font-size:0.85rem; color:#666;">いまの平均時給</span>
+          <strong style="font-size:1.3rem; margin-left:8px; color:${wage ? 'var(--green)' : 'var(--red)'};">
+            ${wage ? wage.toLocaleString() + '円' : '未設定'}</strong>
+          <div style="font-size:0.75rem; color:#888;">月間勤務計画から。${currentSite() || '全拠点'}</div>
+        </div>
+        <button class="nav-btn" data-action="rebuild-spec-prices"
+          style="background:#fff3e0; color:var(--orange); border-color:var(--orange);">
+          🔄 いまの時給で単価を作り直す</button>
+      </div>
+      ${!wage ? `<div style="padding:10px 12px; background:#ffebee; border-radius:6px; font-size:0.9rem; color:var(--red);">
+        月間勤務計画に時給が入っていません。時給を入れないと作業賃が出せません。</div>` : ''}
+    </div>`;
+
+  if (withSpecs.length === 0) {
+    return html + `<div class="card"><div class="empty-message" style="padding:26px;">
+      規格を持つ品目がありません</div></div>`;
+  }
+
+  html += `<div class="card">
+    <div style="overflow-x:auto;">
+    <table style="width:100%; min-width:620px; font-size:0.92rem; border-collapse:collapse;">
+      <thead><tr style="background:var(--green-bg);">
+        <th style="text-align:left; padding:8px;">品目</th>
+        <th style="text-align:left; padding:8px;">規格</th>
+        <th style="text-align:right; padding:8px;">目安の秒</th>
+        <th style="text-align:right; padding:8px; background:#e8eaf6;">作業賃<br><span style="font-weight:normal; font-size:0.75rem;">(円/${unit})</span></th>
+        <th style="text-align:right; padding:8px;">包材費<br><span style="font-weight:normal; font-size:0.75rem;">(袋＋ラベル)</span></th>
+        <th style="text-align:right; padding:8px;">合計</th>
+        <th style="text-align:left; padding:8px;">出どころ</th>
+      </tr></thead><tbody>`;
+  for (const p of withSpecs) {
+    const bag = (typeof p.bag === 'number') ? p.bag : PACK_BAG;
+    const mat = Math.round((bag + PACK_LABEL) * 10) / 10;
+    p.specs.forEach((sp, i) => {
+      const cur = findWorkPrice(SPEC_TASK_ID, p.id, sp.id);
+      const saved = cur ? cur.unit_price : null;
+      const calc = wageOfSec(sp.sec, wage);
+      const diff = (saved !== null && saved !== calc);
+      html += `<tr>
+        <td style="padding:7px 8px;">${i === 0 ? `${p.emoji || ''} <strong>${p.name}</strong>` : ''}</td>
+        <td style="padding:7px 8px;">${sp.label}</td>
+        <td style="padding:7px 8px; text-align:right; color:#888;">${sp.sec}秒</td>
+        <td style="padding:7px 8px; text-align:right; font-weight:bold; background:#f5f6fb;">
+          ${saved !== null ? saved + '円' : '<span style="color:var(--orange);">未設定</span>'}
+          ${diff ? `<div style="font-size:0.72rem; color:var(--orange);">いまの時給なら ${calc}円</div>` : ''}</td>
+        <td style="padding:7px 8px; text-align:right; color:#1565c0;">${mat}円</td>
+        <td style="padding:7px 8px; text-align:right; font-weight:bold;">
+          ${saved !== null ? (Math.round((saved + mat) * 10) / 10) + '円' : '—'}</td>
+        <td style="padding:7px 8px; font-size:0.76rem; color:#888;">${sp.src || ''}</td>
+      </tr>`;
+    });
+  }
+  html += `</tbody></table></div>
+    <div class="form-hint" style="margin-top:10px;">
+      💡 時給を変えたら「いまの時給で単価を作り直す」を押してください。手で直した値も上書きされます。
+    </div></div>`;
+
+  // ── 確定単価表との比較
+  const ap = state.ajisai_prices || [];
+  if (ap.length > 0) {
+    html += `<div class="card">
+      <h3 style="margin-top:0;">🏷 確定単価表との違い</h3>
+      <div class="form-hint" style="margin-bottom:12px;">
+        確定単価表は<strong>実績から逆算</strong>した値で、<strong>時給1,100円・稼働100%</strong>が前提です。<br>
+        規格別の作業賃は<strong>稼働${(PLAN_UTIL * 100).toFixed(0)}%</strong>で計算しています。
+        <strong style="color:var(--orange);">同じ仕事でも、稼働率の前提が違うと必要な単価が変わります。</strong>
+      </div>
+      <table style="width:100%; font-size:0.92rem;">
+        <tr style="background:var(--green-bg);">
+          <th style="text-align:left; padding:8px;">前提</th>
+          <th style="text-align:right; padding:8px;">1時間に働ける分</th>
+          <th style="text-align:right; padding:8px;">15秒の作業の単価</th>
+        </tr>
+        <tr><td style="padding:8px;">確定単価表（稼働100%）</td>
+            <td style="text-align:right;">60分</td>
+            <td style="text-align:right; font-weight:bold;">${Math.round(1100 * 15 / 3600)}円<span style="font-size:0.75rem; color:#888;">（時給1,100円）</span></td></tr>
+        <tr><td style="padding:8px;">規格別（稼働${(PLAN_UTIL * 100).toFixed(0)}%）</td>
+            <td style="text-align:right;">${(60 * PLAN_UTIL).toFixed(0)}分</td>
+            <td style="text-align:right; font-weight:bold; color:var(--green);">${wageOfSec(15, wage)}円<span style="font-size:0.75rem; color:#888;">（時給${wage ? wage.toLocaleString() : '—'}円）</span></td></tr>
+      </table>
+      <div style="margin-top:12px; padding:10px 12px; background:#fff8e1; border-radius:6px; font-size:0.9rem;">
+        確定単価表は「休みなく働ける」前提なので、<strong>そのぶん単価が低く出ます。</strong><br>
+        実際の稼働率は「📈 人時売上・人時生産性」の稼働率タブで見られます。
+      </div>
+    </div>`;
+  }
+  return html;
+}
+
 function renderReports() {
   if (!state._reportTab) state._reportTab = 'wage';
   if (!state._reportDate) state._reportDate = new Date();
@@ -4411,12 +5540,8 @@ function renderReportShip() {
   const product = buf.product_id ? state.work_products.find(p => p.id === buf.product_id) : null;
   
   // 単位作業賃・単位包材費（マスタから）
-  const price = (buf.task_id && buf.product_id) 
-    ? state.work_prices.find(p => p.task_id === buf.task_id && p.product_id === buf.product_id) 
-    : null;
-  const material = (buf.task_id && buf.product_id) 
-    ? state.work_materials.find(m => m.task_id === buf.task_id && m.product_id === buf.product_id) 
-    : null;
+  const price = findWorkPrice(buf.task_id, buf.product_id, buf.spec_id);
+  const material = findWorkMaterial(buf.task_id, buf.product_id, buf.spec_id);
   const unitLaborCharge = price ? price.unit_price : 0;
   const unitMaterialCost = material ? material.material_cost : 0;
   
@@ -4640,10 +5765,11 @@ function renderReportCharge() {
   // 商品（作業×品目）別に集計
   const byKey = {};
   for (const r of records) {
-    const key = `${r.main_task_id}__${r.main_product_id}`;
+    const key = `${r.main_task_id}__${r.main_product_id}__${r.main_spec_id || ''}`;
     if (!byKey[key]) {
       byKey[key] = {
         task_id: r.main_task_id, product_id: r.main_product_id,
+        spec_id: r.main_spec_id || '',
         unit: r.unit,
         quantity: 0,
         totalLaborCost: 0,
@@ -4657,7 +5783,7 @@ function renderReportCharge() {
   }
   // 各商品の課金計算
   const items = Object.values(byKey).map(a => {
-    const mat = state.work_materials.find(m => m.task_id === a.task_id && m.product_id === a.product_id);
+    const mat = findWorkMaterial(a.task_id, a.product_id, a.spec_id);
     const materialUnit = mat ? (mat.material_cost || 0) : 0;
     const totalMaterialCost = materialUnit * a.quantity;
     const totalCharge = a.totalLaborCost + totalMaterialCost;
@@ -4905,11 +6031,12 @@ function renderReportVolume() {
     // 作業×品目別の集計（差益順）
     const byKey = {};
     for (const r of records) {
-      const key = `${r.main_task_id}__${r.main_product_id}`;
+      const key = `${r.main_task_id}__${r.main_product_id}__${r.main_spec_id || ''}`;
       if (!byKey[key]) {
         byKey[key] = {
           task_id: r.main_task_id,
           product_id: r.main_product_id,
+          spec_id: r.main_spec_id || '',
           unit: r.unit,
           unit_price: r.unit_price,
           quantity: 0,
@@ -5034,7 +6161,7 @@ function renderReportVolume() {
     // 同じ作業×品目で複数人が作業した場合の比較
     const byKey = {};
     for (const r of records) {
-      const key = `${r.main_task_id}__${r.main_product_id}`;
+      const key = `${r.main_task_id}__${r.main_product_id}__${r.main_spec_id || ''}`;
       if (!byKey[key]) byKey[key] = [];
       byKey[key].push(r);
     }
@@ -5233,20 +6360,101 @@ function calcMonthlyVolumeSum(employeeId, year, month) {
 }
 
 // 作業記録ごとの作業時間（分）と按分人件費を計算
-function calcRecordCost(record) {
-  if (!record.work_started_at || !record.work_ended_at) return { minutes: 0, laborCost: 0, hourlyRate: 0 };
-  const startT = new Date(record.work_started_at);
-  const endT = new Date(record.work_ended_at);
-  const minutes = Math.max(0, Math.floor((endT - startT) / 60000));
-  const plan = state.work_plans.find(wp => 
-    wp.employee_id === record.employee_id && 
-    wp.year === startT.getFullYear() && 
-    wp.month === startT.getMonth() + 1
-  );
-  const hourlyRate = plan ? (plan.hourly_rate || 0) : 0;
-  const laborCost = Math.round(minutes / 60 * hourlyRate);
-  return { minutes, laborCost, hourlyRate };
+// =========================================================
+// 【2026-08-16 v2.2】ペア作業の人時を正しく数える
+//
+// ★v1.7までの不具合
+//   ここが (終了 − 開始) しか見ておらず、1人分の時間しか数えていなかった。
+//   2人で90分なら投入人時は180分だが、90分として計算していた。
+//   → 人件費が半分、速度が倍に見え、ペアでやった日ほど成績が良く見えていた。
+//   延べ人時は v1.6 から members / total_person_minutes に記録済みだったが、
+//   集計側が使っていなかった。
+//
+// 直し方
+//   members がある記録は、1人ずつの在席時間 × その人の時給 を足し上げる。
+//   members が無い古い記録は、これまでどおり1人分として扱う（壊さない）。
+// =========================================================
+
+// 指定の年月における、その人の時給
+function hourlyRateOf(empId, year, month) {
+  const plan = state.work_plans.find(wp =>
+    wp.employee_id === empId && wp.year === year && wp.month === month);
+  return plan ? (plan.hourly_rate || 0) : 0;
 }
+
+// 記録に関わった人ごとの内訳を返す
+//   [{ employee_id, minutes, hourlyRate, laborCost }]
+function recordMembers(record) {
+  if (!record.work_started_at) return [];
+  const startT = new Date(record.work_started_at);
+  const y = startT.getFullYear(), m = startT.getMonth() + 1;
+  const mem = Array.isArray(record.members) ? record.members.filter(x => x && x.employee_id) : [];
+  if (mem.length > 0) {
+    return mem.map(x => {
+      const minutes = Math.max(0, Math.round(Number(x.minutes) || 0));
+      const rate = hourlyRateOf(x.employee_id, y, m);
+      return { employee_id: x.employee_id, minutes, hourlyRate: rate,
+               laborCost: Math.round(minutes / 60 * rate) };
+    });
+  }
+  // 古い記録（members が無い）：登録した本人が1人でやったものとして扱う
+  if (!record.work_ended_at) return [];
+  const minutes = Math.max(0, Math.floor((new Date(record.work_ended_at) - startT) / 60000));
+  const rate = hourlyRateOf(record.employee_id, y, m);
+  return [{ employee_id: record.employee_id, minutes, hourlyRate: rate,
+            laborCost: Math.round(minutes / 60 * rate) }];
+}
+
+function calcRecordCost(record) {
+  const mem = recordMembers(record);
+  if (mem.length === 0) return { minutes: 0, laborCost: 0, hourlyRate: 0, personMinutes: 0, memberCount: 0 };
+  // ★minutes は「延べ人時（分）」。1人分ではない
+  const personMinutes = mem.reduce((s, x) => s + x.minutes, 0);
+  const laborCost = mem.reduce((s, x) => s + x.laborCost, 0);
+  // 参考：経過時間（1人分）。速度の表示などで使う場面がある
+  const elapsed = (record.work_started_at && record.work_ended_at)
+    ? Math.max(0, Math.floor((new Date(record.work_ended_at) - new Date(record.work_started_at)) / 60000)) : 0;
+  const avgRate = personMinutes > 0 ? Math.round(laborCost / (personMinutes / 60)) : 0;
+  return { minutes: personMinutes, laborCost, hourlyRate: avgRate,
+           personMinutes, elapsedMinutes: elapsed, memberCount: mem.length, members: mem };
+}
+
+// =========================================================
+// 【2026-08-16 v2.2】ペア作業の出来高を、かかった時間の比で各人に配る
+//
+// ★v1.7までの不具合
+//   出来高は「登録した人」に全部ついていた。相方は0だった。
+//   個人別に見ると、働いたのに何もしていない人になっていた。
+//
+// 配り方（社長確定 2026-08-16）
+//   かかった時間の比で割る。途中参加・途中抜けもそのまま反映される。
+//   粗利を労働時間で割る式なので、時間比で配れば
+//   同じ速さで働いた人は同じ人時生産性になる。
+// =========================================================
+function splitRecordByMember(record) {
+  const mem = recordMembers(record);
+  const total = mem.reduce((s, x) => s + x.minutes, 0);
+  const revenue = (record.unit_price || 0) * (record.quantity || 0);
+  const qty = record.quantity || 0;
+  const material = (record.material_cost || 0) * qty;
+  return mem.map(x => {
+    const share = total > 0 ? x.minutes / total : (mem.length ? 1 / mem.length : 0);
+    return {
+      employee_id: x.employee_id,
+      minutes: x.minutes,
+      hourlyRate: x.hourlyRate,
+      laborCost: x.laborCost,
+      share,
+      revenue: revenue * share,          // 出来高（作業賃の売上）
+      quantity: qty * share,
+      materialCost: material * share,
+      profit: revenue * share - x.laborCost,   // 粗利 ＝ 出来高 − 人件費
+    };
+  });
+}
+
+
+// =========================================================
 
 function renderReportMonthly() {
   const ym = state._reportYM;
@@ -5451,10 +6659,11 @@ function renderMonthlyTaskDiagnosis(ym) {
   // 作業×品目別に集計
   const byKey = {};
   for (const r of records) {
-    const key = `${r.main_task_id}__${r.main_product_id}`;
+    const key = `${r.main_task_id}__${r.main_product_id}__${r.main_spec_id || ''}`;
     if (!byKey[key]) {
       byKey[key] = {
         task_id: r.main_task_id, product_id: r.main_product_id,
+        spec_id: r.main_spec_id || '',
         unit: r.unit, unit_price: r.unit_price,
         quantity: 0, count: 0, totalMinutes: 0, totalLaborCost: 0,
         emp_ids: new Set(),
@@ -5566,7 +6775,7 @@ function renderMonthlyCompare(ym) {
   // 作業×品目ごとに人別集計
   const byKey = {};
   for (const r of records) {
-    const key = `${r.main_task_id}__${r.main_product_id}`;
+    const key = `${r.main_task_id}__${r.main_product_id}__${r.main_spec_id || ''}`;
     if (!byKey[key]) byKey[key] = [];
     byKey[key].push(r);
   }
@@ -5718,6 +6927,7 @@ function renderWorkRegister() {
     state._registerBuf = {
       main_task_id: '',
       main_product_id: '',
+      main_spec_id: '',
       quantity: '',
       sub_tasks: {},  // { 'TG01': 10, 'TG05': 15 } 形式
     };
@@ -5735,7 +6945,7 @@ function renderWorkRegister() {
   // 単価が設定されているか
   let priceInfo = '';
   if (buf.main_task_id && buf.main_product_id) {
-    const price = state.work_prices.find(p => p.task_id === buf.main_task_id && p.product_id === buf.main_product_id);
+    const price = findWorkPrice(buf.main_task_id, buf.main_product_id, buf.main_spec_id);
     if (price) {
       priceInfo = `<span style="color:var(--green); font-weight:bold;">単価 ${price.unit_price}円/${price.unit}</span>`;
       if (buf.quantity) {
@@ -5791,10 +7001,29 @@ function renderWorkRegister() {
   `;
   for (const p of products) {
     const sel = (p.id === buf.main_product_id) ? ' selected' : '';
-    html += `<option value="${p.id}"${sel}>${p.emoji} ${p.name}</option>`;
+    const nspec = Array.isArray(p.specs) ? p.specs.length : 0;
+    html += `<option value="${p.id}"${sel}>${p.emoji} ${p.name}${nspec ? `（${nspec}規格）` : ''}</option>`;
   }
   html += `</select>
         </div>
+  `;
+  // 【2026-08-16 v2.3】規格。規格を持つ品目を選んだときだけ出す
+  const regSpecs = specsOf(buf.main_product_id);
+  if (regSpecs.length > 0) {
+    html += `
+        <div class="form-row">
+          <label class="form-label">📏 規格</label>
+          <select id="reg-spec" data-action="register-spec-change">
+            <option value="">-- 選択してください --</option>`;
+    for (const sp of regSpecs) {
+      const sel = (sp.id === buf.main_spec_id) ? ' selected' : '';
+      html += `<option value="${sp.id}"${sel}>${sp.label}（目安 ${sp.sec}秒）</option>`;
+    }
+    html += `</select>
+          <div class="form-hint">規格でかかる時間が変わるため、単価も変わります</div>
+        </div>`;
+  }
+  html += `
         <div class="form-row">
           <label class="form-label">📊 数量${unit ? `（${unit}）` : ''}</label>
           <input type="number" id="reg-quantity" value="${buf.quantity}" placeholder="例：80" min="0" step="1" data-action="register-quantity-change" />
@@ -5821,7 +7050,7 @@ function renderWorkRegister() {
         </div>
         
         <div class="form-actions" style="margin-top:18px;">
-          <button class="primary-btn" data-action="save-work-register" ${!buf.main_task_id || !buf.main_product_id || !buf.quantity ? 'disabled' : ''}>
+          <button class="primary-btn" data-action="save-work-register" ${!buf.main_task_id || !buf.main_product_id || !buf.quantity || (regSpecs.length > 0 && !buf.main_spec_id) ? 'disabled' : ''}>
             ✅ 登録して終了
           </button>
           <button class="nav-btn" data-action="cancel-work-register">作業に戻る</button>
@@ -10218,6 +11447,8 @@ function renderAdmin() {
         <button class="nav-btn" data-action="go-shift-overview" style="background:#fff3e0; color:var(--orange); border-color:var(--orange); font-weight:bold;">📊 シフト一覧</button>
         <button class="nav-btn" data-action="go-punch-logs" style="background:#f3e5f5; color:#7b1fa2; border-color:#7b1fa2; font-weight:bold;">📋 打刻ログ詳細</button>
         <button class="nav-btn" data-action="go-punch-fix" style="background:#fff3e0; color:#e65100; border-color:#e65100; font-weight:bold;">🛠 打刻もれ修正</button>
+        <button class="nav-btn" data-action="go-productivity" style="background:#e8eaf6; color:#3f51b5; border-color:#3f51b5; font-weight:bold;">📈 人時売上・人時生産性</button>
+        <button class="nav-btn" data-action="go-spec-prices" style="background:#e0f7fa; color:#00838f; border-color:#00838f; font-weight:bold;">📏 規格別の単価</button>
         <button class="nav-btn" data-action="go-work-adjust" style="background:#fff8e1; color:#b87b00; border-color:#d9b347; font-weight:bold;">🕐 早出・延長の認定${(function(){const n=pendingDeclarations().length; return n>0?` <span style="background:var(--orange); color:#fff; border-radius:8px; padding:0 6px;">${n}</span>`:'';})()}</button>
         <button class="nav-btn" data-action="go-ajisai-prices" style="background:#fff8e1; color:#d9b347; border-color:#d9b347; font-weight:bold;">🏷 味采確定単価</button>
         <button class="nav-btn" data-action="go-tasks-master" style="background:#e0f2f1; color:#00897b; border-color:#00897b; font-weight:bold;">⚙️ 作業・品目マスタ</button>
@@ -10445,6 +11676,44 @@ async function handleClick(e) {
           return;
         }
       }
+    }
+    render();
+  } else if (a === 'go-spec-prices') {
+    state.screen = 'spec_prices';
+    render();
+  } else if (a === 'rebuild-spec-prices') {
+    const w = currentAvgWage();
+    if (!w) { alert('月間勤務計画に時給が入っていません。先に時給を入れてください。'); return; }
+    const seed = buildSpecPrices(w);
+    if (!confirm(`いまの平均時給 ${w.toLocaleString()}円 で、規格別の単価 ${seed.prices.length}件 を作り直します。\n\n★手で直した値も上書きされます。よろしいですか？`)) return;
+    const keep = state.work_prices.filter(p => !(p.task_id === SPEC_TASK_ID && p.spec_id));
+    state.work_prices = keep.concat(seed.prices);
+    await saveData(STORAGE_KEYS.WORK_PRICES, state.work_prices);
+    state._pricesBuf = null;
+    render();
+    setTimeout(() => alert(`単価を作り直しました（${seed.prices.length}件・時給${w.toLocaleString()}円）`), 100);
+  } else if (a === 'go-productivity') {
+    state._prodKind = state._prodKind || 'month';
+    state._prodView = state._prodView || 'all';
+    state._prodAnchor = todayStr();
+    state.screen = 'productivity';
+    render();
+  } else if (a === 'prod-view') {
+    state._prodView = e.currentTarget.dataset.view;
+    render();
+  } else if (a === 'prod-kind') {
+    state._prodKind = e.currentTarget.dataset.kind;
+    render();
+  } else if (a === 'prod-today') {
+    state._prodAnchor = todayStr();
+    render();
+  } else if (a === 'prod-prev' || a === 'prod-next') {
+    const s = (a === 'prod-next') ? 1 : -1;
+    if (state._prodKind === 'day') state._prodAnchor = dateStrAdd(state._prodAnchor, s);
+    else if (state._prodKind === 'week') state._prodAnchor = dateStrAdd(weekStartOf(state._prodAnchor), s * 7);
+    else {
+      const [y, m] = state._prodAnchor.split('-').map(Number);
+      state._prodAnchor = isoDateOnly(new Date(y, m - 1 + s, 1));
     }
     render();
   } else if (a === 'go-work-adjust') {
@@ -11927,9 +13196,15 @@ async function handleClick(e) {
     render();
   } else if (a === 'register-product-change') {
     state._registerBuf.main_product_id = e.currentTarget.value;
+    // 品目を変えたら規格は選び直し。規格が1つの品目はそれを自動で選ぶ
+    const _sps = specsOf(state._registerBuf.main_product_id);
+    state._registerBuf.main_spec_id = (_sps.length === 1) ? _sps[0].id : '';
     render();
   } else if (a === 'register-quantity-change') {
     state._registerBuf.quantity = e.currentTarget.value;
+    render();
+  } else if (a === 'register-spec-change') {
+    state._registerBuf.main_spec_id = e.currentTarget.value;
     render();
   } else if (a === 'register-sub-toggle') {
     const taskId = e.currentTarget.dataset.taskId;
@@ -11951,6 +13226,7 @@ async function handleClick(e) {
     });
     const buf = state._registerBuf;
     if (!buf.main_task_id || !buf.main_product_id || !buf.quantity) { alert('主作業・品目・数量は必須です'); return; }
+    if (specsOf(buf.main_product_id).length > 0 && !buf.main_spec_id) { alert('規格を選んでください'); return; }
     const emp = state.employees.find(em => em.id === state.current_employee_id);
     const today = todayStr();
     // 最後のWORK_STARTを取得
@@ -11973,11 +13249,11 @@ async function handleClick(e) {
     await punch('WORK_END', null, endSessionId);
     await checkSessionEnding();
     // 単価取得
-    const price = state.work_prices.find(p => p.task_id === buf.main_task_id && p.product_id === buf.main_product_id);
+    const price = findWorkPrice(buf.main_task_id, buf.main_product_id, buf.main_spec_id);
     const unitPrice = price ? price.unit_price : 0;
     // 【2026-08-12 追加】包材費も記録した瞬間の値を焼き付ける。
     // 単価だけ焼き付けて包材費を焼かないと、包材を改定したとき過去の採算が動く。
-    const material = state.work_materials.find(m => m.task_id === buf.main_task_id && m.product_id === buf.main_product_id);
+    const material = findWorkMaterial(buf.main_task_id, buf.main_product_id, buf.main_spec_id);
     const materialCost = material ? (material.material_cost || 0) : 0;
     const task = state.work_tasks.find(t => t.id === buf.main_task_id);
     // 【2026-08-12 追加】何人が何分たずさわったかを復元する
@@ -11999,6 +13275,9 @@ async function handleClick(e) {
       register_entered_at: state._registerEnteredAt,
       main_task_id: buf.main_task_id,
       main_product_id: buf.main_product_id,
+      // 【2026-08-16 v2.3】規格。規格を持たない品目のときは空
+      main_spec_id: buf.main_spec_id || '',
+      main_spec_label: buf.main_spec_id ? specLabel(buf.main_product_id, buf.main_spec_id) : '',
       quantity: parseFloat(buf.quantity),
       unit: task ? task.unit : '',
       unit_price: unitPrice,
@@ -12348,7 +13627,7 @@ async function handleClick(e) {
 // サーバー上のHTMLの先頭だけを読みに行き、版数が自分より新しければ画面上部に帯を出す。
 // 通信できないときは黙って何もしない。打刻の邪魔は一切しない。
 // =========================================================
-const APP_VERSION = 'v2.1';
+const APP_VERSION = 'v2.3';
 const UPDATE_CHECK_INTERVAL_MS = 30 * 60 * 1000;   // 30分おきに確認
 const UPDATE_FIRST_CHECK_MS = 30 * 1000;           // 起動30秒後に1回目
 
