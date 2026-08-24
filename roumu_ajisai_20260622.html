@@ -6,7 +6,7 @@
 
 <!-- 版数の目印。自動更新の確認でここだけを読みに行くので、必ず<head>の先頭付近に置くこと。
      版を上げるときは、この content と APP_VERSION と <title> と画面下のフッターの4か所を揃える。 -->
-<meta name="app-version" content="v2.3">
+<meta name="app-version" content="v2.4">
 
 <!-- ===== ホーム画面に追加したときの見た目（アイコン・アプリ名） =====
      画像は外部ファイルではなくこのHTMLの中に埋め込んでいます。
@@ -49,7 +49,7 @@
   } catch (e) {}
 })();
 </script>
-<title>味采 パッケージセンター 打刻システム v2.3</title>
+<title>味采 パッケージセンター 打刻システム v2.4</title>
 <style>
   :root {
     --green: #1d9e75;
@@ -1642,13 +1642,13 @@
 </header>
 
 <div id="update-bar" style="display:none; background:#fff8e1; border-bottom:2px solid #d9b347; color:#856404; padding:11px 14px; text-align:center; font-size:0.95rem; line-height:1.8;">
-  🔔 新しい版（<strong id="update-bar-ver"></strong>）が出ています。手が空いたときに開き直してください。
+  🔔 新しい版<span id="update-bar-ver-wrap" style="display:none;">（<strong id="update-bar-ver"></strong>）</span>が出ています。手が空いたときに開き直してください。
   <button onclick="reloadForUpdate()" style="margin-left:10px; padding:7px 18px; border:1px solid #d9b347; background:white; color:#856404; border-radius:6px; font-size:0.95rem; font-weight:bold; cursor:pointer;">開き直す</button>
 </div>
 
 <main id="app"></main>
 
-<div class="footer-note">味采版 v2.3（まる労務 v0.4 ベース）<span id="storage-mode-note"></span> ／ <a href="javascript:resetAppData()" style="color:#999; text-decoration:underline; font-size:0.85rem;">🆘 緊急リセット</a></div>
+<div class="footer-note">味采版 v2.4（まる労務 v0.4 ベース）<span id="storage-mode-note"></span> ／ <a href="javascript:resetAppData()" style="color:#999; text-decoration:underline; font-size:0.85rem;">🆘 緊急リセット</a></div>
 
 <script>
 // ストレージモードをフッターに表示
@@ -13627,9 +13627,57 @@ async function handleClick(e) {
 // サーバー上のHTMLの先頭だけを読みに行き、版数が自分より新しければ画面上部に帯を出す。
 // 通信できないときは黙って何もしない。打刻の邪魔は一切しない。
 // =========================================================
-const APP_VERSION = 'v2.3';
+const APP_VERSION = 'v2.4';
 const UPDATE_CHECK_INTERVAL_MS = 30 * 60 * 1000;   // 30分おきに確認
-const UPDATE_FIRST_CHECK_MS = 30 * 1000;           // 起動30秒後に1回目
+const UPDATE_FIRST_CHECK_MS = 3 * 1000;            // 起動3秒後に1回目
+
+// =========================================================
+// 【2026-08-16 v2.3】安全なときは自動で新しい版に切り替える
+//
+// ★なぜ入れたか
+//   ホーム画面のショートカット（アイコン）は、ふつうのブラウザとは
+//   別の控えを持つ。そのため帯を出しても、現場が押さないと古いままだった。
+//   実際に v2.3 を上げたのに v2.1 のままの端末があった（2026-08-16）。
+//
+// ★切り替えてよい場面だけに限る
+//   誰も出勤していない（全員が退勤済み・未出勤）
+//   ＋ 誰も作業中でない
+//   ＋ ペアの確認待ちがいない
+//   ＋ 出来高の入力中でない
+//   このときだけ、黙って開き直す。朝いちばんや昼休みに自然に入れ替わる。
+//
+// ★切り替えてはいけない場面
+//   誰かが働いている最中に画面が飛ぶと、打刻の途中や入力中の数字が消える。
+//   そのときは帯を出すだけにして、手が空いたときに押してもらう。
+// =========================================================
+const AUTO_RELOAD_KEY = 'auto_reload_at';   // 直前に自動で開き直した時刻（繰り返し防止）
+const AUTO_RELOAD_COOLDOWN_MS = 10 * 60 * 1000;
+
+// いま自動で開き直してよいか
+function canAutoReload() {
+  try {
+    // 入力の途中なら触らない
+    if (state._registerBuf) return false;
+    if (state._declTarget) return false;
+    if (state.screen && ['pending_wait', 'pair_select', 'pair_respond', 'mismatch_alert',
+                         'work_select', 'day_edit', 'punch_fix'].includes(state.screen)) return false;
+    // 誰かがペアの確認待ちなら触らない
+    if ((state.pending_sessions || []).length > 0) return false;
+    if ((state.active_sessions || []).length > 0) return false;
+    // 誰かが出勤中・作業中・休憩中なら触らない
+    for (const emp of (state.employees || [])) {
+      const st = getEmployeeStatus(emp.id);
+      if (!st) continue;
+      if (['working', 'waiting', 'matched', 'pending', 'invited', 'break', 'idle'].includes(st.status)) return false;
+    }
+    // 短い間に何度も開き直さない
+    const last = Number(localStorage.getItem(nsKey(AUTO_RELOAD_KEY)) || 0);
+    if (last && (Date.now() - last) < AUTO_RELOAD_COOLDOWN_MS) return false;
+    return true;
+  } catch (e) {
+    return false;   // 判断できないときは触らない
+  }
+}
 
 function cleanAppUrl() {
   return location.href.split('#')[0].split('?')[0];
@@ -13643,12 +13691,32 @@ async function checkForUpdate() {
     const url = cleanAppUrl() + '?_check=' + Date.now();
     // 先頭4KBだけ要求する。版数は<head>の先頭にあるので、これで足りる。
     // 全部で550KBほどあるので、毎回まるごと落とすと現場の回線に負担がかかる。
-    const res = await fetch(url, { cache: 'no-store', headers: { 'Range': 'bytes=0-4095' } });
-    if (!res.ok) return;
-    const text = await res.text();
+    //
+    // ★【2026-08-16 v2.3】Range に頼りきらない
+    //   サーバーが範囲指定を断ると 416 が返り、以前は res.ok が false になって
+    //   黙って諦めていた。そのため新しい版が出ても帯が出ない端末があった。
+    //   範囲指定でうまくいかなければ、ふつうに全部取り直す。
+    let text = '';
+    try {
+      const res = await fetch(url, { cache: 'no-store', headers: { 'Range': 'bytes=0-4095' } });
+      if (res.ok || res.status === 206) text = await res.text();
+    } catch (e) { /* 範囲指定が通らない環境。下でやり直す */ }
+    if (!/name="app-version"/.test(text)) {
+      const res2 = await fetch(url, { cache: 'no-store' });
+      if (!res2.ok) return;
+      text = await res2.text();
+    }
     const m = text.match(/name="app-version" content="([^"]+)"/);
     if (!m) return;
-    if (m[1] !== APP_VERSION) showUpdateBar(m[1]);
+    if (m[1] !== APP_VERSION) {
+      showUpdateBar(m[1]);
+      // 【2026-08-16 v2.3】誰も働いていないときだけ、黙って開き直す
+      if (canAutoReload()) {
+        try { localStorage.setItem(nsKey(AUTO_RELOAD_KEY), String(Date.now())); } catch (e) {}
+        console.log('[味采] 新しい版 ' + m[1] + ' に自動で切り替えます');
+        reloadForUpdate();
+      }
+    }
   } catch (e) {
     // 圏外・回線不調など。次の確認まで何もしない。
   }
@@ -13658,7 +13726,11 @@ function showUpdateBar(newVer) {
   const bar = document.getElementById('update-bar');
   if (!bar) return;
   const verEl = document.getElementById('update-bar-ver');
-  if (verEl) verEl.textContent = newVer;
+  if (verEl && newVer) {
+    verEl.textContent = newVer;
+    const wrap = document.getElementById('update-bar-ver-wrap');
+    if (wrap) wrap.style.display = '';
+  }
   bar.style.display = 'block';
 }
 
