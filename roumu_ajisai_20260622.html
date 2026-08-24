@@ -6,7 +6,7 @@
 
 <!-- 版数の目印。自動更新の確認でここだけを読みに行くので、必ず<head>の先頭付近に置くこと。
      版を上げるときは、この content と APP_VERSION と <title> と画面下のフッターの4か所を揃える。 -->
-<meta name="app-version" content="v2.4">
+<meta name="app-version" content="v2.5">
 
 <!-- ===== ホーム画面に追加したときの見た目（アイコン・アプリ名） =====
      画像は外部ファイルではなくこのHTMLの中に埋め込んでいます。
@@ -49,7 +49,7 @@
   } catch (e) {}
 })();
 </script>
-<title>味采 パッケージセンター 打刻システム v2.4</title>
+<title>味采 パッケージセンター 打刻システム v2.5</title>
 <style>
   :root {
     --green: #1d9e75;
@@ -1648,7 +1648,7 @@
 
 <main id="app"></main>
 
-<div class="footer-note">味采版 v2.4（まる労務 v0.4 ベース）<span id="storage-mode-note"></span> ／ <a href="javascript:resetAppData()" style="color:#999; text-decoration:underline; font-size:0.85rem;">🆘 緊急リセット</a></div>
+<div class="footer-note">味采版 v2.5（まる労務 v0.4 ベース）<span id="storage-mode-note"></span> ／ <a href="javascript:resetAppData()" style="color:#999; text-decoration:underline; font-size:0.85rem;">🆘 緊急リセット</a></div>
 
 <script>
 // ストレージモードをフッターに表示
@@ -1811,6 +1811,35 @@ function actualAvgWage(year, month) {
   if (rates.length === 0) return 0;
   return Math.round(rates.reduce((s, r) => s + r, 0) / rates.length);
 }
+// ★【2026-08-16 v2.5】保存先から直接読む版
+//
+//   移行（migrateSpecsOnce）は initializeData の中で走る。
+//   そのとき state.work_plans はまだ空なので、state から時給を取ると 0 になる。
+//   v2.4 で実際に全品目が「作業賃0円」で入ってしまった。
+//   移行のときは、state ではなく保存先から直接読む。
+async function actualAvgWageFromStore(year, month) {
+  const emps = ((await loadData(STORAGE_KEYS.EMPLOYEES, [])) || [])
+    .filter(e => (e.status || 'active') === 'active');
+  const plans = (await loadData(STORAGE_KEYS.WORK_PLANS, [])) || [];
+  let site = null;
+  try { site = await loadData(STORAGE_KEYS.DEVICE_SITE, null); } catch (e) {}
+  const ids = emps.filter(e => !site || !e.location || e.location === site).map(e => e.id);
+  let rates = plans.filter(w => ids.includes(w.employee_id) && w.year === year && w.month === month)
+                   .map(w => Number(w.hourly_rate) || 0).filter(r => r > 0);
+  if (rates.length === 0) {
+    const latest = {};
+    for (const w of plans) {
+      if (!ids.includes(w.employee_id)) continue;
+      const ym = w.year * 100 + w.month;
+      if (!latest[w.employee_id] || latest[w.employee_id].ym < ym)
+        latest[w.employee_id] = { ym, rate: Number(w.hourly_rate) || 0 };
+    }
+    rates = Object.values(latest).map(x => x.rate).filter(r => r > 0);
+  }
+  if (rates.length === 0) return 0;
+  return Math.round(rates.reduce((s, r) => s + r, 0) / rates.length);
+}
+
 // 今月の平均時給
 function currentAvgWage() {
   const d = new Date();
@@ -1896,6 +1925,16 @@ const SPEC_MIGRATION_ID = 'v23_split_2026_08';
 async function migrateSpecsOnce() {
   if ((await loadData(STORAGE_KEYS.SPEC_MIGRATION, null)) === SPEC_MIGRATION_ID) return null;
 
+  // ★【2026-08-16 v2.5】時給が取れないうちは移行しない
+  //   時給0で走らせると、全品目の作業賃が0円で入ってしまう（v2.4で実際に起きた）。
+  //   印を残さないので、時給を入れて開き直せば、そのときに走る。
+  const d0 = new Date();
+  const wageNow = await actualAvgWageFromStore(d0.getFullYear(), d0.getMonth() + 1);
+  if (!wageNow) {
+    console.warn('[味采] 時給が未設定のため、単価の分離を見送りました。月間勤務計画に時給を入れて開き直してください。');
+    return null;
+  }
+
   const products = (await loadData(STORAGE_KEYS.WORK_PRODUCTS, [])) || [];
   let addedSpecs = 0;
   for (const p of products) {
@@ -1912,7 +1951,7 @@ async function migrateSpecsOnce() {
   // 規格を足した状態で state を更新してから、たたき台をつくる
   const keepProducts = state.work_products;
   state.work_products = products;
-  const seed = buildSpecPrices();
+  const seed = buildSpecPrices(wageNow);   // ★保存先から読んだ時給を使う
   state.work_products = keepProducts;
 
   const specIds = products.filter(p => Array.isArray(p.specs) && p.specs.length).map(p => p.id);
@@ -5296,6 +5335,12 @@ function renderSpecPrices() {
       </div>
       ${!wage ? `<div style="padding:10px 12px; background:#ffebee; border-radius:6px; font-size:0.9rem; color:var(--red);">
         月間勤務計画に時給が入っていません。時給を入れないと作業賃が出せません。</div>` : ''}
+      ${(function () {
+        const zero = state.work_prices.filter(p => p.task_id === SPEC_TASK_ID && p.spec_id && p.unit_price === 0).length;
+        return zero > 0 ? `<div style="padding:10px 12px; background:#ffebee; border-radius:6px; font-size:0.9rem; margin-top:8px;">
+          <strong style="color:var(--red);">⚠ 作業賃が0円のままの規格が ${zero} 件あります。</strong><br>
+          上の「いまの時給で単価を作り直す」を押してください。</div>` : '';
+      })()}
     </div>`;
 
   if (withSpecs.length === 0) {
@@ -5327,8 +5372,10 @@ function renderSpecPrices() {
         <td style="padding:7px 8px;">${i === 0 ? `${p.emoji || ''} <strong>${p.name}</strong>` : ''}</td>
         <td style="padding:7px 8px;">${sp.label}</td>
         <td style="padding:7px 8px; text-align:right; color:#888;">${sp.sec}秒</td>
-        <td style="padding:7px 8px; text-align:right; font-weight:bold; background:#f5f6fb;">
-          ${saved !== null ? saved + '円' : '<span style="color:var(--orange);">未設定</span>'}
+        <td style="padding:7px 8px; text-align:right; font-weight:bold; background:${saved === 0 ? '#ffebee' : '#f5f6fb'};">
+          ${saved === null ? '<span style="color:var(--orange);">未設定</span>'
+            : saved === 0 ? '<span style="color:var(--red);">0円 ⚠</span>'
+            : saved + '円'}
           ${diff ? `<div style="font-size:0.72rem; color:var(--orange);">いまの時給なら ${calc}円</div>` : ''}</td>
         <td style="padding:7px 8px; text-align:right; color:#1565c0;">${mat}円</td>
         <td style="padding:7px 8px; text-align:right; font-weight:bold;">
@@ -13627,7 +13674,7 @@ async function handleClick(e) {
 // サーバー上のHTMLの先頭だけを読みに行き、版数が自分より新しければ画面上部に帯を出す。
 // 通信できないときは黙って何もしない。打刻の邪魔は一切しない。
 // =========================================================
-const APP_VERSION = 'v2.4';
+const APP_VERSION = 'v2.5';
 const UPDATE_CHECK_INTERVAL_MS = 30 * 60 * 1000;   // 30分おきに確認
 const UPDATE_FIRST_CHECK_MS = 3 * 1000;            // 起動3秒後に1回目
 
