@@ -7,6 +7,12 @@
 <!-- 版数の目印。自動更新の確認でここだけを読みに行くので、必ず<head>の先頭付近に置くこと。
      版を上げるときは、この content と APP_VERSION と <title> と画面下のフッターの4か所を揃える。 -->
 <meta name="app-version" content="v2.5">
+<!-- ★GitHub Pages は HTML に「10分はキャッシュしてよい」を付けて返す。
+     そのため上げ直しても10分は古い版が開く。ブラウザにも使わないよう伝えておく。
+     （サーバーの指示が優先されることが多いので、決め手は「🔄 更新を確認」ボタン） -->
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
 
 <!-- ===== ホーム画面に追加したときの見た目（アイコン・アプリ名） =====
      画像は外部ファイルではなくこのHTMLの中に埋め込んでいます。
@@ -11501,6 +11507,7 @@ function renderAdmin() {
         <button class="nav-btn" data-action="go-tasks-master" style="background:#e0f2f1; color:#00897b; border-color:#00897b; font-weight:bold;">⚙️ 作業・品目マスタ</button>
         <button class="nav-btn" data-action="go-app-settings" style="background:#fafafa; color:#555; border-color:#999; font-weight:bold;">🔧 設定</button>
         <button class="nav-btn" data-action="go-reports" style="background:#ffebee; color:#c62828; border-color:#c62828; font-weight:bold;">📊 集計レポート</button>
+        <button class="nav-btn" id="check-update-btn" data-action="check-update-now" style="background:#e1f5fe; color:#0277bd; border-color:#0277bd; font-weight:bold;">🔄 更新を確認</button>
         <button class="nav-btn" data-action="go-qr" style="background:#e8eaf6; color:#3f51b5; border-color:#3f51b5; font-weight:bold;">📱 デモQR</button>
         <label style="margin-left:auto; font-size:0.9rem;">
           <input type="checkbox" id="show-retired" data-action="toggle-retired" ${state._showRetired ? 'checked' : ''} /> 退職者も表示
@@ -11725,6 +11732,8 @@ async function handleClick(e) {
       }
     }
     render();
+  } else if (a === 'check-update-now') {
+    await checkForUpdateNow();
   } else if (a === 'go-spec-prices') {
     state.screen = 'spec_prices';
     render();
@@ -13675,8 +13684,10 @@ async function handleClick(e) {
 // 通信できないときは黙って何もしない。打刻の邪魔は一切しない。
 // =========================================================
 const APP_VERSION = 'v2.5';
-const UPDATE_CHECK_INTERVAL_MS = 30 * 60 * 1000;   // 30分おきに確認
-const UPDATE_FIRST_CHECK_MS = 3 * 1000;            // 起動3秒後に1回目
+const UPDATE_CHECK_INTERVAL_MS = 5 * 60 * 1000;    // 5分おきに確認
+//   先頭4KBだけ読むので回線の負担は小さい。
+//   30分だと「上げたのに変わらない」時間が長すぎたため短くした（2026-08-16）。
+const UPDATE_FIRST_CHECK_MS = 1500;                // 起動1.5秒後に1回目
 
 // =========================================================
 // 【2026-08-16 v2.3】安全なときは自動で新しい版に切り替える
@@ -13698,7 +13709,8 @@ const UPDATE_FIRST_CHECK_MS = 3 * 1000;            // 起動3秒後に1回目
 //   そのときは帯を出すだけにして、手が空いたときに押してもらう。
 // =========================================================
 const AUTO_RELOAD_KEY = 'auto_reload_at';   // 直前に自動で開き直した時刻（繰り返し防止）
-const AUTO_RELOAD_COOLDOWN_MS = 10 * 60 * 1000;
+// ★1分。10分では版を続けて上げたときに切り替わらなかった（2026-08-16）
+const AUTO_RELOAD_COOLDOWN_MS = 60 * 1000;
 
 // いま自動で開き直してよいか
 function canAutoReload() {
@@ -13766,6 +13778,49 @@ async function checkForUpdate() {
     }
   } catch (e) {
     // 圏外・回線不調など。次の確認まで何もしない。
+  }
+}
+
+// =========================================================
+// 【2026-08-16 v2.5】押せばその場で確認する
+//
+// 定期の確認は5分おきだが、版を上げた直後に確かめたいことがある。
+// このボタンを押すと、すぐ見に行き、新しければその場で開き直す。
+// ブラウザの Ctrl+Shift+R を毎回押さなくて済むようにするため。
+// =========================================================
+async function checkForUpdateNow() {
+  const btn = document.getElementById('check-update-btn');
+  if (btn) { btn.disabled = true; btn.textContent = '確認しています…'; }
+  try {
+    if (location.protocol !== 'http:' && location.protocol !== 'https:') {
+      alert('この開き方では確認できません（インターネット経由で開いてください）'); return;
+    }
+    const url = cleanAppUrl() + '?_check=' + Date.now();
+    let text = '';
+    try {
+      const res = await fetch(url, { cache: 'no-store', headers: { 'Range': 'bytes=0-4095' } });
+      if (res.ok || res.status === 206) text = await res.text();
+    } catch (e) {}
+    if (!/name="app-version"/.test(text)) {
+      const res2 = await fetch(url, { cache: 'no-store' });
+      if (!res2.ok) { alert('サーバーに問い合わせできませんでした（' + res2.status + '）'); return; }
+      text = await res2.text();
+    }
+    const m = text.match(/name="app-version" content="([^"]+)"/);
+    if (!m) { alert('版数を読み取れませんでした'); return; }
+    if (m[1] === APP_VERSION) {
+      alert('最新です（' + APP_VERSION + '）');
+      return;
+    }
+    if (confirm('新しい版 ' + m[1] + ' があります。\nいま開き直しますか？\n\n（打刻や入力の途中でなければ安全です）')) {
+      reloadForUpdate();
+    } else {
+      showUpdateBar(m[1]);
+    }
+  } catch (e) {
+    alert('確認できませんでした：' + e.message);
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '🔄 更新を確認'; }
   }
 }
 
