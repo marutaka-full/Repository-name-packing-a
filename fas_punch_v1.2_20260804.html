@@ -6,7 +6,7 @@
 
 <!-- 版数の目印。自動更新の確認でここだけを読みに行くので、必ず<head>の先頭付近に置くこと。
      版を上げるときは、この content と APP_VERSION と <title> と画面下のフッターの4か所を揃える。 -->
-<meta name="app-version" content="v2.0">
+<meta name="app-version" content="v2.1">
 <!-- ★GitHub Pages は HTML に「10分はキャッシュしてよい」を付けて返す。
      そのため上げ直しても10分は古い版が開く。ブラウザにも使わないよう伝えておく。
      （サーバーの指示が優先されることが多いので、決め手は「🔄 更新を確認」ボタン） -->
@@ -55,7 +55,7 @@
   } catch (e) {}
 })();
 </script>
-<title>ファス パッケージセンター 打刻システム v2.0</title>
+<title>ファス パッケージセンター 打刻システム v2.1</title>
 <style>
   :root {
     --green: #1d9e75;
@@ -1656,7 +1656,7 @@
 
 <main id="app"></main>
 
-<div class="footer-note">ファス版 v2.0<span id="storage-mode-note"></span> ／ <a href="javascript:resetAppData()" style="color:#999; text-decoration:underline; font-size:0.85rem;">🆘 緊急リセット</a></div>
+<div class="footer-note">ファス版 v2.1<span id="storage-mode-note"></span> ／ <a href="javascript:resetAppData()" style="color:#999; text-decoration:underline; font-size:0.85rem;">🆘 緊急リセット</a></div>
 
 <script>
 // ストレージモードをフッターに表示
@@ -13826,7 +13826,7 @@ async function handleClick(e) {
 // サーバー上のHTMLの先頭だけを読みに行き、版数が自分より新しければ画面上部に帯を出す。
 // 通信できないときは黙って何もしない。打刻の邪魔は一切しない。
 // =========================================================
-const APP_VERSION = 'v2.0';
+const APP_VERSION = 'v2.1';
 const UPDATE_CHECK_INTERVAL_MS = 5 * 60 * 1000;    // 5分おきに確認
 //   先頭4KBだけ読むので回線の負担は小さい。
 //   30分だと「上げたのに変わらない」時間が長すぎたため短くした（2026-08-16）。
