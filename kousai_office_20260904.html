@@ -6,7 +6,7 @@
 
 <!-- 版数の目印。自動更新の確認でここだけを読みに行くので、必ず<head>の先頭付近に置くこと。
      版を上げるときは、この content と APP_VERSION と <title> と画面下のフッターの4か所を揃える。 -->
-<meta name="app-version" content="v1.5">
+<meta name="app-version" content="v1.9">
 <!-- ★GitHub Pages は HTML に「10分はキャッシュしてよい」を付けて返す。
      そのため上げ直しても10分は古い版が開く。ブラウザにも使わないよう伝えておく。
      （サーバーの指示が優先されることが多いので、決め手は「🔄 更新を確認」ボタン） -->
@@ -55,7 +55,7 @@
   } catch (e) {}
 })();
 </script>
-<title>幸采事務所 打刻管理 v1.5</title>
+<title>幸采事務所 打刻管理 v1.9</title>
 <style>
   :root {
     --green: #1d9e75;
@@ -837,11 +837,30 @@
     border: 1px solid #e0e0e0;
     border-radius: 6px;
     padding: 8px;
+    /* 【2026-09-07】細い帯は掴みにくいので太くする。色も分かるように。 */
+    scrollbar-width: auto;
+    scrollbar-color: var(--header) #e8eef5;
   }
+  .gantt-wrap::-webkit-scrollbar { height: 16px; }
+  .gantt-wrap::-webkit-scrollbar-track {
+    background: #e8eef5;
+    border-radius: 8px;
+  }
+  .gantt-wrap::-webkit-scrollbar-thumb {
+    background: var(--header);
+    border-radius: 8px;
+    border: 3px solid #e8eef5;
+  }
+  .gantt-wrap::-webkit-scrollbar-thumb:hover { background: #163a5c; }
   .gantt-container {
     display: grid;
-    min-width: 700px;
+    /* 【2026-09-07】中身が収まっていても幅を確保していたため、
+       動かせないスクロールバーが出ていた。狭い画面のときだけ広げる。 */
+    min-width: 100%;
     gap: 0;
+  }
+  @media (max-width: 760px) {
+    .gantt-container { min-width: 700px; }
   }
   .gantt-header {
     background: var(--green-bg);
@@ -872,12 +891,20 @@
   }
   .gantt-name {
     padding: 8px 6px;
-    font-size: 0.88rem;
+    font-size: 0.8rem;
     border-bottom: 1px solid #eee;
     background: white;
     display: flex;
     align-items: center;
+    gap: 4px;
   }
+  /* 【2026-09-07】名前は1行に収める。長い名前は…で省略し、マウスを乗せると全部出る */
+  .gantt-name .gname {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .gantt-name img, .gantt-name .gemoji { flex: 0 0 auto; }
   .gantt-row {
     position: relative;
     height: 38px;
@@ -1656,7 +1683,7 @@
 
 <main id="app"></main>
 
-<div class="footer-note">幸采事務所版 v1.5<span id="storage-mode-note"></span> ／ <a href="javascript:resetAppData()" style="color:#999; text-decoration:underline; font-size:0.85rem;">🆘 緊急リセット</a></div>
+<div class="footer-note">幸采事務所版 v1.9<span id="storage-mode-note"></span> ／ <a href="javascript:resetAppData()" style="color:#999; text-decoration:underline; font-size:0.85rem;">🆘 緊急リセット</a></div>
 
 <script>
 // ストレージモードをフッターに表示
@@ -2285,8 +2312,8 @@ const DEFAULT_APP_SETTINGS = {
     cutoff_day: 'last',           // 〆日：'last' (月末) or 1〜31
     payment_day: 15,              // 支給日：1〜31 or 'last'
     payment_offset: 1,            // 0=同月支給、1=翌月支給
-    income_year_start_month: 12,  // 所得累計の開始月度（1〜12。前年扱い）
-    income_year_end_month: 11     // 所得累計の終了月度（1〜12。当年扱い）
+    income_year_start_month: 9,   // 【2026-09-07 幸采】年度は9月始まり（9月〜翌8月）
+    income_year_end_month: 8      // 【2026-09-07 幸采】年度は9月〜翌8月
   },
   // v0.7 法定上限（36協定）
   legal_limits: {
@@ -2613,6 +2640,27 @@ const PLACE_TOPUP_ID = 'place_topup_2026_09';
 // ★【2026-09-07】出張の規定（日当2,000円／宿泊上限8,500円）を一度だけ入れる。
 //   すでに開いた端末には app_settings が保存済みなので、初期値では入らないため。
 const TRAVEL_SET_ID = 'travel_set_2026_09';
+
+// ★【2026-09-07】年度を9月始まりに直す。
+//   味采から引き継いだ 12月始まりのままだったため。
+const FISCAL_SET_ID = 'fiscal_sep_2026_09';
+
+async function setFiscalYearOnce() {
+  try {
+    if (localStorage.getItem(APP_NS + '_fiscal_set') === FISCAL_SET_ID) return null;
+    const st = (await loadData(STORAGE_KEYS.APP_SETTINGS, null)) || {};
+    if (!st.payroll) st.payroll = {};
+    st.payroll.income_year_start_month = 9;
+    st.payroll.income_year_end_month = 8;
+    await saveData(STORAGE_KEYS.APP_SETTINGS, st);
+    localStorage.setItem(APP_NS + '_fiscal_set', FISCAL_SET_ID);
+    console.log('[幸采] 年度を9月始まりにしました');
+    return 1;
+  } catch (e) {
+    console.error('[幸采] 年度の設定に失敗:', e);
+    return null;
+  }
+}
 
 async function setTravelRulesOnce() {
   try {
@@ -3165,8 +3213,8 @@ function getPayrollSettings() {
     cutoff_day: s.cutoff_day || 'last',
     payment_day: s.payment_day || 15,
     payment_offset: typeof s.payment_offset === 'number' ? s.payment_offset : 1,
-    income_year_start_month: s.income_year_start_month || 12,
-    income_year_end_month: s.income_year_end_month || 11
+    income_year_start_month: s.income_year_start_month || 9,
+    income_year_end_month: s.income_year_end_month || 8
   };
 }
 
@@ -3592,6 +3640,8 @@ function render() {
   else if (state.screen === 'labor_plan_index') app.innerHTML = renderLaborPlanIndex();
   else if (state.screen === 'labor_plan_edit') app.innerHTML = renderLaborPlanEdit();
   attachHandlers();
+  // 【2026-09-07】ガントチャートの横移動（出ているときだけ）
+  setTimeout(setupGantt, 0);
 }
 
 // ★【2026-08-24 追加】画面を描くのに失敗したとき、黙って固まらないようにする。
@@ -3892,6 +3942,70 @@ function tripsOfMonth(ym) {
 
 // -------- 本人：申告の画面 --------
 // 【2026-09-05】出勤の打刻もれを、その場で申告してもらう欄
+// 【2026-09-07】ガントチャートを横に動かす。
+//   細い帯を掴むのは難しいので、ボタンとホイールでも動くようにする。
+//   収まっているときは、ボタンごと出さない。
+function setupGantt() {
+  const wrap = document.querySelector('.gantt-wrap');
+  const nav = document.getElementById('gantt-nav');
+  if (!wrap) return;
+  const over = wrap.scrollWidth - wrap.clientWidth;
+  if (nav) nav.style.display = (over > 8) ? 'flex' : 'none';
+  if (over <= 8) return;
+  // 縦のホイールで横に動かす
+  if (!wrap._wheelSet) {
+    wrap.addEventListener('wheel', (ev) => {
+      if (Math.abs(ev.deltaY) <= Math.abs(ev.deltaX)) return;
+      const before = wrap.scrollLeft;
+      wrap.scrollLeft += ev.deltaY;
+      if (wrap.scrollLeft !== before) ev.preventDefault();
+    }, { passive: false });
+    wrap._wheelSet = true;
+  }
+  // 開いたとき、いまの時刻あたりを映す
+  const now = wrap.querySelector('.gantt-now-line');
+  if (now && !wrap._scrolled) {
+    const x = now.offsetLeft - wrap.clientWidth * 0.6;
+    wrap.scrollLeft = Math.max(0, x);
+    wrap._scrolled = true;
+  }
+}
+
+// 【2026-09-07】いまの状態を、押したことが分かる大きさで出す。
+//   打刻しても画面がほとんど変わらず、効いていないと思って
+//   何度も押される事故があったため（9/7、退勤が28件）。
+function renderStatusBox(emp, todayPunches, st, isOut) {
+  const first = (t) => todayPunches.find(p => p.type === t);
+  const last  = (t) => [...todayPunches].reverse().find(p => p.type === t);
+  const inP = first('START'), outP = last('END');
+
+  let icon, label, sub, bg, line, color;
+  if (outP) {
+    icon = '🔴'; label = '退勤済';
+    sub = `${inP ? formatTime(inP.timestamp) + ' 〜 ' : ''}${formatTime(outP.timestamp)}　おつかれさまでした`;
+    bg = '#ffeaea'; line = '#c62828'; color = '#c62828';
+  } else if (isOut) {
+    icon = '🚪'; label = '外出中';
+    const o = [...todayPunches].reverse().find(p => p.type === 'OUT');
+    sub = `${o ? formatTime(o.timestamp) + ' に出ました。' : ''}戻ったら「帰着」を押してください`;
+    bg = '#fff4e5'; line = '#e07b00'; color = '#b35c00';
+  } else if (inP) {
+    icon = '🟢'; label = '出勤済';
+    sub = `${formatTime(inP.timestamp)} から働いています`;
+    bg = '#e8f4ee'; line = '#1d9e75'; color = '#12795a';
+  } else {
+    icon = '⚪'; label = '未出勤';
+    sub = 'まだ出勤の打刻がありません';
+    bg = '#f5f5f5'; line = '#bbb'; color = '#777';
+  }
+  return `
+    <div style="margin:10px 0 4px; padding:16px 18px; border-radius:10px;
+                background:${bg}; border-left:6px solid ${line}; text-align:center;">
+      <div style="font-size:1.7rem; font-weight:bold; color:${color}; line-height:1.3;">${icon} ${label}</div>
+      <div style="font-size:0.95rem; color:#555; margin-top:4px;">${sub}</div>
+    </div>`;
+}
+
 function renderStartOverdueBox(empId) {
   const o = startOverdue(empId);
   if (!o) return '';
@@ -4572,12 +4686,37 @@ function renderMonthSummary() {
         <tfoot>
           <tr style="background:var(--green-bg); font-weight:bold;">
             <td style="text-align:center;">合計</td>
-            <td colspan="4" style="text-align:center;">${days}日</td>
+            <td style="text-align:center;">${days}日</td>
+            <td colspan="3"></td>
             <td style="text-align:right;">${formatMinutes(sumWork)}</td>
             <td style="text-align:right;">${sumTrip}</td>
             <td style="text-align:right;">${sumFare.toLocaleString()}</td>
             <td style="text-align:right;">${sumCommute}</td>
           </tr>
+          ${(() => {
+            // 【2026-09-07】勤務計画から積み上げた所定と、実労働との差
+            const pt = monthPlanTotals(empId, Y, M);
+            if (pt.workDays === 0) return '';
+            const diff = sumWork - pt.netMin;
+            const sign = diff > 0 ? '+' : (diff < 0 ? '−' : '±');
+            const col = diff > 0 ? 'var(--orange)' : (diff < 0 ? 'var(--blue)' : '#888');
+            return `
+          <tr style="background:#fafafa;">
+            <td style="text-align:center; color:#666;">所定</td>
+            <td style="text-align:center; color:#666;">${pt.workDays}日</td>
+            <td colspan="3"></td>
+            <td style="text-align:right; color:#666;">${formatMinutes(pt.netMin)}</td>
+            <td colspan="3"></td>
+          </tr>
+          <tr style="background:#fafafa;">
+            <td style="text-align:center; color:#666;">差</td>
+            <td style="text-align:center; color:${days - pt.workDays === 0 ? '#888' : col};">
+              ${days - pt.workDays > 0 ? '+' : (days - pt.workDays < 0 ? '−' : '±')}${Math.abs(days - pt.workDays)}日</td>
+            <td colspan="3"></td>
+            <td style="text-align:right; color:${col}; font-weight:bold;">${sign}${formatMinutes(Math.abs(diff))}</td>
+            <td colspan="3"></td>
+          </tr>`;
+          })()}
         </tfoot>
       </table>
       </div>
@@ -6499,7 +6638,7 @@ function renderPersonal() {
     </div>
     <div class="card">
       <h2>${emp.emoji} ${emp.name}さん、こんにちは!</h2>
-      <div class="greeting">現在の状態：<strong>${st.label}</strong></div>
+      ${renderStatusBox(emp, todayPunches, st, isOut)}
       ${renderStartOverdueBox(emp.id)}
       ${(() => {
         const os = getOtOrders(emp.id, todayStr());
@@ -6658,7 +6797,7 @@ function renderPersonal() {
   const monthEndM = parseInt(monthCycle.endStr.substring(5, 7));
   const monthPlanKey = `${monthEndY}-${String(monthEndM).padStart(2, '0')}`;
   const monthPlanH = plan ? parseInt(plan.monthly_plans?.[monthPlanKey] || 0, 10) : 0;
-  const yearPlanH = plan ? calcAnnualCapHours(plan, emp.hourly_rate) : 0;
+  const yearPlanH = plan ? calcAnnualCapHours(plan, emp.hourly_rate, emp) : 0;
   const monthActualMin = monthTotal.workMinutes;
   const yearActualMin = yearTotal.workMinutes;
   const monthProgress = monthPlanH > 0 ? Math.min(150, Math.round(monthActualMin / 60 / monthPlanH * 100)) : 0;
@@ -12940,7 +13079,8 @@ function renderLogsGantt(punches) {
   for (let m = minMin; m <= maxMin; m += 60) {
     hours.push(m);
   }
-  let html = `<div class="gantt-wrap"><div class="gantt-container" style="grid-template-columns: 130px 1fr;">`;
+  // 【2026-09-07】名前の欄を狭くして、時間帯を広く使う
+  let html = `<div class="gantt-wrap"><div class="gantt-container" style="grid-template-columns: 92px 1fr;">`;
   // ヘッダー
   html += `<div class="gantt-header sticky-col-g">名前</div>`;
   html += `<div class="gantt-header gantt-time-row">`;
@@ -13021,14 +13161,15 @@ function renderLogsGantt(punches) {
       </div>`;
     }
     // 打刻マーカー
+    // 【2026-09-07】この版で使う4つの打刻を出す（作業・ペア・休憩は使いません）
+    const DOT_COL = { START: 'var(--green)', OUT: 'var(--orange)', RETURN: 'var(--blue)', END: 'var(--red)' };
     for (const p of list) {
-      if (p.type !== 'START' && p.type !== 'END') continue;
+      if (!DOT_COL[p.type]) continue;
       const t = new Date(p.timestamp);
       const m = t.getHours() * 60 + t.getMinutes();
       const leftPct = ((m - minMin) / rangeMin) * 100;
-      const pt = PUNCH_TYPES[p.type];
-      const dotCol = p.type === 'START' ? 'var(--green)' : 'var(--red)';
-      html += `<div class="gantt-marker" style="left:${leftPct}%; background:${dotCol};" title="${pt.label} ${formatTime(p.timestamp)}"></div>`;
+      const pt = PUNCH_TYPES[p.type] || { label: p.type };
+      html += `<div class="gantt-marker" style="left:${leftPct}%; background:${DOT_COL[p.type]};" title="${pt.label} ${formatTime(p.timestamp)}"></div>`;
     }
     // 「今」のライン
     if (isToday) {
@@ -13041,12 +13182,16 @@ function renderLogsGantt(punches) {
     html += `</div>`;
   }
   html += `</div>
+    <div id="gantt-nav" style="display:none; align-items:center; gap:10px; margin-top:8px;">
+      <button class="nav-btn" data-action="gantt-left" style="padding:6px 16px; font-size:1.1rem;">◀</button>
+      <span style="font-size:0.85rem; color:#888;">表の上でマウスのホイールを回しても動きます</span>
+      <button class="nav-btn" data-action="gantt-right" style="padding:6px 16px; font-size:1.1rem;">▶</button>
+    </div>
     <div class="gantt-legend" style="margin-top:14px; display:flex; gap:14px; flex-wrap:wrap; font-size:0.85rem;">
-      <span><span class="legend-dot" style="background:var(--blue);"></span> 単独作業</span>
-      <span><span class="legend-dot" style="background:var(--orange-light); border:1px solid var(--orange);"></span> ペア作業（同色＝同セッション）</span>
-      <span><span class="legend-dot" style="background:#f0f0f0; border:1px solid #999;"></span> 休憩</span>
-      <span><span class="legend-dot" style="background:var(--green); border-radius:50%;"></span> 出勤</span>
-      <span><span class="legend-dot" style="background:var(--red); border-radius:50%;"></span> 退勤</span>
+      <span><span class="legend-dot" style="background:var(--green); border-radius:50%;"></span> 🟢 出勤</span>
+      <span><span class="legend-dot" style="background:var(--orange); border-radius:50%;"></span> 🚪 外出</span>
+      <span><span class="legend-dot" style="background:var(--blue); border-radius:50%;"></span> 🏢 帰着</span>
+      <span><span class="legend-dot" style="background:var(--red); border-radius:50%;"></span> 🔴 退勤</span>
       ${isToday ? '<span><span class="legend-dot" style="background:var(--red); width:3px;"></span> 現在時刻</span>' : ''}
     </div></div>`;
   return html;
@@ -14788,7 +14933,10 @@ function findLaborPlan(empId, incomeYear) {
 }
 
 // 計画から年間総枠時間を算出（扶養内：所得÷時給、扶養外：直接入力）
-function calcAnnualCapHours(plan, hourlyRate) {
+function calcAnnualCapHours(plan, hourlyRate, emp) {
+  // 【2026-09-07】社員は月給なので、所得から逆算しません。
+  //   カレンダー（勤務計画）で計画した時間そのものが年間の枠になります。
+  if (isStaff(emp)) return annualPlannedHours(emp.id);
   if (!plan) return 0;
   if (plan.fuyo_type === 'inside') {
     if (!hourlyRate || hourlyRate <= 0) return 0;
@@ -14796,6 +14944,20 @@ function calcAnnualCapHours(plan, hourlyRate) {
   } else {
     return plan.annual_cap_hours || 0;
   }
+}
+
+// 【2026-09-07】年度ぶんの、勤務計画から積み上げた所定労働時間（時間）
+function annualPlannedHours(empId) {
+  const cyc = getCurrentIncomeYearCycle();
+  const a = new Date(cyc.startStr + 'T00:00:00');
+  const b = new Date(cyc.endStr + 'T00:00:00');
+  let min = 0;
+  const cur = new Date(a.getFullYear(), a.getMonth(), 1);
+  while (cur <= b) {
+    min += monthPlanTotals(empId, cur.getFullYear(), cur.getMonth() + 1).netMin;
+    cur.setMonth(cur.getMonth() + 1);
+  }
+  return Math.round(min / 60);
 }
 
 // 「年内所得対象期間」の月度リストを返す（12ヶ月分）
@@ -14831,7 +14993,7 @@ function renderLaborPlanIndex() {
   const summaries = employees.map(emp => {
     const plan = findLaborPlan(emp.id, incomeYear);
     const fuyo = emp.fuyo_type || 'inside';
-    const capH = plan ? calcAnnualCapHours(plan, emp.hourly_rate) : 0;
+    const capH = plan ? calcAnnualCapHours(plan, emp.hourly_rate, emp) : 0;
     const yearTotal = getTotalsInDateRange(emp.id, incomeYearCycle.startStr, todayS);
     const monthTotal = getTotalsInDateRange(emp.id, monthCycle.startStr, todayS);
     const yearActualH = yearTotal.workMinutes / 60;
@@ -14855,7 +15017,10 @@ function renderLaborPlanIndex() {
   const totalActual = summaries.reduce((s, x) => s + x.yearActualH, 0);
   const totalRemaining = summaries.reduce((s, x) => s + x.yearRemainingH, 0);
   const totalProgress = totalCap > 0 ? Math.round(totalActual / totalCap * 100) : 0;
-  const planExistsCount = summaries.filter(s => s.plan).length;
+  // 【2026-09-07】社員はカレンダーの計画が枠になるので、この画面での作成は要らない。
+  //   数えるのは、計画を作る必要があるパートだけ。
+  const needPlan = summaries.filter(s => !isStaff(s.emp));
+  const planExistsCount = needPlan.filter(s => s.plan).length;
 
   let html = `
     <div class="nav-row">
@@ -14865,7 +15030,12 @@ function renderLaborPlanIndex() {
       <h2>📋 労働時間計画</h2>
       <div class="form-hint" style="margin-bottom:14px;">
         💡 対象年度：<strong>${incomeYearCycle.label}</strong>（${incomeYearCycle.startStr} 〜 ${incomeYearCycle.endStr}）<br>
-        💡 計画を作成・編集したい個人を選んでください。
+        💡 計画を作成・編集したい個人を選んでください。<br>
+        <span style="color:#555;">
+        <strong>パート</strong>は年収の壁があるため、年間の枠を先に切って月ごとに配ります。
+        <strong>作っておかないと、年度末に出勤できなくなります。</strong><br>
+        <strong>社員</strong>は月給なので所得から逆算しません。
+        カレンダー（勤務計画）で計画した時間が、そのまま年間の枠になります。</span>
       </div>
 
       <!-- 全員サマリー（Step 7） -->
@@ -14873,8 +15043,9 @@ function renderLaborPlanIndex() {
         <h3 style="color:var(--blue); margin-bottom:10px;">📊 全従業員サマリー（年度進捗）</h3>
         <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); gap:12px;">
           <div style="background:white; padding:12px; border-radius:8px; text-align:center;">
-            <div style="font-size:0.85rem; color:#666;">計画作成済</div>
-            <div style="font-size:1.3rem; font-weight:bold; color:var(--blue);">${planExistsCount} / ${employees.length} 人</div>
+            <div style="font-size:0.85rem; color:#666;">計画作成済（パート）</div>
+            <div style="font-size:1.3rem; font-weight:bold; color:var(--blue);">${planExistsCount} / ${needPlan.length} 人</div>
+            ${needPlan.length < employees.length ? `<div style="font-size:0.72rem; color:#999;">社員 ${employees.length - needPlan.length}名はカレンダーから</div>` : ''}
           </div>
           <div style="background:white; padding:12px; border-radius:8px; text-align:center;">
             <div style="font-size:0.85rem; color:#666;">年間総枠（合計）</div>
@@ -14906,7 +15077,7 @@ function renderLaborPlanIndex() {
               <span style="font-size:1.4rem;">${s.emp.emoji || '👤'}</span>
               <div style="flex:1;">
                 <strong>${s.emp.name}</strong>
-                <span style="font-size:0.8rem; color:#666; margin-left:8px;">時給 ¥${(s.emp.hourly_rate || 0).toLocaleString()}</span>
+                <span style="font-size:0.8rem; color:#666; margin-left:8px;">${isStaff(s.emp) ? '社員' : '時給 ¥' + (s.emp.hourly_rate || 0).toLocaleString()}</span>
               </div>
               <div style="font-size:0.85rem;">
                 計画残り <strong style="color:${s.yearRemainingH < 50 ? 'var(--red)' : 'var(--green)'};">${Math.round(s.yearRemainingH)}h</strong>
@@ -14924,12 +15095,17 @@ function renderLaborPlanIndex() {
     const emp = s.emp;
     const plan = s.plan;
     const fuyo = s.fuyo;
-    const fuyoBadge = fuyo === 'inside'
-      ? '<span style="background:var(--green-bg); color:var(--green); padding:2px 8px; border-radius:10px; font-size:0.75rem;">扶養内</span>'
-      : '<span style="background:var(--orange-light); color:var(--orange); padding:2px 8px; border-radius:10px; font-size:0.75rem;">扶養外</span>';
-    const planBadge = plan
-      ? `<span style="background:var(--blue-light); color:var(--blue); padding:2px 8px; border-radius:10px; font-size:0.75rem; font-weight:bold;">📋 計画あり</span>`
-      : `<span style="background:#f5f5f5; color:#999; padding:2px 8px; border-radius:10px; font-size:0.75rem;">未作成</span>`;
+    // 【2026-09-07】扶養の区分は従業員マスタから。社員には出さない。
+    const fuyoBadge = isStaff(emp) ? ''
+      : (fuyo === 'inside'
+        ? '<span style="background:var(--green-bg); color:var(--green); padding:2px 8px; border-radius:10px; font-size:0.75rem;">扶養内</span>'
+        : '<span style="background:var(--orange-light); color:var(--orange); padding:2px 8px; border-radius:10px; font-size:0.75rem;">扶養外</span>');
+    // 社員はカレンダーの計画がそのまま枠になるので、作成のいる・いらないを出し分ける
+    const planBadge = isStaff(emp)
+      ? `<span style="background:#e8eef5; color:var(--header); padding:2px 8px; border-radius:10px; font-size:0.75rem; font-weight:bold;">📅 勤務計画から</span>`
+      : (plan
+        ? `<span style="background:var(--blue-light); color:var(--blue); padding:2px 8px; border-radius:10px; font-size:0.75rem; font-weight:bold;">📋 計画あり</span>`
+        : `<span style="background:#f5f5f5; color:#999; padding:2px 8px; border-radius:10px; font-size:0.75rem;">未作成</span>`);
     // 時給変動の警告
     let rateAlertBadge = '';
     if (plan && plan.snapshot_hourly_rate && plan.snapshot_hourly_rate !== emp.hourly_rate) {
@@ -14942,7 +15118,7 @@ function renderLaborPlanIndex() {
           <div style="font-size:1.6rem;">${emp.emoji || '👤'}</div>
           <div style="flex:1;">
             <div style="font-weight:bold; font-size:1.02rem;">${emp.name}</div>
-            <div style="font-size:0.78rem; color:#666;">時給 ¥${(emp.hourly_rate || 0).toLocaleString()} ／ ${emp.location || '-'}</div>
+            <div style="font-size:0.78rem; color:#666;">${isStaff(emp) ? '<strong style="color:var(--header);">社員</strong>（月給）' : '時給 ¥' + (emp.hourly_rate || 0).toLocaleString()} ／ ${emp.location || '-'}</div>
           </div>
         </div>
         <div style="display:flex; gap:6px; flex-wrap:wrap; margin-bottom:6px;">
@@ -14950,11 +15126,13 @@ function renderLaborPlanIndex() {
           ${planBadge}
           ${rateAlertBadge}
         </div>
-        ${plan ? `
+        ${(plan || isStaff(emp)) ? `
           <div style="font-size:0.85rem; color:#666; margin-top:6px;">
-            ${plan.fuyo_type === 'inside'
-              ? `目標：¥${plan.income_target.toLocaleString()} ／ 総枠：${s.capH}h`
-              : `年間総枠：${plan.annual_cap_hours}h`}
+            ${isStaff(emp)
+              ? `カレンダーの計画：${s.capH}h`
+              : (plan.fuyo_type === 'inside'
+                ? `目標：¥${plan.income_target.toLocaleString()} ／ 総枠：${s.capH}h`
+                : `年間総枠：${plan.annual_cap_hours}h`)}
           </div>
           <div style="font-size:0.85rem; margin-top:6px;">
             年度進捗：${Math.round(s.yearActualH)}h / ${s.capH}h <span style="color:${progressColor}; font-weight:bold;">${s.yearProgress}%</span>
@@ -14994,7 +15172,7 @@ function renderLaborPlanEdit() {
         };
   }
   const buf = state._laborPlanBuf;
-  const capH = calcAnnualCapHours(buf, emp.hourly_rate);
+  const capH = calcAnnualCapHours(buf, emp.hourly_rate, emp);
   const months = getIncomeYearMonths();
   // 月別計画の合計
   let monthlyTotal = 0;
@@ -15020,7 +15198,7 @@ function renderLaborPlanEdit() {
             <div style="font-weight:bold; font-size:1.1rem;">${emp.name}</div>
             <div style="font-size:0.85rem; color:#666;">
               対象年度：${incomeYearCycle.label}（${incomeYearCycle.startStr} 〜 ${incomeYearCycle.endStr}）<br>
-              時給：¥${(emp.hourly_rate || 0).toLocaleString()} ／ 拠点：${emp.location || '-'}
+              ${isStaff(emp) ? '<strong style="color:var(--header);">社員</strong>（月給）' : '時給：¥' + (emp.hourly_rate || 0).toLocaleString()} ／ 拠点：${emp.location || '-'}
             </div>
           </div>
           <div>${fuyoBadge}</div>
@@ -16122,6 +16300,18 @@ async function handleClick(e) {
     await saveData(STORAGE_KEYS.APP_SETTINGS, state.app_settings);
     alert(`出張の規定を保存しました。\n日当 ${d}円／日（初日〜最終日の前日）／ 宿泊上限 ${h === 0 ? 'なし' : h + '円'}`);
     render();
+  } else if (a === 'gantt-left' || a === 'gantt-right') {
+    const wrap = document.querySelector('.gantt-wrap');
+    if (!wrap) return;
+    const step = Math.max(120, wrap.clientWidth * 0.6);
+    const delta = (a === 'gantt-left' ? -step : step);
+    // 古いブラウザには scrollBy が無いことがあるので、無ければ直に動かす
+    if (typeof wrap.scrollBy === 'function') {
+      try { wrap.scrollBy({ left: delta, behavior: 'smooth' }); }
+      catch (e2) { wrap.scrollLeft += delta; }
+    } else {
+      wrap.scrollLeft += delta;
+    }
   } else if (a === 'go-travel-list') {
     state._travelAdmin = false;
     state.screen = 'travel_list';
@@ -18647,7 +18837,7 @@ async function handleClick(e) {
 // サーバー上のHTMLの先頭だけを読みに行き、版数が自分より新しければ画面上部に帯を出す。
 // 通信できないときは黙って何もしない。打刻の邪魔は一切しない。
 // =========================================================
-const APP_VERSION = 'v1.5';
+const APP_VERSION = 'v1.9';
 const UPDATE_CHECK_INTERVAL_MS = 5 * 60 * 1000;    // 5分おきに確認
 //   先頭4KBだけ読むので回線の負担は小さい。
 //   30分だと「上げたのに変わらない」時間が長すぎたため短くした（2026-08-16）。
@@ -18847,6 +19037,7 @@ async function bootstrap() {
     await fixSiteNameOnce();
     await topUpPlacesOnce();
     await setTravelRulesOnce();
+    await setFiscalYearOnce();
     state.employees = await loadData(STORAGE_KEYS.EMPLOYEES, []);
     state.work_items = await loadData(STORAGE_KEYS.WORK_ITEMS, []);
     state.punches = await loadData(STORAGE_KEYS.PUNCHES, []);
