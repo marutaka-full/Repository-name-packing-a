@@ -4401,8 +4401,9 @@ function renderMonthSummary() {
   sumTrip = Math.round(sumTrip * 10) / 10;
   sumFare = Math.round(sumFare);
   sumCommute = Math.round(sumCommute * 10) / 10;
-  const tripYen = Math.round(sumTrip * rates.trip);
-  const commuteYen = Math.round(sumCommute * rates.commute);
+  // 【2026-09-07】月の合計kmから一度だけ計算し、1円未満を切り上げる
+  const tripYen = Math.ceil(sumTrip * rates.trip);
+  const commuteYen = Math.ceil(sumCommute * rates.commute);
 
   let html = `
     <div class="nav-row">
@@ -6038,8 +6039,11 @@ function calcDayLaborSummary(employeeId, dateObj) {
   const month = dateObj.getMonth() + 1;
   const plan = state.work_plans.find(wp => wp.employee_id === employeeId && wp.year === year && wp.month === month);
   const hourlyRate = plan ? (plan.hourly_rate || 0) : 0;
+  // 【2026-09-07】この dailyWage は日ごとの参考値。
+  //   支払いに使う金額は、月の合計分から一度だけ計算する（calcMonthlyLaborSummary）。
+  //   日ごとに切り上げて足すと、日数ぶん多く出てしまうため。
   const netHours = netMin / 60;
-  const dailyWage = Math.round(netHours * hourlyRate);
+  const dailyWage = wageOfMinutes(netMin, hourlyRate);
   return {
     start_time: start.timestamp,
     end_time: end ? end.timestamp : null,
@@ -8397,11 +8401,15 @@ function calcMonthlyLaborSummary(employeeId, year, month) {
       totalNetMin += sum.netMin;
       totalGrossMin += sum.grossMin;
       totalBreakMin += sum.breakMin;
-      totalWage += sum.dailyWage;
+      // 【2026-09-07】日ごとには足さない。最後に月の合計分から一度だけ出す。
       hourlyRate = sum.hourlyRate;
       dailyDetails.push({ day, date, ...sum });
     }
   }
+  // 【2026-09-07】賃金は月の合計分から一度だけ計算し、1円未満を切り上げる。
+  //   日ごとに切り上げて足すと、日数ぶん多く出てしまうため。
+  //   例：35分の日が20日 → 日ごと 584円×20=11,680円／月まとめ 700分で 11,667円
+  totalWage = wageOfMinutes(totalNetMin, hourlyRate);
   return { workDays, totalNetMin, totalBreakMin, totalGrossMin, totalWage, hourlyRate, dailyDetails };
 }
 
@@ -8462,7 +8470,7 @@ function recordMembers(record) {
       const minutes = Math.max(0, Math.round(Number(x.minutes) || 0));
       const rate = hourlyRateOf(x.employee_id, y, m);
       return { employee_id: x.employee_id, minutes, hourlyRate: rate,
-               laborCost: Math.round(minutes / 60 * rate) };
+               laborCost: wageOfMinutes(minutes, rate) };
     });
   }
   // 古い記録（members が無い）：登録した本人が1人でやったものとして扱う
@@ -8470,7 +8478,7 @@ function recordMembers(record) {
   const minutes = Math.max(0, Math.floor((new Date(record.work_ended_at) - startT) / 60000));
   const rate = hourlyRateOf(record.employee_id, y, m);
   return [{ employee_id: record.employee_id, minutes, hourlyRate: rate,
-            laborCost: Math.round(minutes / 60 * rate) }];
+            laborCost: wageOfMinutes(minutes, rate) }];
 }
 
 function calcRecordCost(record) {
@@ -10145,6 +10153,15 @@ function formatTimeStr(minutes) {
 // 労基法準拠の自動休憩計算
 // 【2026-09-04 幸采事務所版】brk を渡すとその休憩で計算する。
 //   ただし労基法の下限は下回らせない（下回る数字が来たら下限まで引き上げる）。
+// 【2026-09-07】分と時給から賃金を出す。1円未満は切り上げ。
+//   60進法のまま計算する（0.58時間のような中途半端な数字を経由しない）。
+function wageOfMinutes(minutes, hourlyRate) {
+  const m = Number(minutes) || 0;
+  const r = Number(hourlyRate) || 0;
+  if (m <= 0 || r <= 0) return 0;
+  return Math.ceil(m * r / 60);
+}
+
 function calcLaborMinutes(start, end, brk) {
   if (!start || !end) return { grossMin: 0, breakMin: 0, netMin: 0 };
   const grossMin = parseTimeStr(end) - parseTimeStr(start);
@@ -14287,10 +14304,10 @@ async function handleClick(e) {
     stk = Math.round(stk * 10) / 10; sck = Math.round(sck * 10) / 10; sf = Math.round(sf);
     lines.push(['合計', '', '', '', '', '', sw, stk, sf, sck].join(','));
     lines.push([]);
-    lines.push(['業務移動（車）', stk + 'km', rates.trip + '円/km', Math.round(stk * rates.trip) + '円'].join(','));
+    lines.push(['業務移動（車）', stk + 'km', rates.trip + '円/km', Math.ceil(stk * rates.trip) + '円'].join(','));
     lines.push(['業務移動（公共）', '実費', '', sf + '円'].join(','));
-    lines.push(['通勤', sck + 'km', rates.commute + '円/km', Math.round(sck * rates.commute) + '円'].join(','));
-    lines.push(['合計', '', '', (Math.round(stk * rates.trip) + sf + Math.round(sck * rates.commute)) + '円'].join(','));
+    lines.push(['通勤', sck + 'km', rates.commute + '円/km', Math.ceil(sck * rates.commute) + '円'].join(','));
+    lines.push(['合計', '', '', (Math.ceil(stk * rates.trip) + sf + Math.ceil(sck * rates.commute)) + '円'].join(','));
     downloadTextFile(`集計_${emp ? emp.name : empId}_${ym}.csv`, '\uFEFF' + lines.join('\n'), 'text/csv');
   } else if (a === 'go-ot-request') {
     state._otReqForm = { date: todayStr(), type: 'overtime', minutes: 30, reason: OT_REASONS[0], note: '' };
