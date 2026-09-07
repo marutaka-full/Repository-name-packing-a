@@ -6,7 +6,7 @@
 
 <!-- 版数の目印。自動更新の確認でここだけを読みに行くので、必ず<head>の先頭付近に置くこと。
      版を上げるときは、この content と APP_VERSION と <title> と画面下のフッターの4か所を揃える。 -->
-<meta name="app-version" content="v1.2">
+<meta name="app-version" content="v1.5">
 <!-- ★GitHub Pages は HTML に「10分はキャッシュしてよい」を付けて返す。
      そのため上げ直しても10分は古い版が開く。ブラウザにも使わないよう伝えておく。
      （サーバーの指示が優先されることが多いので、決め手は「🔄 更新を確認」ボタン） -->
@@ -55,7 +55,7 @@
   } catch (e) {}
 })();
 </script>
-<title>幸采事務所 打刻管理 v1.2</title>
+<title>幸采事務所 打刻管理 v1.5</title>
 <style>
   :root {
     --green: #1d9e75;
@@ -1656,7 +1656,7 @@
 
 <main id="app"></main>
 
-<div class="footer-note">幸采事務所版 v1.2<span id="storage-mode-note"></span> ／ <a href="javascript:resetAppData()" style="color:#999; text-decoration:underline; font-size:0.85rem;">🆘 緊急リセット</a></div>
+<div class="footer-note">幸采事務所版 v1.5<span id="storage-mode-note"></span> ／ <a href="javascript:resetAppData()" style="color:#999; text-decoration:underline; font-size:0.85rem;">🆘 緊急リセット</a></div>
 
 <script>
 // ストレージモードをフッターに表示
@@ -6467,15 +6467,25 @@ function renderPersonal() {
   //   退勤 … 出勤しているとき
   const isOut = isCurrentlyOut(emp.id);
   const hasDirectPlan = hasDirectTrip(emp.id, todayStr());
+  // 【2026-09-07】今日すでに打ってあるか。二度押しを防ぐ。
+  const todayP = state.punches.filter(p => p.employee_id === emp.id && isOnDate(p.timestamp, todayStr()));
+  const doneStart = todayP.some(p => p.type === 'START');
+  const doneEnd = todayP.some(p => p.type === 'END');
   // 【2026-09-05】出勤を押し忘れたまま始業を過ぎている状態
   const overdue = startOverdue(emp.id);
   const blocked = !!overdue && !overdue.claimed;   // 申告がまだ
   const buttonState = {
-    START:  st.status === 'off' && !isOut && !overdue,          // 始業を過ぎたら押せない
-    DIRECT: st.status === 'off',
-    OUT:    st.status !== 'off' && !isOut,
-    RETURN: isOut || needsReturnAfterDirect(emp.id) || (st.status === 'off' && hasDirectPlan),
-    END:    (st.status !== 'off' || (overdue && overdue.claimed)) && !blocked,
+    // 出勤 … まだ出勤していないとき。始業を過ぎたら押せない（申告してもらう）
+    START:  !doneStart && !isOut && !overdue,
+    // 直行 … まだ出勤していないとき
+    DIRECT: !doneStart,
+    // 外出 … 出勤していて、いま事務所にいるとき。退勤したあとは押せない
+    OUT:    doneStart && !doneEnd && !isOut,
+    // 帰着 … 外出中／直行のあと／直行を申告してあってまだ出勤していないとき
+    RETURN: !doneEnd && (isOut || needsReturnAfterDirect(emp.id) || (!doneStart && hasDirectPlan)),
+    // 退勤 … 出勤している（または出勤もれを申告済み）かつ、まだ退勤していないとき
+    //        ★ すでに退勤していたら押せない（二度押しで打刻が増えないように）
+    END:    !doneEnd && (doneStart || (overdue && overdue.claimed)) && !blocked,
   };
 
   const today = todayStr();
@@ -7191,6 +7201,15 @@ function renderPlanTotalBox(empId, year, month, contractHours) {
   return html;
 }
 
+// 【2026-09-07】計画の1日分（{start,end,brk}）から実労働を出す。
+//   brk が入っていればそれを使い、無ければ法定の下限を使う。
+//   ※ calcLaborMinutes に休憩を渡し忘れると、休憩0分で計算されてしまいます。
+//     計画の1日分を扱うときは、必ずこちらを通してください。
+function planDayCalc(day) {
+  if (!day || !day.start || !day.end) return { grossMin: 0, breakMin: 0, netMin: 0 };
+  return calcLaborMinutes(day.start, day.end, day.brk);
+}
+
 // 【2026-09-07】時刻の入っていない計画（残業なしの区分の「出勤だけ」）を弾く
 function hasPlannedTimes(p) { return !!(p && p.start && p.end); }
 
@@ -7351,7 +7370,10 @@ function calcOvertimeStats(empId, year, month) {
       const dt = new Date(year, m - 1, d);
       const sum = calcDayLaborSummary(empId, dt);
       if (!sum || !sum.has_plan) continue;
-      const planNet = calcLaborMinutes(sum.planned_start, sum.planned_end);
+      // 【2026-09-07】計画の休憩を引いた所定と比べる（休憩を渡し忘れると所定が長く出る）
+      const planNet = calcLaborMinutes(sum.planned_start, sum.planned_end,
+        getPlannedBreakMin(empId, dt,
+          parseTimeStr(sum.planned_end) - parseTimeStr(sum.planned_start)));
       const planMin = planNet ? planNet.netMin : 0;
       const over = Math.max(0, sum.netMin - planMin);
       mm += over;
@@ -11915,7 +11937,7 @@ function renderDailyPlanList() {
       for (const key of WEEKDAY_KEYS) {
         const day = pat.pattern[key];
         if (day && day.start && day.end) {
-          const calc = calcLaborMinutes(day.start, day.end);
+          const calc = planDayCalc(day);
           weekGross += calc.grossMin;
           weekNet += calc.netMin;
           workDays++;
@@ -11969,7 +11991,7 @@ function renderPatternEdit() {
   for (const key of WEEKDAY_KEYS) {
     const d = buf[key];
     if (d && d.start && d.end) {
-      const c = calcLaborMinutes(d.start, d.end);
+      const c = planDayCalc(d);
       weekGross += c.grossMin; weekNet += c.netMin; workDays++;
     }
   }
@@ -12071,7 +12093,7 @@ function renderDailyPlanMonth() {
   for (let d = 1; d <= lastDay; d++) {
     const dayData = days[d];
     if (dayData && dayData.start && dayData.end) {
-      const c = calcLaborMinutes(dayData.start, dayData.end);
+      const c = planDayCalc(dayData);
       monthGross += c.grossMin; monthNet += c.netMin; workDays++;
     }
   }
@@ -12150,7 +12172,7 @@ function renderDailyPlanMonth() {
     const isWork = dayData && dayData.start && dayData.end;
     let cellContent = `<div class="cal-day-num">${dayNum}</div>`;
     if (isWork) {
-      const c = calcLaborMinutes(dayData.start, dayData.end);
+      const c = planDayCalc(dayData);
       cellContent += `<div class="cal-time">${dayData.start}<br>〜${dayData.end}</div>`;
       cellContent += `<div class="cal-hours">${formatHMin(c.netMin)}</div>`;
     } else if (Object.keys(days).length > 0 && (dayData === null || dayData === undefined && days[dayNum] !== undefined)) {
@@ -12194,6 +12216,7 @@ function renderDayEdit() {
   const dayData = days[dayNum];
   const start = (dayData && dayData.start) || '09:00';
   const end = (dayData && dayData.end) || '17:00';
+  const brk = (dayData && dayData.brk != null) ? dayData.brk : null;
   const isOff = (dayData === null);
   const date = new Date(year, month - 1, dayNum);
   const dow = WEEKDAYS[date.getDay()];
@@ -12211,6 +12234,17 @@ function renderDayEdit() {
         <div class="form-row">
           <label class="form-label">終業時刻</label>
           <input type="time" id="day-end" value="${end}" ${isOff ? 'disabled' : ''} />
+        </div>
+        <div class="form-row">
+          <label class="form-label">休憩</label>
+          <div style="display:flex; align-items:center; gap:8px;">
+            <input type="number" id="day-brk" value="${brk != null ? brk : ''}" min="0" step="5" style="width:100px; text-align:right;" ${isOff ? 'disabled' : ''} />
+            <span>分</span>
+          </div>
+          <div class="form-hint">
+            空にすると法令の下限（6時間超→45分、8時間45分超→60分）が入ります。<br>
+            <strong>下限より短くはできません。</strong>
+          </div>
         </div>
         <div class="form-row">
           <div id="day-calc-preview" class="form-hint">時刻を入力すると拘束・休憩・実労働が表示されます</div>
@@ -12303,7 +12337,7 @@ function renderShiftDay(baseDate) {
   for (const emp of activeEmps) {
     const day = getDayPlan(emp.id, baseDate);
     if (day && day.start && day.end) {
-      const calc = calcLaborMinutes(day.start, day.end);
+      const calc = planDayCalc(day);
       attending.push({ emp, day, calc });
     }
   }
@@ -12388,7 +12422,7 @@ function renderShiftWeek(baseDate) {
       } else if (day === null) {
         cells += `<td class="cell-off">休</td>`;
       } else if (day.start && day.end) {
-        const c = calcLaborMinutes(day.start, day.end);
+        const c = planDayCalc(day);
         rowNet += c.netMin; rowCount++;
         dayTotals[idx].netMin += c.netMin; dayTotals[idx].count++;
         cells += `<td class="cell-work"><div class="cw-time">${day.start}<br>〜${day.end}</div><div class="cw-hours">${formatHMin(c.netMin)}</div></td>`;
@@ -12447,7 +12481,7 @@ function renderShiftMonth(baseDate) {
       } else if (day === null) {
         cells += `<td class="month-cell cell-off">休</td>`;
       } else if (day.start && day.end) {
-        const c = calcLaborMinutes(day.start, day.end);
+        const c = planDayCalc(day);
         rowNet += c.netMin; rowCount++;
         dayTotals[d].netMin += c.netMin; dayTotals[d].count++;
         const hLabel = (c.netMin % 60 === 0) ? (c.netMin/60) + 'h' : formatHMin(c.netMin);
@@ -12493,7 +12527,7 @@ function renderShiftCustom(baseDate) {
   for (const emp of activeEmps) {
     const day = getDayPlan(emp.id, baseDate);
     if (day && day.start && day.end) {
-      attending.push({ emp, day, calc: calcLaborMinutes(day.start, day.end) });
+      attending.push({ emp, day, calc: planDayCalc(day) });
     }
   }
   html = `
@@ -12615,6 +12649,41 @@ function renderPunchFix() {
       <button class="nav-btn" data-action="pfix-day-next">翌日 →</button>
     </div>`;
 
+  // 【2026-09-07】同じ種類が2件以上ある日は、まとめて消せるようにする
+  //   画面が固まったように見えて何度も押されると、同じ打刻が並ぶため。
+  const dupCount = {};
+  for (const { p } of rows) dupCount[p.type] = (dupCount[p.type] || 0) + 1;
+  const dupTypes = Object.keys(dupCount).filter(t => dupCount[t] > 1);
+  let dupHtml = '';
+  if (dupTypes.length > 0) {
+    dupHtml = `<div style="padding:12px 14px; background:#ffe9e9; border-left:5px solid var(--red); border-radius:6px; margin:10px 0;">
+      <strong style="color:var(--red);">⚠️ 同じ打刻が重なっています</strong>
+      <div style="font-size:0.9rem; color:#555; margin:6px 0 10px;">
+        ${dupTypes.map(t => `${punchName(t)} が <strong>${dupCount[t]}件</strong>`).join('　／　')}<br>
+        <span style="font-size:0.85rem;">いちばん早いものを1件だけ残して、あとは消せます。</span>
+      </div>
+      <details style="margin-bottom:10px;">
+        <summary style="cursor:pointer; font-size:0.88rem;">🔍 何時何分何秒に入ったか（原因を見るため）</summary>
+        <div style="font-size:0.82rem; color:#555; margin-top:6px; font-family:monospace; max-height:200px; overflow:auto;">
+          ${dupTypes.map(t => {
+            const same2 = rows.filter(x => x.p.type === t)
+              .sort((a2, b2) => String(a2.p.timestamp).localeCompare(String(b2.p.timestamp)));
+            return `<div style="margin-bottom:6px;"><strong>${punchName(t)}</strong><br>` +
+              same2.map(x => {
+                const d2 = new Date(x.p.timestamp);
+                return `${String(d2.getHours()).padStart(2,'0')}:${String(d2.getMinutes()).padStart(2,'0')}:${String(d2.getSeconds()).padStart(2,'0')}`;
+              }).join('　') + '</div>';
+          }).join('')}
+        </div>
+        <div style="font-size:0.8rem; color:#888; margin-top:6px;">
+          秒がばらけていれば、押された回数ぶん入っています。<br>
+          <strong>全部まったく同じ秒なら、仕組みのほうの不具合です。</strong>この画面を見せてください。
+        </div>
+      </details>
+      <button class="primary-btn" data-action="pfix-dedupe" style="background:var(--red);">重なった打刻を消す（1件だけ残す）</button>
+    </div>`;
+  }
+
   // 既存打刻の編集行（上からなぞる）
   let editHtml = '';
   if (rows.length === 0) {
@@ -12681,6 +12750,7 @@ function renderPunchFix() {
       <h2>🛠 打刻もれ修正（管理者）</h2>
       <div style="font-size:0.85rem; color:#666; margin-bottom:6px;">出勤・休憩・退勤の打刻を、管理者が「上からなぞって」訂正・補完・取消できます。本人画面からは操作できません。修正は履歴に残ります。</div>
       ${navHtml}
+      ${dupHtml}
       <div class="filter-label" style="margin-top:8px;">従業員：</div>
       ${empChips}
       <div style="margin-top:10px; font-weight:bold;">${emp ? emp.emoji + ' ' + emp.name : '（従業員を選択）'} ／ ${formatYMD(state._fixDate)}</div>
@@ -13290,6 +13360,26 @@ async function addEmployeeNotification(empId, payload) {
 }
 
 // 勤務計画（日別）の特定日を更新
+// 【2026-09-07】計画の1日分に休憩を必ず持たせる。
+//   休憩が無いまま書き込むと、その日は休憩0分で計算されてしまいます。
+//   ・すでに brk があればそのまま
+//   ・無ければ、同じ曜日の標準パターンの brk を使う
+//   ・それも無ければ法令の下限
+//   いずれの場合も、法令の下限は下回らせません。
+function fillBreak(empId, year, month, day, dayData) {
+  if (!dayData || !dayData.start || !dayData.end) return dayData;
+  const legal = calcLaborMinutes(dayData.start, dayData.end).breakMin;
+  let brk = dayData.brk;
+  if (brk == null) {
+    const pat = getPattern(empId);
+    const key = WEEKDAY_KEYS[new Date(year, month - 1, day).getDay()];
+    const pw = pat && pat.pattern && pat.pattern[key];
+    if (pw && pw.brk != null) brk = pw.brk;
+  }
+  if (brk == null || isNaN(Number(brk)) || Number(brk) < legal) brk = legal;
+  return { ...dayData, brk: Number(brk) };
+}
+
 async function updateDailyPlanCell(empId, year, month, day, newDayData) {
   let plan = state.daily_plans.find(dp => dp.employee_id === empId && dp.year === year && dp.month === month);
   if (!plan) {
@@ -13297,7 +13387,7 @@ async function updateDailyPlanCell(empId, year, month, day, newDayData) {
     state.daily_plans.push(plan);
   }
   if (!plan.days) plan.days = {};
-  plan.days[day] = newDayData;
+  plan.days[day] = fillBreak(empId, year, month, day, newDayData);
   await saveData(STORAGE_KEYS.DAILY_PLANS, state.daily_plans);
 }
 
@@ -13529,7 +13619,7 @@ function renderPlanDayChange() {
         cellContent += `<div class="change-arrow">↓ 出勤に</div>`;
       }
     } else if (isWork) {
-      const c = calcLaborMinutes(dayData.start, dayData.end);
+      const c = planDayCalc(dayData);
       cellContent += `<div class="cal-time">${dayData.start}<br>〜${dayData.end}</div>`;
       cellContent += `<div class="cal-hours">${formatHMin(c.netMin)}</div>`;
     } else if (isOff) {
@@ -13775,7 +13865,7 @@ function renderPlanTimeChange() {
       cellContent += `<div class="cal-time" style="text-decoration:line-through;">${pendingChange.fromTime}</div>`;
       cellContent += `<div class="new-time">→ ${pendingChange.toTime}</div>`;
     } else if (isWork) {
-      const c = calcLaborMinutes(dayData.start, dayData.end);
+      const c = planDayCalc(dayData);
       cellContent += `<div class="cal-time">${dayData.start}<br>〜${dayData.end}</div>`;
       if (isEditing) {
         cellContent += `<div class="editing-mark">編集中</div>`;
@@ -13821,7 +13911,7 @@ function renderPlanTimeChange() {
     if (origData && origData.start && origData.end) {
       const editNew = state._editingNewTime || { start: origData.start, end: origData.end };
       // 実労働時間計算
-      const c = calcLaborMinutes(editNew.start, editNew.end);
+      const c = planDayCalc(editNew);
       const dt = new Date(year, month - 1, editDay);
       const wd = ['日','月','火','水','木','金','土'][dt.getDay()];
       html += `
@@ -13862,8 +13952,8 @@ function renderPlanTimeChange() {
     allPending.sort((a, b) => (a.year - b.year) || (a.month - b.month) || (a.day - b.day)).forEach(p => {
       const dt = new Date(p.year, p.month - 1, p.day);
       const wd = ['日','月','火','水','木','金','土'][dt.getDay()];
-      const cFrom = calcLaborMinutes(p.from.start, p.from.end);
-      const cTo = calcLaborMinutes(p.to.start, p.to.end);
+      const cFrom = planDayCalc(p.from);
+      const cTo = planDayCalc(p.to);
       const diffMin = cTo.netMin - cFrom.netMin;
       const diffLabel = diffMin === 0 ? '' :
         (diffMin > 0 ? `<span style="color:var(--orange);">+${formatHMin(diffMin)}</span>` : `<span style="color:var(--red);">${formatHMin(diffMin)}</span>`);
@@ -14088,8 +14178,8 @@ function renderRequestCard(req) {
     changeText = `${fromTxt} <span class="arrow">→</span> ${toTxt}`;
   } else {
     // 時刻変更：実労働時間差分も表示
-    const fc = calcLaborMinutes(req.from_time.start, req.from_time.end);
-    const tc = calcLaborMinutes(req.to_time.start, req.to_time.end);
+    const fc = planDayCalc(req.from_time);
+    const tc = planDayCalc(req.to_time);
     const diff = tc.netMin - fc.netMin;
     let diffLabel = '';
     if (diff !== 0) {
@@ -14431,8 +14521,8 @@ function formatHistoryChangeText(h) {
     return `${fromTxt} <span class="arrow">→</span> ${toTxt}`;
   } else {
     // time_change
-    const fc = h.from_time ? calcLaborMinutes(h.from_time.start, h.from_time.end) : null;
-    const tc = h.to_time ? calcLaborMinutes(h.to_time.start, h.to_time.end) : null;
+    const fc = h.from_time ? planDayCalc(h.from_time) : null;
+    const tc = h.to_time ? planDayCalc(h.to_time) : null;
     const fromStr = h.from_time ? `${h.from_time.start}〜${h.from_time.end}${fc ? ' (' + formatHMin(fc.netMin) + ')' : ''}` : '-';
     const toStr = h.to_time ? `${h.to_time.start}〜${h.to_time.end}${tc ? ' (' + formatHMin(tc.netMin) + ')' : ''}` : '-';
     return `${fromStr} <span class="arrow">→</span> ${toStr}`;
@@ -15307,7 +15397,10 @@ function attachHandlers() {
       if (!preview) return;
       if (!s || !e) { preview.textContent = '時刻を入力すると拘束・休憩・実労働が表示されます'; return; }
       if (parseTimeStr(s) >= parseTimeStr(e)) { preview.innerHTML = '<span style="color:var(--red);">終業は始業より後の時刻にしてください</span>'; return; }
-      const c = calcLaborMinutes(s, e);
+      // 日別編集の休憩欄（あれば）を見る
+      const brkEl = document.getElementById('day-brk');
+      const brk = (brkEl && brkEl.value !== '') ? parseInt(brkEl.value, 10) : undefined;
+      const c = calcLaborMinutes(s, e, brk);
       preview.innerHTML = `拘束 <strong>${formatHMin(c.grossMin)}</strong> ／ 休憩 <strong>${c.breakMin > 0 ? c.breakMin + '分' : 'なし'}</strong> ／ 実労働 <strong style="color:var(--green);">${formatHMin(c.netMin)}</strong>`;
     };
     dayStart.addEventListener('input', updatePreview);
@@ -15395,6 +15488,18 @@ async function handleClick(e) {
     state.screen = 'admin';
     render();
   } else if (a === 'punch') {
+    // 【2026-09-07】二度押しを止める。画面が固まったように見えて何度も押されると、
+    //   同じ打刻が並んでしまうため。
+    const todayPs = state.punches.filter(p =>
+      p.employee_id === state.current_employee_id && isOnDate(p.timestamp, todayStr()));
+    if (type === 'END' && todayPs.some(p => p.type === 'END')) {
+      alert('本日はすでに退勤を押しています。\n\n直すときは管理者にご連絡ください（打刻もれ修正で直せます）。');
+      return;
+    }
+    if (type === 'START' && todayPs.some(p => p.type === 'START')) {
+      alert('本日はすでに出勤を押しています。');
+      return;
+    }
     // セッションメンバーの場合、session_id付き打刻
     const st = getEmployeeStatus(state.current_employee_id);
     const sessionId = st.session_id || null;
@@ -17119,6 +17224,39 @@ async function handleClick(e) {
     state._fixDate = addDays(state._fixDate, 1); render();
   } else if (a === 'pfix-day-today') {
     state._fixDate = new Date(); render();
+  } else if (a === 'pfix-dedupe') {
+    const empId = state._fixEmpId;
+    const dateStr2 = isoDateOnly(state._fixDate);
+    const same = state.punches
+      .map((p) => p)
+      .filter(p => p.employee_id === empId && isOnDate(p.timestamp, dateStr2))
+      .sort((a2, b2) => String(a2.timestamp).localeCompare(String(b2.timestamp)));
+    const keep = {}; const drop = [];
+    for (const p of same) {
+      if (keep[p.type]) drop.push(p);       // 2件目以降は消す
+      else keep[p.type] = p;
+    }
+    if (drop.length === 0) { alert('重なっている打刻はありません。'); return; }
+    const naiyo = {};
+    for (const p of drop) naiyo[p.type] = (naiyo[p.type] || 0) + 1;
+    if (!confirm(
+      `${dateStr2} の重なった打刻を消します。\n\n` +
+      Object.keys(naiyo).map(t => `　${punchName(t)}　${naiyo[t]}件`).join('\n') +
+      `\n\nいちばん早いものを1件だけ残します。よろしいですか？`)) return;
+    const dropSet = new Set(drop);
+    state.punches = state.punches.filter(p => !dropSet.has(p));
+    for (const t of Object.keys(naiyo)) {
+      state.punch_edits.push({
+        employee_id: empId, date: dateStr2, punch_type: t,
+        action: 'delete', before: `${naiyo[t]}件の重複`, after: '',
+        reason: '同じ打刻が重なっていたため、1件を残して削除',
+        edited_at: new Date().toISOString(),
+      });
+    }
+    await saveData(STORAGE_KEYS.PUNCHES, state.punches);
+    await saveData(STORAGE_KEYS.PUNCH_EDITS, state.punch_edits);
+    alert(`${drop.length}件を消しました。`);
+    render();
   } else if (a === 'pfix-date-change') {
     const val = e.currentTarget.value;
     if (val) { state._fixDate = parseISODate(val); render(); }
@@ -18381,7 +18519,8 @@ async function handleClick(e) {
       const key = WEEKDAY_KEYS[dow];
       const dayPattern = pattern.pattern[key];
       if (dayPattern && dayPattern.start && dayPattern.end) {
-        days[d] = { start: dayPattern.start, end: dayPattern.end };
+        // 【2026-09-07】休憩も写す。ここで写し忘れると、月別計画が休憩0分で計算されます。
+        days[d] = { start: dayPattern.start, end: dayPattern.end, brk: dayPattern.brk };
       } else {
         days[d] = null;  // 休
       }
@@ -18435,7 +18574,17 @@ async function handleClick(e) {
       dp = { id: `DP-${year}-${month}-${empId}`, employee_id: empId, year, month, days: {}, updated_at: now };
       state.daily_plans.push(dp);
     }
-    dp.days[dayNum] = { start, end: endVal };
+    // 【2026-09-07】休憩も保存する。法令の下限より短ければ下限に戻す。
+    const brkEl2 = document.getElementById('day-brk');
+    const legalB = calcLaborMinutes(start, endVal).breakMin;
+    let brkVal = (brkEl2 && brkEl2.value !== '') ? parseInt(brkEl2.value, 10) : legalB;
+    if (isNaN(brkVal) || brkVal < legalB) {
+      if (brkEl2 && brkEl2.value !== '' && !isNaN(brkVal) && brkVal < legalB) {
+        alert(`この勤務時間では、休憩は ${legalB} 分以上必要です（労働基準法）。`);
+      }
+      brkVal = legalB;
+    }
+    dp.days[dayNum] = { start, end: endVal, brk: brkVal };
     dp.updated_at = now;
     await saveData(STORAGE_KEYS.DAILY_PLANS, state.daily_plans);
     state._editingDay = null;
@@ -18498,7 +18647,7 @@ async function handleClick(e) {
 // サーバー上のHTMLの先頭だけを読みに行き、版数が自分より新しければ画面上部に帯を出す。
 // 通信できないときは黙って何もしない。打刻の邪魔は一切しない。
 // =========================================================
-const APP_VERSION = 'v1.2';
+const APP_VERSION = 'v1.5';
 const UPDATE_CHECK_INTERVAL_MS = 5 * 60 * 1000;    // 5分おきに確認
 //   先頭4KBだけ読むので回線の負担は小さい。
 //   30分だと「上げたのに変わらない」時間が長すぎたため短くした（2026-08-16）。
