@@ -6,7 +6,7 @@
 
 <!-- 版数の目印。自動更新の確認でここだけを読みに行くので、必ず<head>の先頭付近に置くこと。
      版を上げるときは、この content と APP_VERSION と <title> と画面下のフッターの4か所を揃える。 -->
-<meta name="app-version" content="v1.0">
+<meta name="app-version" content="v1.2">
 <!-- ★GitHub Pages は HTML に「10分はキャッシュしてよい」を付けて返す。
      そのため上げ直しても10分は古い版が開く。ブラウザにも使わないよう伝えておく。
      （サーバーの指示が優先されることが多いので、決め手は「🔄 更新を確認」ボタン） -->
@@ -55,7 +55,7 @@
   } catch (e) {}
 })();
 </script>
-<title>幸采事務所 打刻管理 v1.0</title>
+<title>幸采事務所 打刻管理 v1.2</title>
 <style>
   :root {
     --green: #1d9e75;
@@ -1656,7 +1656,7 @@
 
 <main id="app"></main>
 
-<div class="footer-note">幸采事務所版 v1.0<span id="storage-mode-note"></span> ／ <a href="javascript:resetAppData()" style="color:#999; text-decoration:underline; font-size:0.85rem;">🆘 緊急リセット</a></div>
+<div class="footer-note">幸采事務所版 v1.2<span id="storage-mode-note"></span> ／ <a href="javascript:resetAppData()" style="color:#999; text-decoration:underline; font-size:0.85rem;">🆘 緊急リセット</a></div>
 
 <script>
 // ストレージモードをフッターに表示
@@ -1715,7 +1715,8 @@ const STORAGE_KEYS = {
   TRIPS: 'trips',                 // 移動の記録（本人の申告 → 管理者の承認）
   PUNCH_CLAIMS: 'punch_claims',   // 打刻もれの後追い申告（本人 → 管理者が承認して打刻を入れる）
   DRIVE_PERMITS: 'drive_permits', // その日の運転許可（管理者が乗車前に登録する）
-  OT_ORDERS: 'ot_orders',         // 早出・延長の指示（上司が前もって出す計画）          // 月締めの記録
+  OT_ORDERS: 'ot_orders',         // 早出・延長の指示（上司が前もって出す計画）
+  TRAVELS: 'travels',             // 出張の申請と報告（1件に両方が入る）          // 月締めの記録
 };
 
 // 管理画面の初期パスワード。設定画面で必ず変更してもらう
@@ -1752,6 +1753,8 @@ const DEFAULT_EMPLOYEES = (() => {
       name: '事務' + String(i).padStart(2, '0') + '（未設定）',
       emoji: '👤', hourly_rate: null, location: '嘉島事務所', fuyo_type: 'inside',
       monthly_contract_hours: null, status: 'active',
+      emp_type: 'part',        // 'part' パート ／ 'staff' 社員
+      ot_eligible: true,       // 残業（早出・延長）が付くか。社員で「なし」の人は false
       commute_km: null,        // 通勤の片道（km）
       car_insured: false,      // 任意保険に入っているか
       insurance_until: '',     // 任意保険の満期月（YYYY-MM）
@@ -2270,6 +2273,11 @@ const DEFAULT_APP_SETTINGS = {
   // 【2026-09-05 幸采事務所版】キロ単価。全員共通。
   commute_rate: 15,      // 通勤 円/km
   trip_rate: 20,         // 移動 円/km
+  // 【2026-09-07】出張の規定。額が決まるまで 0 円で置いておく。
+  // 日当：初日から最終日の前日まで。最終日は朝から帰るだけなので付かない。
+  //       日帰りは0円（泊まらない＝仕事をした日の食事代が発生しない）
+  allowance_day: 2000,   // 日当 円/日
+  hotel_limit: 8500,     // 宿泊費の上限 円/泊（0 なら上限なし）
   global_allocation_rate: 0.10,  // 当日差益の10%を全体寄与に配賦（社長設定）
   global_allocation_rate_updated_at: null,
   // v0.7 給与サイクル設定（年内所得対象期間の算出に使用）
@@ -2602,6 +2610,28 @@ async function fixSiteNameOnce() {
 //   いま入っている地点の名前や、登録済みの区間には触らない。
 const PLACE_TOPUP_ID = 'place_topup_2026_09';
 
+// ★【2026-09-07】出張の規定（日当2,000円／宿泊上限8,500円）を一度だけ入れる。
+//   すでに開いた端末には app_settings が保存済みなので、初期値では入らないため。
+const TRAVEL_SET_ID = 'travel_set_2026_09';
+
+async function setTravelRulesOnce() {
+  try {
+    if (localStorage.getItem(APP_NS + '_travel_set') === TRAVEL_SET_ID) return null;
+    const st = (await loadData(STORAGE_KEYS.APP_SETTINGS, null)) || {};
+    let n = 0;
+    if (st.allowance_day == null || st.allowance_day === 0) { st.allowance_day = 2000; n++; }
+    if (st.hotel_limit == null || st.hotel_limit === 0) { st.hotel_limit = 8500; n++; }
+    delete st.allowance_stay;   // 日帰り／宿泊の区別はやめた
+    await saveData(STORAGE_KEYS.APP_SETTINGS, st);
+    localStorage.setItem(APP_NS + '_travel_set', TRAVEL_SET_ID);
+    if (n) console.log('[幸采] 出張の規定を入れました', { 日当: st.allowance_day, 宿泊上限: st.hotel_limit });
+    return n;
+  } catch (e) {
+    console.error('[幸采] 出張の規定の設定に失敗:', e);
+    return null;
+  }
+}
+
 async function topUpPlacesOnce() {
   try {
     if (localStorage.getItem(APP_NS + '_place_topup') === PLACE_TOPUP_ID) return null;
@@ -2668,6 +2698,7 @@ async function initializeData() {
   if (!(await loadData(STORAGE_KEYS.PUNCH_CLAIMS, null))) await saveData(STORAGE_KEYS.PUNCH_CLAIMS, []);
   if (!(await loadData(STORAGE_KEYS.DRIVE_PERMITS, null))) await saveData(STORAGE_KEYS.DRIVE_PERMITS, []);
   if (!(await loadData(STORAGE_KEYS.OT_ORDERS, null))) await saveData(STORAGE_KEYS.OT_ORDERS, []);
+  if (!(await loadData(STORAGE_KEYS.TRAVELS, null))) await saveData(STORAGE_KEYS.TRAVELS, []);
   const vps = await loadData(STORAGE_KEYS.VISIT_PLACES, null);
   if (!vps || vps.length === 0) await saveData(STORAGE_KEYS.VISIT_PLACES, DEFAULT_VISIT_PLACES);
   const rts = await loadData(STORAGE_KEYS.ROUTES, null);
@@ -2743,7 +2774,10 @@ const state = {
   punch_claims: [],
   drive_permits: [],
   ot_orders: [],
+  travels: [],
   _orderDate: null,      // 指示の画面で見ている日
+  _travelId: null,       // いま開いている出張申請
+  _travelTab: 'plan',    // 申請の画面のタブ
   _permitDate: null,     // 運転許可の画面で見ている日
   _calEmpId: null,       // カレンダーで見ている人
   _calMonth: null,       // カレンダーで見ている月（YYYY-MM）
@@ -2799,7 +2833,7 @@ function requiredBreakMin(spanMin) {
 // spanMin を渡すと、勤務計画が無い日でも実際の拘束時間から法令の下限を引く。
 function getPlannedBreakMin(empId, dateObj, spanMin) {
   const p = getPlannedTimesWithLeave(empId, dateObj);
-  if (!p) return requiredBreakMin(Number(spanMin) || 0);
+  if (!hasPlannedTimes(p)) return requiredBreakMin(Number(spanMin) || 0);
   const span = parseTimeStr(p.end) - parseTimeStr(p.start);
   const floor = requiredBreakMin(span);
   let v = null;
@@ -2826,13 +2860,15 @@ function getPlannedBreakMin(empId, dateObj, spanMin) {
 //   ・申告を出すまで退勤も押せない
 function startOverdue(empId) {
   const today = todayStr();
+  const emp9 = state.employees.find(e => e.id === empId);
+  if (isNoOt(emp9)) return null;                  // 【2026-09-07】残業なしの区分は打刻の警告を出さない
   if (shucchouOfDay(empId, today)) return null;   // 出張の日は打刻をしない
   const has = state.punches.some(p =>
     p.employee_id === empId && isOnDate(p.timestamp, today) && p.type === 'START');
   if (has) return null;
   const now = new Date();
   const plan = getPlannedTimesWithLeave(empId, now);
-  if (!plan || !plan.start) return null;                 // 計画が無い日は何もしない
+  if (!hasPlannedTimes(plan)) return null;               // 計画が無い日・時刻が無い日は何もしない
   const lv = getLeave(empId, today);
   if (lv && lv.unit === 'full') return null;             // 休みの日は出さない
   const nowMin = now.getHours() * 60 + now.getMinutes();
@@ -2871,7 +2907,7 @@ function hasDirectTrip(empId, dateStr) {
 // 直行の出勤時刻に使う、その日の勤務計画の始業（無ければ null）
 function plannedStartISO(empId, dateObj) {
   const p = getPlannedTimesWithLeave(empId, dateObj);
-  if (!p || !p.start) return null;
+  if (!hasPlannedTimes(p)) return null;
   const b = new Date(dateObj); b.setHours(0, 0, 0, 0);
   return new Date(b.getTime() + parseTimeStr(p.start) * 60000).toISOString();
 }
@@ -3511,6 +3547,9 @@ function render() {
   else if (state.screen === 'insurance_list') app.innerHTML = renderInsuranceList();
   else if (state.screen === 'ot_orders') app.innerHTML = renderOtOrders();
   else if (state.screen === 'ot_request') app.innerHTML = renderOtRequest();
+  else if (state.screen === 'travel_list') app.innerHTML = renderTravelList();
+  else if (state.screen === 'travel_edit') app.innerHTML = renderTravelEdit();
+  else if (state.screen === 'travel_admin') app.innerHTML = renderTravelAdmin();
   else if (state.screen === 'trips') app.innerHTML = renderTripsAdmin();
   else if (state.screen === 'visit_places') app.innerHTML = renderVisitPlaces();
   else if (state.screen === 'my_routes') app.innerHTML = renderMyRoutes();
@@ -3522,7 +3561,7 @@ function render() {
   else if (state.screen === 'mismatch_alert') app.innerHTML = renderMismatchAlert();
   else if (state.screen === 'admin_lock') app.innerHTML = renderAdminLock();
   else if (state.screen === 'admin') app.innerHTML = renderAdmin();
-  else if (state.screen === 'employee_edit') app.innerHTML = renderEmployeeEdit();
+  else if (state.screen === 'employee_edit') { app.innerHTML = renderEmployeeEdit(); setTimeout(toggleEmpTypeRows, 0); }
   else if (state.screen === 'work_plan') app.innerHTML = renderWorkPlan();
   else if (state.screen === 'work_plan_edit') app.innerHTML = renderWorkPlanEdit();
   else if (state.screen === 'daily_plan_list') app.innerHTML = renderDailyPlanList();
@@ -3927,6 +3966,12 @@ function calDayInfo(empId, dateStr) {
   const reqs = (state.change_requests || []).filter(r => r.emp_id === empId && r.target_date === dateStr);
   const adj = getAdjustment(empId, dateStr);
 
+  // 【2026-09-07】これから先の予定も拾う
+  const travels = (state.travels || []).filter(t =>
+    t.emp_id === empId && ['hold', 'requested', 'approved', 'reported', 'settled'].includes(t.status) &&
+    t.date_from && t.date_to && t.date_from <= dateStr && dateStr <= t.date_to);
+  const orders = getOtOrders(empId, dateStr);                    // 承認済みの早出・延長の指示
+  const ordersPend = getOtOrdersAll(empId, dateStr).filter(o => (o.status || 'approved') === 'pending');
   const decl = isFuture ? null : findDeclarable(empId, dateObj);
   const needDeclare = !!decl && (
     (decl.early_min > 0 && canDeclare(empId, dateStr, 'early')) ||
@@ -3940,8 +3985,10 @@ function calDayInfo(empId, dateStr) {
   const hasApprovedChokki = trips.some(t => t.status === 'approved' && t.end_time);
   const isChokkiDay = trips.some(t => t.status !== 'rejected' && (t.kind === 'chokki' || t.kind === 'both'));
   const isShucchou = !!shucchouOfDay(empId, dateStr);
+  const empW = state.employees.find(e => e.id === empId);
   const missingList = [];
-  if (!isFuture && !isToday && plan && !leave && !isShucchou) {
+  // 【2026-09-07】残業なしの区分は、打刻が無くても欠けとしない
+  if (!isFuture && !isToday && hasPlannedTimes(plan) && !leave && !isShucchou && watchesPunch(empW)) {
     if (!hasStart) missingList.push('START');
     if (!hasEnd && !hasApprovedChokki) missingList.push('END');
     // 外出と帰着の組を前から順に見る
@@ -3988,11 +4035,13 @@ function calDayInfo(empId, dateStr) {
   if (needDeclare) mark = 'declare';
   if (openMissing.length > 0) mark = 'missing';
   if (isFuture && !waiting) mark = (plan && !leave) ? 'future' : 'off';
+  if (travels.length > 0) mark = 'travel';   // 出張の期間は、これから先でも色を付ける
 
   const sum = (!isFuture && hasStart) ? calcDayLaborSummary(empId, dateObj) : null;
   return { dateStr, dateObj, plan, leave, punches, hasStart, hasEnd, trips, claims, reqs,
            adj, decl, needDeclare, missing, missingList, openMissing, claimedTypes,
-           claimPending, waiting, approved, mark, sum, isFuture, isToday };
+           claimPending, waiting, approved, mark, sum, isFuture, isToday,
+           travels, orders, ordersPend };
 }
 
 const CAL_COLORS = {
@@ -4003,6 +4052,7 @@ const CAL_COLORS = {
   missing:  { bg: '#ffe9e9', line: '#c62828', label: '打刻もれ' },
   waiting:  { bg: '#e8eef5', line: '#1f4e79', label: '申告中' },
   approved: { bg: '#e8f4ee', line: '#1d9e75', label: '承認済' },
+  travel:   { bg: '#f7f0fa', line: '#7b1fa2', label: '出張' },
 };
 
 function renderMonthCalendar() {
@@ -4045,7 +4095,7 @@ function renderMonthCalendar() {
 
   // 凡例
   html += `<div style="display:flex; gap:8px; flex-wrap:wrap; margin:10px 0 14px;">`;
-  for (const k of ['declare', 'missing', 'waiting', 'approved', 'off']) {
+  for (const k of ['declare', 'missing', 'waiting', 'approved', 'travel', 'off']) {
     const c = CAL_COLORS[k];
     html += `<span style="font-size:0.78rem; padding:3px 9px; border-radius:12px; background:${c.bg}; border:1.5px solid ${c.line}; color:#444;">${c.label}</span>`;
   }
@@ -4061,7 +4111,7 @@ function renderMonthCalendar() {
 
   for (let i = 0; i < leadBlanks; i++) html += `<td></td>`;
   let col = leadBlanks;
-  let counts = { declare: 0, missing: 0, waiting: 0, approved: 0 };
+  let counts = { declare: 0, missing: 0, waiting: 0, approved: 0, travel: 0 };
 
   for (let d = 1; d <= lastDay; d++) {
     const ds = `${Y}-${String(M).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
@@ -4070,6 +4120,8 @@ function renderMonthCalendar() {
     if (counts[info.mark] !== undefined) counts[info.mark]++;
     const sel = state._calDay === ds;
     const tripMark = info.trips.length > 0 ? '<span style="font-size:0.72rem;">🚗</span>' : '';
+    const tvMark = info.travels.length > 0 ? '<span style="font-size:0.72rem;">🧳</span>' : '';
+    const ordMark = (info.orders.length + info.ordersPend.length) > 0 ? '<span style="font-size:0.72rem;">📋</span>' : '';
     const planStr = info.plan ? `${info.plan.start}〜${info.plan.end}` : (info.leave ? '休' : '—');
     const actStr = info.sum
       ? `${formatTime(info.sum.start_time)}〜${info.sum.end_time ? formatTime(info.sum.end_time) : '?'}`
@@ -4079,8 +4131,10 @@ function renderMonthCalendar() {
       <div data-action="cal-pick-day" data-date="${ds}"
            style="cursor:pointer; min-height:64px; border-radius:6px; padding:4px 5px;
                   background:${c.bg}; border:${sel ? '2.5px' : '1.5px'} solid ${c.line};">
-        <div style="font-weight:bold; font-size:0.9rem;">${d}${info.isToday ? ' <span style="font-size:0.7rem; color:var(--header);">今日</span>' : ''} ${tripMark}</div>
+        <div style="font-weight:bold; font-size:0.9rem;">${d}${info.isToday ? ' <span style="font-size:0.7rem; color:var(--header);">今日</span>' : ''} ${tvMark}${ordMark}${tripMark}</div>
         <div style="font-size:0.7rem; color:#666; line-height:1.35;">${planStr}</div>
+        ${info.travels.length ? `<div style="font-size:0.68rem; color:#7b1fa2; line-height:1.3;">🧳 ${(info.travels[0].destinations || []).map(x => x.name).filter(Boolean).join('・') || '出張'}</div>` : ''}
+        ${info.orders.length ? `<div style="font-size:0.68rem; color:#b87b00; line-height:1.3;">${info.orders.map(o => (o.type === 'early' ? '早' : '延') + o.minutes + '分').join(' ')}</div>` : ''}
         <div style="font-size:0.7rem; color:#333; line-height:1.35;">${actStr}</div>
       </div>
     </td>`;
@@ -4093,7 +4147,10 @@ function renderMonthCalendar() {
   html += `<div style="margin-top:12px; font-size:0.9rem; color:#555;">
     この月：要申告 <strong>${counts.declare}</strong>日 ／ 打刻もれ <strong style="color:var(--red);">${counts.missing}</strong>日
     ／ 申告中 <strong>${counts.waiting}</strong>日 ／ 承認済 <strong style="color:var(--green);">${counts.approved}</strong>日
-  </div></div>`;
+    ${counts.travel > 0 ? `／ 出張 <strong style="color:#7b1fa2;">${counts.travel}</strong>日` : ''}
+  </div>
+  <div style="margin-top:12px;">${renderPlanTotalBox(empId, Y, M, isStaff(emp) ? null : (contractHoursOf(empId, Y, M) || null))}</div>
+  </div>`;
 
   // 選んだ日の内訳
   if (state._calDay && state._calDay.startsWith(ym)) {
@@ -4110,6 +4167,28 @@ function renderCalDayDetail(empId, ds, isAdmin) {
   let html = `<div class="card" style="border-left:5px solid ${c.line};">
     <h2>${ds}（${WEEKDAYS[i.dateObj.getDay()]}）　<span style="font-size:0.9rem; color:${c.line};">${c.label}</span></h2>
     <table><tbody>`;
+  // 出張（申請のほう）
+  if (i.travels.length) {
+    for (const t of i.travels) {
+      const st3 = TRAVEL_STATUS[t.status] || {};
+      const day = travelDates(t).indexOf(ds) + 1;
+      const total = travelDates(t).length;
+      html += `<tr><th style="width:9em;">🧳 出張</th><td>
+        <strong style="color:#7b1fa2;">${(t.destinations || []).map(x => x.name).filter(Boolean).join('・') || '（訪問先未定）'}</strong>
+        <span style="color:#888;">（${day}/${total}日目）</span>
+        <span style="color:${st3.color};">［${st3.label}］</span>
+        ${(t.destinations || []).some(x => x.purpose) ? `<br><span style="font-size:0.85rem; color:#666;">${(t.destinations || []).map(x => x.purpose).filter(Boolean).join('／')}</span>` : ''}
+        ${(t.schedule || []).filter(x => x.date === ds).length ? `<br><span style="font-size:0.85rem;">${(t.schedule || []).filter(x => x.date === ds).map(x => `${x.time} ${x.what}`).join('<br>')}</span>` : ''}
+      </td></tr>`;
+    }
+  }
+  // 早出・延長の指示
+  if (i.orders.length || i.ordersPend.length) {
+    html += `<tr><th>📋 早出・延長の指示</th><td>
+      ${i.orders.map(o => `<strong>${o.type === 'early' ? '🌅 早出' : '🌙 延長'} ${o.minutes}分</strong>（${o.reason || ''}）${o.from === 'self' ? '<span style="color:#888;">／本人の申請</span>' : '<span style="color:#888;">／上司の指示</span>'}`).join('<br>')}
+      ${i.ordersPend.map(o => `<span style="color:var(--orange);">${o.type === 'early' ? '早出' : '延長'} ${o.minutes}分（承認待ち）</span>`).join('<br>')}
+    </td></tr>`;
+  }
   const shuT = i.trips.find(t => t.kind === 'shucchou' && t.status !== 'rejected');
   if (shuT) {
     html += `<tr><th style="width:9em;">出張</th><td style="color:var(--header); font-weight:bold;">
@@ -4156,7 +4235,8 @@ function renderCalDayDetail(empId, ds, isAdmin) {
                <button class="nav-btn" data-action="reject-claim" data-claim-id="${cl.id}" style="color:var(--orange); border-color:var(--orange);">差戻し</button>`;
     }
   } else {
-    if (i.needDeclare) html += `<button class="primary-btn" data-action="go-ot-declare" style="background:var(--orange);">📝 早出・延長を申告する</button>`;
+    const emp9 = state.employees.find(x => x.id === empId);
+    if (i.needDeclare && canDeclareOt(emp9)) html += `<button class="primary-btn" data-action="go-ot-declare" style="background:var(--orange);">📝 早出・延長を申告する</button>`;
     if (i.openMissing.length > 0) {
       const first = i.openMissing[0];
       const doneCount = i.missingList.length - i.openMissing.length;
@@ -4310,6 +4390,53 @@ function canDriveOn(emp, dateStr) {
   return !!drivePermitOf(emp.id, dateStr);
 }
 
+// =========================================================
+// 【2026-09-07】区分は3つ
+//
+//   ① パート          時給あり。勤務計画あり。残業あり。金額まで計算する
+//   ② 社員（残業あり）  勤務計画あり。残業は時間だけ記録。金額は出さない
+//   ③ 社員（残業なし）  管理監督者など。出勤／休日だけ決めればよい。
+//                      打刻はできるが、しなくても何も出ない。警告も出さない。
+//                      出張・移動距離・通勤距離・任意保険は全部使う。
+//
+//   ③の人が打刻をしないと、その日の通勤距離は0になります。
+//   通勤手当が要る場合は、本人が打刻もれ申告を出してください。
+// =========================================================
+function isStaff(emp) { return emp && emp.emp_type === 'staff'; }
+
+// 残業が付かない区分（③）
+function isNoOt(emp) { return isStaff(emp) && emp.ot_eligible === false; }
+
+// 打刻の警告（出勤もれ・打刻もれ）を出すか
+function watchesPunch(emp) { return !isNoOt(emp); }
+
+// 区分の名前
+function empKindLabel(emp) {
+  if (!isStaff(emp)) return 'パート';
+  return isNoOt(emp) ? '社員（残業なし）' : '社員';
+}
+
+// 【2026-09-07】区分を選び直したら、その場でパート用の欄を出し入れする。
+//   画面を作り直さないので、入力中の内容が消えない。
+function toggleEmpTypeRows() {
+  const sel = document.getElementById('ef-emp-type');
+  if (!sel) return;
+  const staff = sel.value === 'staff';
+  document.querySelectorAll('.ef-part-only').forEach(el => { el.style.display = staff ? 'none' : ''; });
+  const note = document.getElementById('ef-staff-note');
+  if (note) note.style.display = staff ? '' : 'none';
+}
+function empTypeLabel(emp) { return isStaff(emp) ? '社員' : 'パート'; }
+
+// 早出・延長を申請できるか
+function canDeclareOt(emp) {
+  if (!emp) return false;
+  return emp.ot_eligible !== false;
+}
+
+// 賃金を計算するか（社員は出さない）
+function showsWage(emp) { return !isStaff(emp); }
+
 function insuranceState(emp) {
   if (!emp || !emp.car_insured) return { code: 'none', label: '未加入', canDeclare: false };
   const until = emp.insurance_until || '';
@@ -4455,7 +4582,9 @@ function renderMonthSummary() {
       </table>
       </div>
 
-      <h3 style="margin-top:20px;">金額</h3>
+      ${renderPremiumBox(empId, Y, M, emp)}
+      ${showsWage(emp) ? `<h3 style="margin-top:20px;">金額</h3>` : `<h3 style="margin-top:20px;">交通費・通勤</h3>
+      <div class="form-hint" style="margin-bottom:8px;">社員の方は月給のため、労働時間の賃金は出していません。</div>`}
       <table style="max-width:560px;"><tbody>
         <tr><th style="width:12em;">業務移動（車）</th>
             <td style="text-align:right;">${sumTrip} km × ${rates.trip} 円</td>
@@ -4490,6 +4619,1068 @@ function otOrderTag(empId, dateStr, type) {
     return `<span style="color:var(--green); font-weight:bold;">📋 指示あり（${o.minutes}分・${o.reason || ''}）</span>`;
   }
   return `<span style="color:#b87b00;">⚠️ 指示なし</span>`;
+}
+
+// =========================================================
+// 【2026-09-07】出張の申請と報告
+//
+//   申請と報告は同じ1件に入っています。
+//   申請を出して承認を受け、出張から帰ったら同じ1件を開いて報告を書きます。
+//   報告でいちばん大事なのは「何処で何をして、どのような成果があったか」です。
+//   金額の清算はそのついでです。
+//
+//   車で走った距離は、この申請には入れません。移動の申告のほうに入れます。
+// =========================================================
+// 【2026-09-07】領収証が要るかどうか
+//   金額だけでは、どの席・どの等級で乗ったか分かりません。
+//   （自由席かグリーン車か、エコノミーかファーストクラスか）
+//   買い方で値段が変わるものは、領収書か明細をもらってきてもらいます。
+//   電車とバスは調べれば料金が一つに決まるので要りません。
+//   ★ グリーン車・ファーストクラス等の上級席は使えません（もともと禁止）。
+//     領収書は、それが守られているかを確かめるためのものでもあります。
+//   ※ 領収書はアプリには入れません。紙で提出してください。
+const TRAVEL_MODES = [
+  { label: '✈️ 飛行機',   receipt: true  },
+  { label: '🚄 新幹線',   receipt: true  },
+  { label: '🚃 電車',     receipt: false },
+  { label: '🚌 バス',     receipt: false },
+  { label: '🚕 タクシー', receipt: true  },
+  { label: '⛴ フェリー',  receipt: true  },
+  { label: '🚗 その他',   receipt: true  },
+];
+function travelModeNames() { return TRAVEL_MODES.map(m => m.label); }
+function needsReceipt(label) {
+  const m = TRAVEL_MODES.find(x => x.label === label);
+  return m ? m.receipt : true;
+}
+
+const TRAVEL_STATUS = {
+  hold:      { label: '期間だけ', color: '#7b1fa2' },   // 承認不要。先に日を押さえる
+  draft:     { label: '下書き',   color: '#888' },
+  requested: { label: '申請中',   color: '#b87b00' },
+  approved:  { label: '承認済',   color: '#1d9e75' },
+  rejected:  { label: '却下',     color: '#c62828' },
+  reported:  { label: '報告済',   color: '#1f4e79' },
+  settled:   { label: '清算済',   color: '#1d9e75' },
+  canceled:  { label: '取消',     color: '#888' },
+};
+
+// 期間の押さえ・下書き・申請中は、まだ内容を触れる
+function travelEditable(t) {
+  return ['hold', 'draft', 'rejected'].includes(t.status);
+}
+// 期間が過ぎたのに報告が出ていない（未精算）
+function travelUnsettled(t) {
+  return t.status === 'approved' && t.date_to && t.date_to < todayStr();
+}
+// 期間の押さえのまま、日が近づいている／過ぎた
+function travelHoldStale(t) {
+  return t.status === 'hold' && t.date_from && t.date_from <= todayStr();
+}
+
+function travelSettings() {
+  const st = state.app_settings || {};
+  return {
+    day: Number(st.allowance_day != null ? st.allowance_day : 2000),
+    hotelLimit: Number(st.hotel_limit != null ? st.hotel_limit : 8500),
+  };
+}
+
+// 期間の日付を並べる
+function travelDates(t) {
+  if (!t || !t.date_from || !t.date_to) return [];
+  const out = [];
+  const a = new Date(t.date_from + 'T00:00:00');
+  const b = new Date(t.date_to + 'T00:00:00');
+  if (b < a) return [];
+  for (let d = new Date(a); d <= b; d.setDate(d.getDate() + 1)) {
+    out.push(d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'));
+  }
+  return out;
+}
+
+// 泊数（期間の日数 − 1）
+function travelNights(t) {
+  return Math.max(0, travelDates(t).length - 1);
+}
+
+// 金額をまとめる。which は 'plan'（予定）か 'real'（実績）
+function travelTotals(t, which) {
+  const k = which === 'real' ? 'real' : 'plan';
+  const s2 = travelSettings();
+  const fare = (t.transports || []).reduce((a, x) => a + (Number(x[k + '_fee']) || 0), 0);
+  const hotel = (t.hotels || []).reduce((a, x) => a + (Number(x[k + '_fee']) || 0), 0);
+  const other = (t.others || []).reduce((a, x) => a + (Number(x[k + '_fee']) || 0), 0);
+  const nights = travelNights(t);
+  const days = travelDates(t).length;
+  // 【2026-09-07】日当の数え方
+  //   初日は、移動が遅くても日中は仕事をしてもらうので払う。
+  //   中日も仕事をしている。
+  //   最終日は朝から帰るだけなので払えない。
+  //   よって「初日から最終日の前日まで」＝ 日数−1 ＝ 泊数 と同じ数になる。
+  //   日帰り（泊まらない）は0円。
+  //   最終日は日当の対象にしません（リストにも出しません）。
+  //   それ以外の日は、日ごとに付ける・付けないを選べます（既定は全部付ける）。
+  //   長期の出張だと、間に休日が入ることがあるためです。
+  //   付けるかどうかの最終の判断は、管理者の承認で行います。
+  const list = travelDates(t);
+  const target = list.slice(0, Math.max(0, list.length - 1));   // 最終日を除く
+  const off = t.allowance_off || {};                            // 外した日
+  const allowanceDays = target.filter(d => !off[d]).length;
+  const allowance = s2.day * allowanceDays;
+  return { fare, hotel, other, allowance, allowanceDays, allowanceTarget: target,
+           total: fare + hotel + other + allowance, nights, days };
+}
+
+// 宿泊費が上限を超えていないか
+function hotelOver(fee) {
+  const lim = travelSettings().hotelLimit;
+  return lim > 0 && Number(fee) > lim;
+}
+
+function getTravel(id) {
+  return (state.travels || []).find(t => t.id === id) || null;
+}
+
+
+
+// 画面の入力を出張の記録に取り込む
+function collectTravel() {
+  const t = getTravel(state._travelId);
+  if (!t) return;
+  const g = (id) => { const el = document.getElementById(id); return el ? el.value : null; };
+  const f = g('tv-from'); if (f !== null) t.date_from = f;
+  const to = g('tv-to');  if (to !== null) t.date_to = to;
+  const nt = g('tv-rp-note'); if (nt !== null) t.report_note = nt;
+
+  const each = (cls, fn) => document.querySelectorAll(cls).forEach(el => {
+    const i = parseInt(el.dataset.i, 10);
+    if (!isNaN(i)) fn(i, el.value);
+  });
+  each('.tv-dest-name',    (i, v) => { if (t.destinations[i]) t.destinations[i].name = v; });
+  each('.tv-dest-purpose', (i, v) => { if (t.destinations[i]) t.destinations[i].purpose = v; });
+  each('.tv-sch-time',     (i, v) => { if (t.schedule[i]) t.schedule[i].time = v; });
+  each('.tv-sch-what',     (i, v) => { if (t.schedule[i]) t.schedule[i].what = v; });
+  each('.tv-tr-from',      (i, v) => { if (t.transports[i]) t.transports[i].from = v; });
+  each('.tv-tr-to',        (i, v) => { if (t.transports[i]) t.transports[i].to = v; });
+  each('.tv-tr-mode',      (i, v) => { if (t.transports[i]) t.transports[i].mode = v; });
+  each('.tv-tr-fee',       (i, v) => { if (t.transports[i]) t.transports[i].plan_fee = v; });
+  each('.tv-ho-fee',       (i, v) => { if (t.hotels[i]) t.hotels[i].plan_fee = v; });
+  each('.tv-ho-name',      (i, v) => { if (t.hotels[i]) t.hotels[i].name = v; });
+  each('.tv-ot-date',      (i, v) => { if (t.others[i]) t.others[i].date = v; });
+  each('.tv-ot-what',      (i, v) => { if (t.others[i]) t.others[i].what = v; });
+  each('.tv-ot-fee',       (i, v) => { if (t.others[i]) t.others[i].plan_fee = v; });
+  // 日当（日ごとに付ける・付けない）
+  const allowEls = document.querySelectorAll('.tv-allow');
+  if (allowEls.length) {
+    if (!t.allowance_off) t.allowance_off = {};
+    allowEls.forEach(el => {
+      const d = el.dataset.date;
+      if (el.checked) delete t.allowance_off[d];
+      else t.allowance_off[d] = true;
+    });
+  }
+  document.querySelectorAll('.tv-allow-note').forEach(el => {
+    if (!t.allowance_note) t.allowance_note = {};
+    const d = el.dataset.date;
+    if (el.value.trim()) t.allowance_note[d] = el.value.trim();
+    else delete t.allowance_note[d];
+  });
+  // 報告のほう
+  each('.tv-rp-who',    (i, v) => { if (t.destinations[i]) t.destinations[i].r_who = v; });
+  each('.tv-rp-what',   (i, v) => { if (t.destinations[i]) t.destinations[i].r_what = v; });
+  each('.tv-rp-result', (i, v) => { if (t.destinations[i]) t.destinations[i].r_result = v; });
+  each('.tv-rp-next',   (i, v) => { if (t.destinations[i]) t.destinations[i].r_next = v; });
+  each('.tv-rr-tr', (i, v) => { if (t.transports[i]) t.transports[i].real_fee = v; });
+  each('.tv-rr-ho', (i, v) => { if (t.hotels[i]) t.hotels[i].real_fee = v; });
+  each('.tv-rr-ot', (i, v) => { if (t.others[i]) t.others[i].real_fee = v; });
+}
+
+// 期間が変わったら、宿泊の行数と、期間の外に出た予定を整える
+function syncTravelRows(t) {
+  const dates = travelDates(t);
+  const nights = Math.max(0, dates.length - 1);
+  if (!Array.isArray(t.hotels)) t.hotels = [];
+  while (t.hotels.length < nights) t.hotels.push({ plan_fee: '', real_fee: '', name: '' });
+  if (t.hotels.length > nights) t.hotels.length = nights;
+  // 期間から外れた日の予定・交通は、初日に寄せる
+  const first = dates[0];
+  for (const x of (t.schedule || []))   if (!dates.includes(x.date)) x.date = first;
+  for (const x of (t.transports || [])) if (!dates.includes(x.date)) x.date = first;
+  for (const x of (t.others || []))     if (!dates.includes(x.date)) x.date = first;
+}
+
+// 申請できるか
+function checkTravel(t) {
+  if (!t.date_from || !t.date_to) return '期間を決めてください。';
+  if (travelDates(t).length === 0) return '期間がおかしいようです。日付を見直してください。';
+  const dest = (t.destinations || []).filter(d => (d.name || '').trim());
+  if (dest.length === 0) return '訪問先を1つ以上入れてください。';
+  for (const d of dest) {
+    if (!(d.purpose || '').trim()) return `「${d.name}」の目的を書いてください。`;
+  }
+  if ((t.schedule || []).length === 0) return '行動予定を1つ以上入れてください。';
+  for (const x of (t.schedule || [])) {
+    if (!x.time || !(x.what || '').trim()) return '行動予定に、時刻と内容の入っていない行があります。';
+  }
+  for (const x of (t.transports || [])) {
+    if (!(x.from || '').trim() || !(x.to || '').trim()) return '交通手段に、起点か終点の入っていない行があります。';
+    if (x.plan_fee === '' || x.plan_fee == null) return `${x.from} → ${x.to} の料金を入れてください。`;
+  }
+  const nights = travelNights(t);
+  for (let i = 0; i < nights; i++) {
+    const h = (t.hotels || [])[i] || {};
+    if (h.plan_fee === '' || h.plan_fee == null) return `${travelDates(t)[i]} の夜の宿泊費を入れてください。`;
+  }
+  for (const o of (t.others || [])) {
+    if (!(o.what || '').trim()) return '高速・駐車ほかに、内容の入っていない行があります。';
+    if (o.plan_fee === '' || o.plan_fee == null) return `「${o.what}」の金額を入れてください。`;
+  }
+  return null;
+}
+
+// 報告を出せるか
+function checkTravelReport(t) {
+  const dest = (t.destinations || []).filter(d => (d.name || '').trim());
+  for (const d of dest) {
+    if (!(d.r_what || '').trim())   return `「${d.name}」で何をしたかを書いてください。`;
+    if (!(d.r_result || '').trim()) return `「${d.name}」でどのような成果があったかを書いてください。`;
+  }
+  for (const x of (t.transports || [])) {
+    if (x.real_fee === '' || x.real_fee == null) return `${x.from} → ${x.to} の実際の料金を入れてください。`;
+  }
+  for (let i = 0; i < (t.hotels || []).length; i++) {
+    const h = t.hotels[i];
+    if (h.real_fee === '' || h.real_fee == null) return `${travelDates(t)[i]} の夜の実際の宿泊費を入れてください。`;
+  }
+  for (const o of (t.others || [])) {
+    if (o.real_fee === '' || o.real_fee == null) return `「${o.what}」の実際の金額を入れてください。`;
+  }
+  return null;
+}
+
+// -------- 管理：出張の一覧 --------
+function renderTravelAdmin() {
+  const all = (state.travels || []).filter(t => t.status !== 'draft')
+    .sort((a, b) => String(b.date_from).localeCompare(String(a.date_from)));
+  const req = all.filter(t => t.status === 'requested');
+  const rep2 = all.filter(t => t.status === 'reported');
+  const uns = all.filter(travelUnsettled);
+  const holds = all.filter(t => t.status === 'hold');
+
+  let html = `
+    <div class="nav-row"><button class="nav-btn" data-action="back-admin">← 管理画面へ戻る</button></div>
+    <div class="card admin-section">
+      <h2>🧳 出張</h2>
+  `;
+  if (req.length > 0) {
+    html += `<div style="padding:12px 14px; background:#fff8e1; border-left:5px solid var(--yellow); border-radius:6px; margin-bottom:12px;">
+      <strong style="color:#b87b00;">📨 承認待ちの申請が ${req.length} 件あります</strong></div>`;
+  }
+  if (rep2.length > 0) {
+    html += `<div style="padding:12px 14px; background:#e8eef5; border-left:5px solid var(--header); border-radius:6px; margin-bottom:12px;">
+      <strong style="color:var(--header);">📄 清算待ちの報告が ${rep2.length} 件あります</strong></div>`;
+  }
+  if (uns.length > 0) {
+    html += `<div style="padding:12px 14px; background:#ffe9e9; border-left:5px solid var(--red); border-radius:6px; margin-bottom:12px;">
+      <strong style="color:var(--red);">⚠️ 未精算の出張が ${uns.length} 件あります</strong>
+      <div style="font-size:0.88rem; color:#555; margin-top:6px;">
+        期間が過ぎたのに報告が出ていません。<br>
+        ${uns.map(t => {
+          const e2 = state.employees.find(x => x.id === t.emp_id);
+          return `${t.date_from}〜${t.date_to}　${e2 ? e2.name : t.emp_id}`;
+        }).join('<br>')}
+      </div></div>`;
+  }
+  if (holds.length > 0) {
+    html += `<div style="padding:12px 14px; background:#f7f0fa; border-left:5px solid #7b1fa2; border-radius:6px; margin-bottom:12px;">
+      <strong style="color:#7b1fa2;">📅 期間だけ押さえてある出張が ${holds.length} 件あります</strong>
+      <div style="font-size:0.88rem; color:#555; margin-top:6px;">
+        ${holds.map(t => {
+          const e2 = state.employees.find(x => x.id === t.emp_id);
+          const stale = travelHoldStale(t);
+          return `${t.date_from}〜${t.date_to}　${e2 ? e2.name : t.emp_id}` +
+            (stale ? '　<span style="color:var(--red); font-weight:bold;">⚠️ 日が来ています。まだ申請が出ていません</span>' : '');
+        }).join('<br>')}
+      </div></div>`;
+  }
+  if (all.length === 0) {
+    html += `<div class="empty-message">出張はまだありません</div>`;
+  } else {
+    html += `<table><thead><tr><th>期間</th><th>氏名</th><th>行先</th><th>見込み</th><th>実際</th><th>状態</th><th></th></tr></thead><tbody>`;
+    for (const t of all) {
+      const emp = state.employees.find(x => x.id === t.emp_id);
+      const st2 = TRAVEL_STATUS[t.status] || TRAVEL_STATUS.draft;
+      const p = travelTotals(t, 'plan'), r = travelTotals(t, 'real');
+      const days = travelDates(t).length;
+      html += `<tr>
+        <td style="font-size:0.85rem;">${t.date_from}${days > 1 ? `<br>〜 ${t.date_to}` : ''}</td>
+        <td>${emp ? emp.name : t.emp_id}</td>
+        <td style="font-size:0.85rem;">${(t.destinations || []).map(d => d.name).filter(Boolean).join('・') || '—'}</td>
+        <td style="text-align:right; color:#888;">${p.total.toLocaleString()}</td>
+        <td style="text-align:right; font-weight:bold;">${['reported', 'settled'].includes(t.status) ? r.total.toLocaleString() : '—'}</td>
+        <td style="text-align:center; color:${st2.color}; font-weight:bold;">${st2.label}</td>
+        <td style="white-space:nowrap;">
+          <button class="nav-btn" data-action="admin-open-travel" data-tid="${t.id}" data-tab="plan" style="padding:3px 10px; font-size:0.8rem;">申請</button>
+          ${['approved', 'reported', 'settled'].includes(t.status)
+            ? `<button class="nav-btn" data-action="admin-open-travel" data-tid="${t.id}" data-tab="report" style="padding:3px 10px; font-size:0.8rem; color:var(--header); border-color:var(--header);">報告</button>` : ''}
+        </td>
+      </tr>`;
+    }
+    html += `</tbody></table>`;
+  }
+  html += `</div>`;
+  return html;
+}
+
+// =========================================================
+// 【2026-09-07】出張報告への添付
+//
+//   このアプリはブラウザの中だけで動きます（サーバーがありません）。
+//   添付は端末の中に文字にして持つので、置ける量に限りがあります。
+//   ・写真   … 自動で小さくする（長辺1200px・JPEG）。1枚200KB前後
+//   ・Excel  … そのまま入れる。1MBを超えたら知らせる
+//   ・PDF    … 入れません。スキャンしたものは縮められず重いためです。
+//              資料は写真に撮ってください。
+// =========================================================
+const ATTACH_MAX_SIDE = 1200;          // 写真の長辺（px）
+const ATTACH_WARN_BYTES = 1024 * 1024; // これを超えたら知らせる
+const ATTACH_HARD_BYTES = 3 * 1024 * 1024;  // これを超えたら断る
+const ATTACH_OK_EXT = ['xlsx', 'xls', 'xlsm', 'csv'];
+
+function fileExt(name) {
+  const m = String(name || '').toLowerCase().match(/\.([a-z0-9]+)$/);
+  return m ? m[1] : '';
+}
+
+function fmtBytes(n) {
+  if (n < 1024) return n + ' B';
+  if (n < 1024 * 1024) return Math.round(n / 1024) + ' KB';
+  return (n / 1024 / 1024).toFixed(1) + ' MB';
+}
+
+// 写真を小さくして文字にする
+function shrinkImage(file) {
+  return new Promise((resolve, reject) => {
+    const fr = new FileReader();
+    fr.onload = () => {
+      const img = new Image();
+      img.onload = () => {
+        let w = img.width, h = img.height;
+        const long = Math.max(w, h);
+        if (long > ATTACH_MAX_SIDE) {
+          const r = ATTACH_MAX_SIDE / long;
+          w = Math.round(w * r); h = Math.round(h * r);
+        }
+        const cv = document.createElement('canvas');
+        cv.width = w; cv.height = h;
+        cv.getContext('2d').drawImage(img, 0, 0, w, h);
+        resolve(cv.toDataURL('image/jpeg', 0.8));
+      };
+      img.onerror = () => reject(new Error('画像を読めませんでした'));
+      img.src = fr.result;
+    };
+    fr.onerror = () => reject(new Error('ファイルを読めませんでした'));
+    fr.readAsDataURL(file);
+  });
+}
+
+// ファイルをそのまま文字にする
+function fileToDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const fr = new FileReader();
+    fr.onload = () => resolve(fr.result);
+    fr.onerror = () => reject(new Error('ファイルを読めませんでした'));
+    fr.readAsDataURL(file);
+  });
+}
+
+// その出張の添付の合計サイズ
+function attachTotalBytes(t) {
+  return (t.attachments || []).reduce((a, x) => a + (x.bytes || 0), 0);
+}
+
+
+// 【2026-09-07】出張報告を紙で出す
+//   別の窓を開いて、A4に収まる形で出します。写真も入ります。
+//   ブラウザの印刷からPDFにも保存できます。
+function printTravelReport(t) {
+  const emp = state.employees.find(e => e.id === t.emp_id);
+  const set = travelSettings();
+  const dates = travelDates(t);
+  const p = travelTotals(t, 'plan'), r = travelTotals(t, 'real');
+  const st2 = TRAVEL_STATUS[t.status] || {};
+  const esc = (x) => String(x == null ? '' : x)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const nl = (x) => esc(x).replace(/\n/g, '<br>');
+
+  let h = `<!DOCTYPE html><html lang="ja"><head><meta charset="UTF-8">
+    <title>出張報告書 ${esc(emp ? emp.name : '')} ${esc(t.date_from)}</title>
+    <style>
+      @page { size: A4; margin: 15mm; }
+      body { font-family: "Hiragino Kaku Gothic ProN", "Yu Gothic", Meiryo, sans-serif;
+             font-size: 10.5pt; line-height: 1.7; color: #222; }
+      h1 { font-size: 16pt; text-align: center; margin: 0 0 4mm; letter-spacing: 0.2em; }
+      h2 { font-size: 11.5pt; margin: 6mm 0 2mm; padding: 1.5mm 3mm;
+           background: #eef2f6; border-left: 4px solid #1f4e79; }
+      table { width: 100%; border-collapse: collapse; margin-bottom: 3mm; }
+      th, td { border: 1px solid #bbb; padding: 1.6mm 2.5mm; font-size: 10pt; vertical-align: top; }
+      th { background: #f4f6f9; text-align: left; font-weight: bold; white-space: nowrap; }
+      .r { text-align: right; }
+      .c { text-align: center; }
+      .muted { color: #777; font-size: 9pt; }
+      .dest { border: 1px solid #bbb; padding: 3mm; margin-bottom: 3mm; page-break-inside: avoid; }
+      .dest .name { font-weight: bold; font-size: 11pt; }
+      .dest .lab { color: #1f4e79; font-weight: bold; font-size: 9.5pt; margin-top: 2mm; }
+      .sign { margin-top: 8mm; }
+      .sign table { width: 70mm; margin-left: auto; }
+      .sign th, .sign td { height: 14mm; text-align: center; }
+      .photos { display: flex; flex-wrap: wrap; gap: 3mm; }
+      .photos figure { width: 58mm; margin: 0; page-break-inside: avoid; }
+      .photos img { width: 100%; border: 1px solid #ccc; }
+      .photos figcaption { font-size: 8.5pt; color: #555; margin-top: 1mm; }
+      .pb { page-break-before: always; }
+      @media print { .noprint { display: none; } }
+    </style></head><body>
+    <div class="noprint" style="text-align:center; margin-bottom:5mm; padding:3mm; background:#eef2f6;">
+      <button onclick="window.print()" style="padding:8px 24px; font-size:14px; cursor:pointer;">🖨 印刷する</button>
+      <span style="margin-left:12px; color:#555; font-size:12px;">
+        印刷の画面で「PDFに保存」を選ぶと、ファイルとしても残せます</span>
+    </div>
+
+    <h1>出 張 報 告 書</h1>
+    <table>
+      <tr><th style="width:22mm;">氏名</th><td>${esc(emp ? emp.name : t.emp_id)}</td>
+          <th style="width:22mm;">状態</th><td>${esc(st2.label || t.status)}</td></tr>
+      <tr><th>期間</th><td>${esc(t.date_from)} 〜 ${esc(t.date_to)}（${dates.length}日間 ／ ${travelNights(t)}泊）</td>
+          <th>提出日</th><td>${t.reported_at ? esc(String(t.reported_at).substring(0, 10)) : ''}</td></tr>
+    </table>
+
+    <h2>訪問先と結果</h2>`;
+
+  if (!(t.destinations || []).length) {
+    h += `<p class="muted">訪問先が入っていません</p>`;
+  }
+  for (const d of (t.destinations || [])) {
+    h += `<div class="dest">
+      <div class="name">${esc(d.name || '（訪問先なし）')}</div>
+      <div class="muted">目的：${esc(d.purpose || '—')}　／　会った方：${esc(d.r_who || '—')}</div>
+      <div class="lab">何をしたか</div><div>${nl(d.r_what || '—')}</div>
+      <div class="lab">どのような成果があったか</div><div>${nl(d.r_result || '—')}</div>
+      <div class="lab">次にやること</div><div>${nl(d.r_next || '—')}</div>
+    </div>`;
+  }
+
+  if (t.report_note) {
+    h += `<h2>全体をとおして</h2><div style="border:1px solid #bbb; padding:3mm;">${nl(t.report_note)}</div>`;
+  }
+
+  h += `<h2>行動の記録</h2><table>
+    <tr><th style="width:26mm;">日付</th><th style="width:18mm;">時刻</th><th>内容</th></tr>`;
+  const sch = (t.schedule || []).slice().sort((a, b) =>
+    String(a.date).localeCompare(String(b.date)) || String(a.time).localeCompare(String(b.time)));
+  if (!sch.length) h += `<tr><td colspan="3" class="muted">記録がありません</td></tr>`;
+  for (const x of sch) {
+    h += `<tr><td>${esc(x.date)}</td><td>${esc(x.time)}</td><td>${esc(x.what)}</td></tr>`;
+  }
+  h += `</table>`;
+
+  h += `<h2>交通費</h2><table>
+    <tr><th style="width:26mm;">日付</th><th>区間</th><th style="width:24mm;">利用</th>
+        <th style="width:20mm;" class="r">見込み</th><th style="width:20mm;" class="r">実際</th>
+        <th style="width:18mm;" class="c">領収証</th></tr>`;
+  if (!(t.transports || []).length) h += `<tr><td colspan="6" class="muted">ありません</td></tr>`;
+  for (const x of (t.transports || [])) {
+    h += `<tr><td>${esc(x.date)}</td><td>${esc(x.from)} → ${esc(x.to)}</td><td>${esc(x.mode)}</td>
+      <td class="r">${(Number(x.plan_fee) || 0).toLocaleString()}</td>
+      <td class="r">${(Number(x.real_fee) || 0).toLocaleString()}</td>
+      <td class="c">${needsReceipt(x.mode) ? '要' : '—'}</td></tr>`;
+  }
+  h += `</table>`;
+
+  if ((t.hotels || []).length) {
+    h += `<h2>宿泊費</h2><table>
+      <tr><th style="width:26mm;">泊まる日</th><th>宿名</th>
+          <th style="width:20mm;" class="r">見込み</th><th style="width:20mm;" class="r">実際</th></tr>`;
+    (t.hotels || []).forEach((x, i) => {
+      h += `<tr><td>${esc(dates[i] || '')}</td><td>${esc(x.name || '')}</td>
+        <td class="r">${(Number(x.plan_fee) || 0).toLocaleString()}</td>
+        <td class="r">${(Number(x.real_fee) || 0).toLocaleString()}</td></tr>`;
+    });
+    h += `</table><p class="muted">宿泊費の上限：1泊 ${set.hotelLimit.toLocaleString()}円</p>`;
+  }
+
+  if ((t.others || []).length) {
+    h += `<h2>高速・駐車ほか</h2><table>
+      <tr><th style="width:26mm;">日付</th><th>内容</th>
+          <th style="width:20mm;" class="r">見込み</th><th style="width:20mm;" class="r">実際</th></tr>`;
+    for (const x of (t.others || [])) {
+      h += `<tr><td>${esc(x.date)}</td><td>${esc(x.what)}</td>
+        <td class="r">${(Number(x.plan_fee) || 0).toLocaleString()}</td>
+        <td class="r">${(Number(x.real_fee) || 0).toLocaleString()}</td></tr>`;
+    }
+    h += `</table>`;
+  }
+
+  h += `<h2>清算</h2><table>
+    <tr><th style="width:40mm;"></th><th class="r" style="width:30mm;">見込み</th><th class="r" style="width:30mm;">実際</th></tr>
+    <tr><th>交通費</th><td class="r">${p.fare.toLocaleString()}</td><td class="r">${r.fare.toLocaleString()}</td></tr>
+    <tr><th>宿泊費</th><td class="r">${p.hotel.toLocaleString()}</td><td class="r">${r.hotel.toLocaleString()}</td></tr>
+    <tr><th>高速・駐車ほか</th><td class="r">${p.other.toLocaleString()}</td><td class="r">${r.other.toLocaleString()}</td></tr>
+    <tr><th>日当（${p.allowanceDays}日 × ${set.day.toLocaleString()}円）</th>
+        <td class="r">${p.allowance.toLocaleString()}</td><td class="r">${r.allowance.toLocaleString()}</td></tr>
+    <tr style="background:#eef2f6;"><th>合計</th>
+        <td class="r"><strong>${p.total.toLocaleString()}</strong></td>
+        <td class="r"><strong>${r.total.toLocaleString()} 円</strong></td></tr>
+    </table>
+    <p class="muted">
+      ※ 車で走った距離は、この表に入っていません（移動の申告で別に計算されます）。<br>
+      ※ 領収証が「要」のものは、この報告書に添えて提出してください。<br>
+      ※ グリーン車・ファーストクラス等の上級席は使えません。
+      ${(() => {
+        const offs = Object.keys(t.allowance_off || {});
+        return offs.length ? `<br>※ 日当を外した日：${offs.map(d => esc(d) + ((t.allowance_note || {})[d] ? '（' + esc(t.allowance_note[d]) + '）' : '')).join('、')}` : '';
+      })()}
+    </p>
+
+    <div class="sign"><table>
+      <tr><th style="width:35mm;">本人</th><th>承認</th></tr>
+      <tr><td></td><td></td></tr>
+    </table></div>`;
+
+  const photos = (t.attachments || []).filter(a => a.kind === 'photo');
+  const files = (t.attachments || []).filter(a => a.kind !== 'photo');
+  if (photos.length) {
+    h += `<div class="pb"><h2>添付した写真</h2><div class="photos">`;
+    for (const a of photos) {
+      h += `<figure><img src="${a.data}" alt="" />
+        <figcaption>${esc(a.name || '')}${a.note ? '　' + esc(a.note) : ''}</figcaption></figure>`;
+    }
+    h += `</div></div>`;
+  }
+  if (files.length) {
+    h += `<h2>添付したファイル</h2><table><tr><th>名前</th><th style="width:24mm;" class="r">大きさ</th><th>ひとこと</th></tr>`;
+    for (const a of files) {
+      h += `<tr><td>${esc(a.name)}</td><td class="r">${fmtBytes(a.bytes || 0)}</td><td>${esc(a.note || '')}</td></tr>`;
+    }
+    h += `</table><p class="muted">※ ファイルの中身は紙に出せません。アプリから開いてください。</p>`;
+  }
+
+  h += `</body></html>`;
+
+  const win = window.open('', '_blank');
+  if (!win) { alert('別の窓を開けませんでした。\nブラウザのポップアップの設定をご確認ください。'); return; }
+  win.document.write(h);
+  win.document.close();
+}
+
+// -------- 出張の報告 --------
+//   いちばん大事なのは「何処で何をして、どのような成果があったか」。
+//   金額の清算はそのついで。
+function renderTravelReport(t, locked, isAdmin) {
+  const dates = travelDates(t);
+  const canWrite = ['approved', 'reported'].includes(t.status) && !isAdmin;
+  const ro = canWrite ? '' : ' disabled';
+  const set = travelSettings();
+
+  if (t.status === 'draft' || t.status === 'requested') {
+    return `<div class="card"><div class="empty-message">
+      申請が承認されると、ここに報告を書けるようになります。</div></div>`;
+  }
+
+  let html = `
+    <div class="card" style="background:#e8eef5; border-left:5px solid var(--header);">
+      <strong style="font-size:1.02rem;">📄 出張報告</strong>
+      <div style="font-size:0.9rem; color:#555; margin-top:6px; line-height:1.8;">
+        <strong>何処で、何をして、どのような成果があったか</strong>を書いてください。<br>
+        これがこの報告のいちばん大事なところです。金額はそのあとで構いません。
+      </div>
+    </div>
+  `;
+
+  // ① 訪問先ごとの成果
+  html += `<div class="card">
+    <h3 style="margin-top:0;">① 訪問先ごとの結果</h3>`;
+  if (!(t.destinations || []).length) {
+    html += `<div class="empty-message">申請に訪問先が入っていません</div>`;
+  }
+  (t.destinations || []).forEach((d, i) => {
+    html += `<div style="margin-bottom:18px; padding:14px; background:#fafafa; border-radius:8px; border-left:4px solid var(--header);">
+      <div style="font-weight:bold; font-size:1.02rem;">${d.name || '（訪問先なし）'}</div>
+      <div style="font-size:0.86rem; color:#888; margin-bottom:10px;">目的：${d.purpose || '—'}</div>
+      <div class="form-row">
+        <label>会った方</label>
+        <input type="text" class="tv-rp-who" data-i="${i}" value="${d.r_who || ''}" placeholder="部署・お名前" ${ro} />
+      </div>
+      <div class="form-row">
+        <label>何をしたか</label>
+        <textarea class="tv-rp-what" data-i="${i}" rows="3" placeholder="話した内容・見たもの・行ったこと"${ro}>${d.r_what || ''}</textarea>
+      </div>
+      <div class="form-row">
+        <label>どのような成果があったか</label>
+        <textarea class="tv-rp-result" data-i="${i}" rows="3" placeholder="決まったこと・分かったこと・持ち帰ったもの"${ro}>${d.r_result || ''}</textarea>
+      </div>
+      <div class="form-row">
+        <label>次にやること</label>
+        <input type="text" class="tv-rp-next" data-i="${i}" value="${d.r_next || ''}" placeholder="いつまでに誰が何をするか" ${ro} />
+      </div>
+    </div>`;
+  });
+  html += `</div>`;
+
+  // ② 全体の所感
+  html += `<div class="card">
+    <h3 style="margin-top:0;">② 全体をとおして</h3>
+    <div class="form-row">
+      <label>気づいたこと・報告しておきたいこと</label>
+      <textarea id="tv-rp-note" rows="4" placeholder="次に活かせること、困ったこと、共有しておきたいこと"${ro}>${t.report_note || ''}</textarea>
+    </div>
+  </div>`;
+
+  // ③ 資料の添付
+  const atts = t.attachments || [];
+  html += `<div class="card">
+    <h3 style="margin-top:0;">③ 資料</h3>
+    <div class="form-hint" style="margin-bottom:10px;">
+      写真とExcelを付けられます。<strong>写真は自動で小さくします。</strong><br>
+      紙の資料はPDFではなく<strong>写真に撮って</strong>ください。PDFは小さくできず、端末に入りきらなくなります。
+      ${atts.length > 0 ? `<br>いまの合計 <strong>${fmtBytes(attachTotalBytes(t))}</strong>（${atts.length}件）` : ''}
+    </div>`;
+  if (atts.length === 0) {
+    html += `<div class="empty-message">まだありません</div>`;
+  } else {
+    html += `<div style="display:flex; gap:12px; flex-wrap:wrap;">`;
+    atts.forEach((a, i) => {
+      const isImg = (a.kind === 'photo');
+      html += `<div style="width:170px; border:1px solid #e0e0e0; border-radius:8px; padding:8px; background:#fafafa;">
+        ${isImg ? `<img src="${a.data}" style="width:100%; height:110px; object-fit:cover; border-radius:6px; cursor:pointer;"
+                       data-action="attach-open" data-i="${i}" alt="" />`
+                : `<div style="height:110px; display:flex; align-items:center; justify-content:center; font-size:2.4rem;">📊</div>`}
+        <div style="font-size:0.78rem; margin-top:6px; word-break:break-all;">${a.name || ''}</div>
+        <div style="font-size:0.72rem; color:#888;">${fmtBytes(a.bytes || 0)}</div>
+        ${a.note ? `<div style="font-size:0.75rem; color:#555; margin-top:4px;">${a.note}</div>` : ''}
+        <div style="display:flex; gap:6px; margin-top:6px;">
+          <button class="nav-btn" data-action="attach-save" data-i="${i}" style="padding:2px 8px; font-size:0.75rem;">保存</button>
+          ${canWrite ? `<button class="nav-btn" data-action="attach-del" data-i="${i}" style="padding:2px 8px; font-size:0.75rem; color:var(--red); border-color:var(--red);">×</button>` : ''}
+        </div>
+      </div>`;
+    });
+    html += `</div>`;
+  }
+  if (canWrite) {
+    html += `<div style="margin-top:14px; padding:14px; background:#f4f6f9; border-radius:8px;">
+      <strong style="font-size:0.95rem;">＋ 資料を足す</strong>
+      <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-top:10px;">
+        <input type="file" id="attach-file" accept="image/*,.xlsx,.xls,.xlsm,.csv" data-action="attach-pick" />
+        <input type="text" id="attach-note" placeholder="ひとこと（任意）" style="min-width:200px; padding:6px;" />
+      </div>
+      <div class="form-hint" style="margin-top:8px;">
+        写真は長辺${ATTACH_MAX_SIDE}pxに縮めます。Excelはそのまま入ります（${fmtBytes(ATTACH_WARN_BYTES)}を超えると知らせます）。
+      </div>
+    </div>`;
+  }
+  html += `</div>`;
+
+  // ④ 実際にかかった金額
+  const p = travelTotals(t, 'plan'), r = travelTotals(t, 'real');
+  html += `<div class="card">
+    <h3 style="margin-top:0;">④ 実際にかかった金額</h3>
+    <div class="form-hint" style="margin-bottom:10px;">
+      申請のときの見込みが左に出ています。<strong>実際の額を右に入れてください。</strong>同じなら見込みの数字をそのまま入れます。
+    </div>`;
+
+  html += `<h4 style="margin:12px 0 6px;">交通費</h4>
+    <table><thead><tr><th>日付</th><th>区間</th><th style="width:15%;">見込み</th><th style="width:18%;">実際</th></tr></thead><tbody>`;
+  (t.transports || []).forEach((x, i) => {
+    html += `<tr><td style="font-size:0.85rem;">${x.date}</td>
+      <td style="font-size:0.85rem;">${x.from || '?'} → ${x.to || '?'}<br><span style="color:#888;">${x.mode || ''}</span>
+        ${needsReceipt(x.mode) ? '<span style="font-size:0.7rem; color:var(--red); font-weight:bold;">　要領収証</span>' : ''}</td>
+      <td style="text-align:right; color:#888;">${(Number(x.plan_fee) || 0).toLocaleString()}</td>
+      <td><input type="number" class="tv-rr-tr" data-i="${i}" value="${x.real_fee != null ? x.real_fee : ''}" min="0" step="10" style="width:90px; padding:4px; text-align:right;"${ro} /></td></tr>`;
+  });
+  if (!(t.transports || []).length) html += `<tr><td colspan="4" style="color:#aaa;">なし</td></tr>`;
+  html += `</tbody></table>`;
+
+  if ((t.hotels || []).length) {
+    html += `<h4 style="margin:16px 0 6px;">宿泊費</h4>
+      <table><thead><tr><th>泊まる日</th><th>宿名</th><th style="width:15%;">見込み</th><th style="width:18%;">実際</th></tr></thead><tbody>`;
+    (t.hotels || []).forEach((h, i) => {
+      const over = hotelOver(h.real_fee);
+      html += `<tr><td style="font-size:0.85rem;">${dates[i] || ''} の夜</td>
+        <td style="font-size:0.85rem;">${h.name || '—'}</td>
+        <td style="text-align:right; color:#888;">${(Number(h.plan_fee) || 0).toLocaleString()}</td>
+        <td><input type="number" class="tv-rr-ho" data-i="${i}" value="${h.real_fee != null ? h.real_fee : ''}" min="0" step="100" style="width:100px; padding:4px; text-align:right;"${ro} />
+          ${over ? `<div style="font-size:0.75rem; color:var(--red);">上限 ${set.hotelLimit.toLocaleString()}円 まで</div>` : ''}</td></tr>`;
+    });
+    html += `</tbody></table>`;
+  }
+
+  if ((t.others || []).length) {
+    html += `<h4 style="margin:16px 0 6px;">高速・駐車ほか</h4>
+      <table><thead><tr><th>日付</th><th>内容</th><th style="width:15%;">見込み</th><th style="width:18%;">実際</th></tr></thead><tbody>`;
+    (t.others || []).forEach((o, i) => {
+      html += `<tr><td style="font-size:0.85rem;">${o.date}</td><td style="font-size:0.85rem;">${o.what || ''}</td>
+        <td style="text-align:right; color:#888;">${(Number(o.plan_fee) || 0).toLocaleString()}</td>
+        <td><input type="number" class="tv-rr-ot" data-i="${i}" value="${o.real_fee != null ? o.real_fee : ''}" min="0" step="10" style="width:90px; padding:4px; text-align:right;"${ro} /></td></tr>`;
+    });
+    html += `</tbody></table>`;
+  }
+
+  html += `<h4 style="margin:16px 0 6px;">合計</h4>
+    <table style="max-width:560px;"><thead><tr><th></th><th style="text-align:right;">見込み</th><th style="text-align:right;">実際</th></tr></thead><tbody>
+      <tr><th>交通費</th><td style="text-align:right; color:#888;">${p.fare.toLocaleString()}</td><td style="text-align:right;">${r.fare.toLocaleString()}</td></tr>
+      <tr><th>宿泊費</th><td style="text-align:right; color:#888;">${p.hotel.toLocaleString()}</td><td style="text-align:right;">${r.hotel.toLocaleString()}</td></tr>
+      <tr><th>高速・駐車ほか</th><td style="text-align:right; color:#888;">${p.other.toLocaleString()}</td><td style="text-align:right;">${r.other.toLocaleString()}</td></tr>
+      <tr><th>日当</th><td style="text-align:right; color:#888;">${p.allowance.toLocaleString()}</td>
+        <td style="text-align:right;">${r.allowance.toLocaleString()}
+          <div style="font-size:0.75rem; color:#888;">${p.allowanceDays}日 × ${set.day.toLocaleString()}円</div></td></tr>
+      <tr style="background:var(--green-bg);"><th>合計</th>
+        <td style="text-align:right; color:#888;">${p.total.toLocaleString()} 円</td>
+        <td style="text-align:right; font-weight:bold; font-size:1.1rem;">${r.total.toLocaleString()} 円</td></tr>
+    </tbody></table>
+    <div class="form-hint" style="margin-top:8px;">
+      車で走った距離は、ここに入っていません。「🚗 移動を申告する」の分が別に計算されます。
+    </div>
+  </div>`;
+
+  html += `<div class="card"><div style="display:flex; gap:10px; flex-wrap:wrap;">`;
+  html += `<button class="nav-btn" data-action="print-travel" style="background:#e8eef5; border-color:var(--header); color:var(--header); font-weight:bold;">🖨 紙で出す</button>`;
+  if (canWrite) {
+    html += `<button class="primary-btn" data-action="save-travel-report">💾 報告を保存</button>`;
+    if (t.status === 'approved') {
+      html += `<button class="primary-btn" data-action="submit-travel-report" style="background:var(--orange);">📤 報告を提出する</button>`;
+    }
+  }
+  if (isAdmin && t.status === 'reported') {
+    html += `<button class="primary-btn" data-action="settle-travel" style="background:var(--green);">✅ 清算を確定する</button>`;
+  }
+  html += `</div></div>`;
+  return html;
+}
+
+// -------- 出張の一覧（本人） --------
+function renderTravelList() {
+  const emp = state.employees.find(e => e.id === state.current_employee_id);
+  if (!emp) { state.screen = 'home'; return ''; }
+  const mine = (state.travels || []).filter(t => t.emp_id === emp.id)
+    .sort((a, b) => String(b.date_from).localeCompare(String(a.date_from)));
+
+  let html = `
+    <div class="nav-row"><button class="nav-btn" data-action="back-personal">← 戻る</button></div>
+    <div class="card">
+      <h2>🧳 出張</h2>
+      <div class="form-hint" style="margin-bottom:14px;">
+        出張の申請と報告です。申請を出して承認を受け、
+        帰ってきたら<strong>同じものを開いて報告</strong>を書きます。<br>
+        車で走った距離は、こちらではなく<strong>「🚗 移動を申告する」</strong>に入れてください。
+      </div>
+      <div style="display:flex; gap:10px; flex-wrap:wrap;">
+        <button class="primary-btn" data-action="new-travel-hold" style="flex:1; min-width:200px; background:#7b1fa2;">📅 期間だけ先に押さえる</button>
+        <button class="primary-btn" data-action="new-travel" style="flex:1; min-width:200px;">＋ 内容を決めて申請する</button>
+      </div>
+      <div class="form-hint" style="margin-top:10px;">
+        <strong>期間だけ先に押さえる</strong>は、承認が要りません。日が決まった時点で入れてください。
+        管理者のカレンダーにも出るので、人繰りができます。<br>
+        訪問先や金額が決まったら、同じものを開いて<strong>申請</strong>に進みます。
+      </div>
+    </div>
+  `;
+
+  html += `<div class="card"><h2>📋 あなたの出張</h2>`;
+  if (mine.length === 0) {
+    html += `<div class="empty-message">まだありません</div>`;
+  } else {
+    html += `<table><thead><tr><th>期間</th><th>行先</th><th>状態</th><th></th></tr></thead><tbody>`;
+    for (const t of mine) {
+      const st2 = TRAVEL_STATUS[t.status] || TRAVEL_STATUS.draft;
+      const days = travelDates(t).length;
+      const dests = (t.destinations || []).map(d => d.name).filter(Boolean).join('・') || '—';
+      html += `<tr>
+        <td>${t.date_from}${days > 1 ? `<br>〜 ${t.date_to}<span style="font-size:0.8rem; color:#888;">（${days}日）</span>` : ''}</td>
+        <td style="font-size:0.9rem;">${dests}</td>
+        <td style="text-align:center; color:${st2.color}; font-weight:bold;">${st2.label}</td>
+        <td><button class="nav-btn" data-action="open-travel" data-tid="${t.id}" style="padding:4px 12px; font-size:0.85rem;">開く</button></td>
+      </tr>`;
+    }
+    html += `</tbody></table>`;
+  }
+  html += `</div>`;
+  return html;
+}
+
+// -------- 出張の中身（申請・報告 共通） --------
+function renderTravelEdit() {
+  const t = getTravel(state._travelId);
+  if (!t) { state.screen = 'travel_list'; return renderTravelList(); }
+  const emp = state.employees.find(e => e.id === t.emp_id);
+  const isAdmin = !!state._travelAdmin;
+  const st2 = TRAVEL_STATUS[t.status] || TRAVEL_STATUS.draft;
+  const locked = !travelEditable(t) || isAdmin;   // 申請の中身を触れない
+  const dates = travelDates(t);
+  const set = travelSettings();
+  const tab = state._travelTab || 'plan';
+
+  let html = `
+    <div class="nav-row">
+      <button class="nav-btn" data-action="${isAdmin ? 'back-admin' : 'go-travel-list'}">← 戻る</button>
+    </div>
+    <div class="card">
+      <h2>🧳 出張 ${t.date_from ? t.date_from : '（日付未設定）'}${dates.length > 1 ? ` 〜 ${t.date_to}` : ''}
+        <span style="font-size:0.9rem; color:${st2.color};">［${st2.label}］</span></h2>
+      <div style="font-size:0.9rem; color:#666;">${emp ? emp.emoji + ' ' + emp.name : ''}
+        ${dates.length ? `　${dates.length}日間 ／ ${travelNights(t)}泊` : ''}</div>
+      <div class="filter-options" style="margin-top:10px;">
+        <button class="filter-chip${tab === 'plan' ? ' active' : ''}" data-action="travel-tab" data-tab="plan">📝 申請</button>
+        <button class="filter-chip${tab === 'report' ? ' active' : ''}" data-action="travel-tab" data-tab="report">📄 報告</button>
+      </div>
+    </div>
+    ${t.status === 'hold' ? `
+    <div class="card" style="border-left:5px solid #7b1fa2; background:#f7f0fa;">
+      <strong style="color:#7b1fa2;">📅 いまは期間を押さえただけです</strong>
+      <div style="font-size:0.9rem; color:#555; margin-top:6px; line-height:1.8;">
+        承認は要りません。管理者のカレンダーにも出るので、人繰りに使われます。<br>
+        訪問先・目的・交通・金額が決まったら、下の欄を埋めて
+        <strong>「この内容で申請する」</strong>を押してください。
+      </div>
+    </div>` : ''}
+    ${travelUnsettled(t) ? `
+    <div class="card" style="border-left:5px solid var(--red); background:#ffe9e9;">
+      <strong style="color:var(--red);">📄 未精算です</strong>
+      <div style="font-size:0.9rem; color:#555; margin-top:6px;">
+        ${t.date_to} で期間が終わっています。<strong>報告を書いてください。</strong>
+      </div>
+    </div>` : ''}
+  `;
+
+  if (tab === 'report') return html + renderTravelReport(t, locked && !isAdmin, isAdmin);
+
+  const ro = locked ? ' disabled' : '';
+
+  // ① 期間
+  html += `
+    <div class="card">
+      <h3 style="margin-top:0;">① 期間</h3>
+      <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
+        <input type="date" id="tv-from" value="${t.date_from || ''}" data-action="travel-period"${ro} />
+        <span>〜</span>
+        <input type="date" id="tv-to" value="${t.date_to || ''}" data-action="travel-period"${ro} />
+        ${dates.length ? `<span style="color:#666;">${dates.length}日間 ／ ${travelNights(t)}泊</span>` : ''}
+      </div>
+      ${dates.length === 0 ? '<div class="form-hint" style="color:var(--red);">まず期間を決めてください。ほかの欄はそのあとに出ます。</div>' : ''}
+    </div>
+  `;
+  if (dates.length === 0) return html;
+
+  // ② 行先・訪問先
+  html += `
+    <div class="card">
+      <h3 style="margin-top:0;">② 行先・訪問先</h3>
+      <div class="form-hint" style="margin-bottom:10px;">訪問先ごとに、何をしに行くのかを書いてください。</div>
+      <table><thead><tr><th style="width:38%;">訪問先</th><th>目的</th><th></th></tr></thead><tbody>
+  `;
+  (t.destinations || []).forEach((d, i) => {
+    html += `<tr>
+      <td><input type="text" class="tv-dest-name" data-i="${i}" value="${d.name || ''}" placeholder="会社名・場所" style="width:100%; padding:5px;"${ro} /></td>
+      <td><input type="text" class="tv-dest-purpose" data-i="${i}" value="${d.purpose || ''}" placeholder="打合せ・視察 など" style="width:100%; padding:5px;"${ro} /></td>
+      <td>${locked ? '' : `<button class="nav-btn" data-action="travel-dest-del" data-i="${i}" style="padding:2px 8px; font-size:0.78rem; color:var(--red); border-color:var(--red);">×</button>`}</td>
+    </tr>`;
+  });
+  html += `</tbody></table>
+      ${locked ? '' : '<button class="nav-btn" data-action="travel-dest-add" style="margin-top:8px;">＋ 訪問先を追加</button>'}
+    </div>`;
+
+  // ③ 行動予定（日別・時間単位）
+  html += `<div class="card">
+      <h3 style="margin-top:0;">③ 行動予定</h3>
+      <div class="form-hint" style="margin-bottom:10px;">日ごとに、時間の順に入れてください。</div>`;
+  for (const ds of dates) {
+    const rows = (t.schedule || []).map((x, i) => ({ ...x, _i: i })).filter(x => x.date === ds);
+    const wd = WEEKDAYS[new Date(ds + 'T00:00:00').getDay()];
+    html += `<div style="margin-bottom:14px;">
+      <div style="font-weight:bold; color:var(--header); margin-bottom:6px;">${ds}（${wd}）</div>
+      <table><thead><tr><th style="width:22%;">時刻</th><th>内容</th><th></th></tr></thead><tbody>`;
+    if (rows.length === 0) {
+      html += `<tr><td colspan="3" style="color:#aaa; font-size:0.88rem;">まだありません</td></tr>`;
+    }
+    for (const r of rows) {
+      html += `<tr>
+        <td><input type="time" class="tv-sch-time" data-i="${r._i}" value="${r.time || ''}" style="padding:4px;"${ro} /></td>
+        <td><input type="text" class="tv-sch-what" data-i="${r._i}" value="${r.what || ''}" placeholder="○○社で打合せ" style="width:100%; padding:5px;"${ro} /></td>
+        <td>${locked ? '' : `<button class="nav-btn" data-action="travel-sch-del" data-i="${r._i}" style="padding:2px 8px; font-size:0.78rem; color:var(--red); border-color:var(--red);">×</button>`}</td>
+      </tr>`;
+    }
+    html += `</tbody></table>
+      ${locked ? '' : `<button class="nav-btn" data-action="travel-sch-add" data-date="${ds}" style="margin-top:6px; font-size:0.85rem;">＋ この日の予定を追加</button>`}
+    </div>`;
+  }
+  html += `</div>`;
+
+  // ④ 交通手段
+  html += `<div class="card">
+      <h3 style="margin-top:0;">④ 交通手段</h3>
+      <div class="form-hint" style="margin-bottom:10px;">
+        利用した順に入れてください。<strong>車で走った距離は、こちらではなく「🚗 移動を申告する」に入れます。</strong><br>
+        <span style="color:var(--red); font-weight:bold;">⚠️ グリーン車・ファーストクラス等の上級席は使えません。</span><br>
+        <span style="color:var(--red);">✈️飛行機・🚄新幹線・⛴フェリー・🚕タクシー・🚗その他は<strong>領収証をもらってきてください。</strong></span>
+        金額だけでは、どの席・どの等級で乗ったか分からないためです。
+        <span style="color:#888;">（🚃電車・🚌バスは調べれば料金が分かるので要りません）</span><br>
+        <span style="color:#888;">領収証はこのアプリには入れません。紙で提出してください。</span>
+      </div>`;
+  for (const ds of dates) {
+    const rows = (t.transports || []).map((x, i) => ({ ...x, _i: i })).filter(x => x.date === ds);
+    html += `<div style="margin-bottom:14px;">
+      <div style="font-weight:bold; color:var(--header); margin-bottom:6px;">${ds}</div>
+      <table><thead><tr><th>起点</th><th>終点</th><th style="width:20%;">利用</th><th style="width:16%;">料金</th><th></th></tr></thead><tbody>`;
+    if (rows.length === 0) {
+      html += `<tr><td colspan="5" style="color:#aaa; font-size:0.88rem;">まだありません</td></tr>`;
+    }
+    for (const r of rows) {
+      html += `<tr>
+        <td><input type="text" class="tv-tr-from" data-i="${r._i}" value="${r.from || ''}" placeholder="熊本駅" style="width:100%; padding:5px;"${ro} /></td>
+        <td><input type="text" class="tv-tr-to" data-i="${r._i}" value="${r.to || ''}" placeholder="博多駅" style="width:100%; padding:5px;"${ro} /></td>
+        <td><select class="tv-tr-mode" data-i="${r._i}" style="padding:4px;"${ro}>
+          ${travelModeNames().map(m => `<option value="${m}"${r.mode === m ? ' selected' : ''}>${m}</option>`).join('')}
+        </select></td>
+        <td><input type="number" class="tv-tr-fee" data-i="${r._i}" value="${r.plan_fee != null ? r.plan_fee : ''}" min="0" step="10" style="width:90px; padding:4px; text-align:right;"${ro} />
+          ${needsReceipt(r.mode) ? '<div style="font-size:0.7rem; color:var(--red); font-weight:bold;">要領収証</div>' : ''}</td>
+        <td>${locked ? '' : `<button class="nav-btn" data-action="travel-tr-del" data-i="${r._i}" style="padding:2px 8px; font-size:0.78rem; color:var(--red); border-color:var(--red);">×</button>`}</td>
+      </tr>`;
+    }
+    html += `</tbody></table>
+      ${locked ? '' : `<button class="nav-btn" data-action="travel-tr-add" data-date="${ds}" style="margin-top:6px; font-size:0.85rem;">＋ この日の交通を追加</button>`}
+    </div>`;
+  }
+  html += `</div>`;
+
+  // ⑤ 宿泊
+  const nights = travelNights(t);
+  html += `<div class="card">
+      <h3 style="margin-top:0;">⑤ 宿泊</h3>`;
+  if (nights === 0) {
+    html += `<div class="empty-message">日帰りのため、宿泊はありません</div>`;
+  } else {
+    html += `<div class="form-hint" style="margin-bottom:10px;">
+        泊まる日ごとに料金を入れてください。
+        ${set.hotelLimit > 0 ? `<strong>規定の上限は1泊 ${set.hotelLimit.toLocaleString()}円</strong>です。超えた分は上限までのお支払いになります。`
+                             : '<span style="color:var(--red);">宿泊費の上限が設定されていません（管理画面 → 設定）。</span>'}
+      </div>
+      <table><thead><tr><th>泊まる日</th><th style="width:24%;">料金</th><th>宿名（任意）</th></tr></thead><tbody>`;
+    for (let i = 0; i < nights; i++) {
+      const ds = dates[i];
+      const h = (t.hotels || [])[i] || {};
+      const over = hotelOver(h.plan_fee);
+      html += `<tr>
+        <td>${ds} の夜</td>
+        <td><input type="number" class="tv-ho-fee" data-i="${i}" value="${h.plan_fee != null ? h.plan_fee : ''}" min="0" step="100" style="width:100px; padding:4px; text-align:right;"${ro} />
+          ${over ? `<div style="font-size:0.75rem; color:var(--red);">上限 ${set.hotelLimit.toLocaleString()}円 を超えています</div>` : ''}</td>
+        <td><input type="text" class="tv-ho-name" data-i="${i}" value="${h.name || ''}" placeholder="ホテル名" style="width:100%; padding:5px;"${ro} /></td>
+      </tr>`;
+    }
+    html += `</tbody></table>`;
+  }
+  html += `</div>`;
+
+  // ⑥ 高速・駐車ほか
+  html += `<div class="card">
+      <h3 style="margin-top:0;">⑥ 高速・駐車ほか</h3>
+      <div class="form-hint" style="margin-bottom:10px;">高速代・駐車料金など、交通費と宿泊費以外のものを入れてください。</div>
+      <table><thead><tr><th style="width:22%;">日付</th><th>内容</th><th style="width:18%;">金額</th><th></th></tr></thead><tbody>`;
+  (t.others || []).forEach((o, i) => {
+    html += `<tr>
+      <td><select class="tv-ot-date" data-i="${i}" style="padding:4px;"${ro}>
+        ${dates.map(d => `<option value="${d}"${o.date === d ? ' selected' : ''}>${d}</option>`).join('')}
+      </select></td>
+      <td><input type="text" class="tv-ot-what" data-i="${i}" value="${o.what || ''}" placeholder="九州道 熊本→太宰府" style="width:100%; padding:5px;"${ro} /></td>
+      <td><input type="number" class="tv-ot-fee" data-i="${i}" value="${o.plan_fee != null ? o.plan_fee : ''}" min="0" step="10" style="width:90px; padding:4px; text-align:right;"${ro} /></td>
+      <td>${locked ? '' : `<button class="nav-btn" data-action="travel-ot-del" data-i="${i}" style="padding:2px 8px; font-size:0.78rem; color:var(--red); border-color:var(--red);">×</button>`}</td>
+    </tr>`;
+  });
+  if (!(t.others || []).length) html += `<tr><td colspan="4" style="color:#aaa; font-size:0.88rem;">まだありません</td></tr>`;
+  html += `</tbody></table>
+      ${locked ? '' : '<button class="nav-btn" data-action="travel-ot-add" style="margin-top:8px;">＋ 追加</button>'}
+    </div>`;
+
+  // ⑦ 日当
+  const totForAllow = travelTotals(t, 'plan');
+  html += `<div class="card">
+      <h3 style="margin-top:0;">⑦ 日当</h3>`;
+  if (totForAllow.allowanceTarget.length === 0) {
+    html += `<div class="empty-message">日帰りのため、日当はありません</div>`;
+  } else {
+    html += `<div class="form-hint" style="margin-bottom:10px;">
+        1日 <strong>${set.day.toLocaleString()}円</strong>。<strong>最終日（${dates[dates.length - 1]}）は対象外</strong>のため、ここに出していません。<br>
+        休日をはさむなど、要らない日はチェックを外してください。<strong>最後は管理者が承認のときに見ます。</strong>
+      </div>
+      <table style="max-width:520px;"><thead><tr><th style="width:4em;">付ける</th><th>日付</th><th>備考</th></tr></thead><tbody>`;
+    const off = t.allowance_off || {};
+    for (const ds2 of totForAllow.allowanceTarget) {
+      const wd = WEEKDAYS[new Date(ds2 + 'T00:00:00').getDay()];
+      html += `<tr>
+        <td style="text-align:center;"><input type="checkbox" class="tv-allow" data-action="tv-allow-toggle" data-date="${ds2}" ${off[ds2] ? '' : 'checked'}${ro} /></td>
+        <td>${ds2}（${wd}）</td>
+        <td><input type="text" class="tv-allow-note" data-date="${ds2}" value="${(t.allowance_note || {})[ds2] || ''}"
+              placeholder="外す理由（休日など）" style="width:100%; padding:4px;"${ro} /></td>
+      </tr>`;
+    }
+    html += `</tbody></table>
+      <div style="margin-top:10px; font-size:0.95rem;">
+        ${totForAllow.allowanceDays}日 × ${set.day.toLocaleString()}円 = <strong>${totForAllow.allowance.toLocaleString()} 円</strong>
+      </div>`;
+  }
+  html += `</div>`;
+
+  // ⑧ 見込みの金額
+  const tot = travelTotals(t, 'plan');
+  html += `<div class="card">
+      <h3 style="margin-top:0;">⑧ 見込みの金額</h3>
+      <table style="max-width:520px;"><tbody>
+        <tr><th style="width:10em;">交通費</th><td style="text-align:right;">${tot.fare.toLocaleString()} 円</td></tr>
+        <tr><th>宿泊費</th><td style="text-align:right;">${tot.hotel.toLocaleString()} 円</td></tr>
+        <tr><th>高速・駐車ほか</th><td style="text-align:right;">${tot.other.toLocaleString()} 円</td></tr>
+        <tr><th>日当</th><td style="text-align:right;">${tot.allowance.toLocaleString()} 円
+          <span style="font-size:0.8rem; color:#888;">（${tot.allowanceDays}日 × ${set.day.toLocaleString()}円）</span></td></tr>
+        <tr style="background:var(--green-bg);"><th>合計</th>
+          <td style="text-align:right; font-weight:bold; font-size:1.1rem;">${tot.total.toLocaleString()} 円</td></tr>
+      </tbody></table>
+      ${set.day === 0 ? '<div class="form-hint" style="color:var(--red); margin-top:8px;">日当が設定されていません（管理画面 → 設定 → 出張の規定）。</div>' : ''}
+      <div class="form-hint" style="margin-top:8px;">
+        車で走った距離は、この合計に入っていません。「🚗 移動を申告する」に入れた分が別に計算されます。
+      </div>
+    </div>`;
+
+  // ボタン
+  html += `<div class="card"><div style="display:flex; gap:10px; flex-wrap:wrap;">`;
+  if (!locked) {
+    html += `<button class="primary-btn" data-action="save-travel">💾 ${t.status === 'hold' ? '期間を保存' : '下書きを保存'}</button>`;
+    html += `<button class="primary-btn" data-action="submit-travel" style="background:var(--orange);">📤 この内容で申請する</button>`;
+    html += `<button class="nav-btn" data-action="delete-travel" style="color:var(--red); border-color:var(--red);">削除</button>`;
+  }
+  // 承認後の取り消し（病気などで行けなくなった）
+  if (!isAdmin && ['approved'].includes(t.status)) {
+    html += `<button class="nav-btn" data-action="cancel-travel" style="color:var(--red); border-color:var(--red);">🚫 行けなくなった（取り消す）</button>`;
+  }
+  if (!isAdmin && t.status === 'requested') {
+    html += `<button class="nav-btn" data-action="withdraw-travel" style="color:var(--orange); border-color:var(--orange);">↩️ 申請を取り下げる</button>`;
+  }
+  if (isAdmin && t.status === 'requested') {
+    html += `<button class="primary-btn" data-action="approve-travel" style="background:var(--green);">✅ 承認する</button>
+             <button class="nav-btn" data-action="reject-travel" style="color:var(--orange); border-color:var(--orange);">❌ 却下</button>`;
+  }
+  html += `</div>`;
+  if (t.reject_reason) {
+    html += `<div style="margin-top:10px; padding:10px 14px; background:#ffe9e9; border-left:5px solid var(--red); border-radius:6px;">
+      <strong style="color:var(--red);">却下の理由</strong><br>${t.reject_reason}</div>`;
+  }
+  if (t.status === 'canceled') {
+    html += `<div style="margin-top:10px; padding:10px 14px; background:#f5f5f5; border-left:5px solid #888; border-radius:6px;">
+      <strong>この出張は取り消されました</strong><br>
+      <span style="font-size:0.9rem; color:#555;">理由：${t.cancel_reason || '（記載なし）'}</span><br>
+      <span style="font-size:0.86rem; color:#888;">
+      勤務予定が出張のままになっていないか、確かめてください。
+      戻すときは「勤務予定の変更を申請する」から出します。</span></div>`;
+  }
+  html += `</div>`;
+  return html;
 }
 
 // 【2026-09-05】早出・延長の指示（上司が前もって出す）
@@ -4564,7 +5755,7 @@ function renderOtOrders() {
       <strong style="font-size:0.95rem;">＋ ${d} の指示を出す</strong>
       <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-top:10px;">
         <select id="order-emp">
-          ${emps.map(e2 => `<option value="${e2.id}">${e2.emoji} ${e2.name}</option>`).join('')}
+          ${emps.filter(canDeclareOt).map(e2 => `<option value="${e2.id}">${e2.emoji} ${e2.name}</option>`).join('')}
         </select>
         <select id="order-type">
           <option value="overtime">🌙 延長</option>
@@ -5369,7 +6560,8 @@ function renderPersonal() {
   const declCount = listDeclarable(emp.id, DECLARE_BACK_DAYS).length;
   const declPending = (state.change_requests || []).filter(r =>
     r.emp_id === emp.id && r.status === 'pending' && (r.type === 'early' || r.type === 'overtime')).length;
-  html += `
+  // 【2026-09-07】残業が付かない区分の方には、この欄そのものを出さない
+  if (canDeclareOt(emp)) html += `
     <div class="card" style="background:${declCount > 0 ? '#fff8e1' : '#fafafa'};">
       <div style="display:flex; align-items:center; gap:14px; flex-wrap:wrap;">
         <div style="font-size:1.8rem;">📝</div>
@@ -5384,7 +6576,32 @@ function renderPersonal() {
         <div style="display:flex; flex-direction:column; gap:6px;">
           <button class="primary-btn" data-action="go-ot-declare" style="background:var(--orange); white-space:nowrap;">📝 実績を申告する</button>
           <button class="nav-btn" data-action="go-ot-request" style="white-space:nowrap; background:#fff8e1; border-color:#d9b347; color:#b87b00; font-weight:bold;">📋 これからの分を申請</button>
+
         </div>
+      </div>
+    </div>
+  `;
+
+  // 🧳 出張の申請・報告（2026-09-07）
+  //   残業が付かない区分の方も使うので、早出・延長とは別のカードにする
+  const tvOpen = (state.travels || []).filter(t => t.emp_id === emp.id &&
+    ['hold', 'draft', 'requested', 'approved', 'reported'].includes(t.status)).length;
+  const tvUns = (state.travels || []).filter(t => t.emp_id === emp.id && travelUnsettled(t)).length;
+  const tvHold = (state.travels || []).filter(t => t.emp_id === emp.id && travelHoldStale(t)).length;
+  html += `
+    <div class="card" style="background:#fafafa;">
+      <div style="display:flex; align-items:center; gap:14px; flex-wrap:wrap;">
+        <div style="font-size:1.8rem;">🧳</div>
+        <div style="flex:1; min-width:180px;">
+          <div style="font-weight:bold; font-size:1.02rem;">出張の申請・報告</div>
+          <div style="font-size:0.85rem; color:#666; margin-top:2px;">
+            期間・訪問先・目的を申請し、帰ったら報告を書きます
+            ${tvOpen > 0 ? `<br><span style="color:var(--header); font-weight:bold;">進行中：${tvOpen}件</span>` : ''}
+            ${tvUns > 0 ? `<br><span style="color:var(--red); font-weight:bold;">⚠️ 未精算：${tvUns}件　報告を書いてください</span>` : ''}
+            ${tvHold > 0 ? `<br><span style="color:#7b1fa2; font-weight:bold;">📅 期間だけのまま日が来ています：${tvHold}件</span>` : ''}
+          </div>
+        </div>
+        <button class="primary-btn" data-action="go-travel-list" style="background:var(--header); white-space:nowrap;">🧳 開く</button>
       </div>
     </div>
   `;
@@ -5800,6 +7017,183 @@ const DECLARE_BACK_DAYS = 14;   // 早出・延長・移動をさかのぼって
 
 // その日の予定始業・終業を返す。無ければ null。
 // 日別勤務計画が最優先、無ければ曜日別の標準パターン。
+// =========================================================
+// 【2026-09-07】勤務計画から、その月の所定労働時間を積み上げる
+//   計画ができた時点で、月に何時間になるかが分かるようにする。
+//   ・所定 … 計画の始業〜終業から休憩を引いた時間
+//   ・法定の枠 … 週40時間 × その月の日数 ÷ 7
+//   ・週ごとの合計も出す（週40時間を超える週を、計画の時点で見つけるため）
+// =========================================================
+// その月の契約時間（月間勤務計画の上書きがあればそれ、無ければ従業員マスタ）
+function contractHoursOf(empId, year, month) {
+  const p = (state.work_plans || []).find(wp => wp.employee_id === empId && wp.year === year && wp.month === month);
+  if (p && p.contract_hours) return p.contract_hours;
+  const e = state.employees.find(x => x.id === empId);
+  return e ? (e.monthly_contract_hours || null) : null;
+}
+
+function monthPlanTotals(empId, year, month) {
+  const lastDay = new Date(year, month, 0).getDate();
+  let workDays = 0, offDays = 0, netMin = 0, noTimeDays = 0;
+  const weeks = {};   // 週の頭（日曜）の日付 → { min, days }
+  for (let d = 1; d <= lastDay; d++) {
+    const dateObj = new Date(year, month - 1, d);
+    const p = getPlannedTimesWithLeave(empId, dateObj);
+    // 週の頭（日曜）を求める
+    const wk = new Date(dateObj);
+    wk.setDate(wk.getDate() - wk.getDay());
+    const wkKey = wk.getFullYear() + '-' + String(wk.getMonth() + 1).padStart(2, '0') + '-' + String(wk.getDate()).padStart(2, '0');
+    if (!weeks[wkKey]) weeks[wkKey] = { min: 0, days: 0 };
+    if (!p) { offDays++; continue; }
+    workDays++;
+    weeks[wkKey].days++;
+    if (!hasPlannedTimes(p)) { noTimeDays++; continue; }   // 出勤だけ決めた日（残業なしの区分）
+    const brk = getPlannedBreakMin(empId, dateObj, parseTimeStr(p.end) - parseTimeStr(p.start));
+    const m = Math.max(0, (parseTimeStr(p.end) - parseTimeStr(p.start)) - brk);
+    netMin += m;
+    weeks[wkKey].min += m;
+  }
+  // 法定の枠（週40時間 × 日数 ÷ 7）
+  const legalCapMin = Math.floor(40 * 60 * lastDay / 7);
+  const overWeeks = Object.keys(weeks)
+    .filter(k => weeks[k].min > 40 * 60)
+    .map(k => ({ from: k, min: weeks[k].min, days: weeks[k].days, over: weeks[k].min - 40 * 60 }))
+    .sort((a, b) => a.from.localeCompare(b.from));
+  return { workDays, offDays, netMin, noTimeDays, legalCapMin, weeks, overWeeks, lastDay };
+}
+
+// 割増の内訳と、36協定・休日のアラームを1枚に出す
+function renderPremiumBox(empId, year, month, emp) {
+  const pr = monthPremium(empId, year, month);
+  const w36 = check36(empId, year, month);
+  const wk = checkWeeks(empId, year, month);
+  const rate = showsWage(emp) ? (contractRateOf(empId, year, month) || 0) : 0;
+
+  let html = `<h3 style="margin-top:20px;">労働時間の内訳（割増）</h3>
+    <table style="max-width:620px;"><thead><tr>
+      <th></th><th style="text-align:right;">時間</th>
+      ${rate > 0 ? '<th style="text-align:right;">単価</th><th style="text-align:right;">金額</th>' : ''}
+    </tr></thead><tbody>
+      <tr><th style="width:14em;">通常（1.00）</th><td style="text-align:right;">${formatMinutes(pr.normal)}</td>
+        ${rate > 0 ? `<td style="text-align:right; color:#888;">${rate.toLocaleString()}</td>
+        <td style="text-align:right;">${wageOfMinutes(pr.normal, rate).toLocaleString()} 円</td>` : ''}</tr>
+      <tr><th>時間外（1.25）</th><td style="text-align:right; ${pr.ot125 > 0 ? 'font-weight:bold;' : 'color:#aaa;'}">${formatMinutes(pr.ot125)}</td>
+        ${rate > 0 ? `<td style="text-align:right; color:#888;">${Math.round(rate * 1.25).toLocaleString()}</td>
+        <td style="text-align:right;">${wageOfMinutes(pr.ot125, rate * 1.25).toLocaleString()} 円</td>` : ''}</tr>
+      ${pr.ot150 > 0 ? `<tr style="background:#ffe9e9;"><th>時間外 月60時間超（1.50）</th>
+        <td style="text-align:right; font-weight:bold; color:var(--red);">${formatMinutes(pr.ot150)}</td>
+        ${rate > 0 ? `<td style="text-align:right; color:#888;">${Math.round(rate * 1.5).toLocaleString()}</td>
+        <td style="text-align:right;">${wageOfMinutes(pr.ot150, rate * 1.5).toLocaleString()} 円</td>` : ''}</tr>` : ''}
+      ${pr.night > 0 ? `<tr><th>深夜（＋0.25）</th><td style="text-align:right; font-weight:bold;">${formatMinutes(pr.night)}</td>
+        ${rate > 0 ? `<td style="text-align:right; color:#888;">${Math.round(rate * 0.25).toLocaleString()}</td>
+        <td style="text-align:right;">${wageOfMinutes(pr.night, rate * 0.25).toLocaleString()} 円</td>` : ''}</tr>` : ''}
+      <tr style="background:var(--green-bg);"><th>時間外の合計</th>
+        <td style="text-align:right; font-weight:bold;">${formatMinutes(pr.totalOt)}</td>
+        ${rate > 0 ? '<td></td><td></td>' : ''}</tr>
+    </tbody></table>
+    <div class="form-hint" style="margin-top:8px;">
+      所定を超えた分がそのまま1.25倍ではありません。<strong>1日8時間・週40時間を超えてから</strong>が割増の対象です。<br>
+      休日に出た日は勤務計画を出勤に変更する運用のため、法定休日の1.35倍は使っていません。
+      ${!showsWage(emp) ? '<br>社員の方は月給のため、金額は出していません。時間だけお出ししています。' : ''}
+    </div>`;
+
+  // 週のアラーム
+  const bad = wk.filter(x => x.offDays === 0);
+  const warn = wk.filter(x => x.offDays === 1 || x.over > 0);
+  if (bad.length > 0 || warn.length > 0) {
+    html += `<h3 style="margin-top:20px;">週ごとの注意</h3>`;
+    for (const x of bad) {
+      html += `<div style="padding:12px 14px; background:#ffe9e9; border-left:5px solid var(--red); border-radius:6px; margin-bottom:8px;">
+        <strong style="color:var(--red);">🚨 ${x.from}の週　休みが1日もありません（出勤${x.workDays}日・${formatMinutes(x.min)}）</strong><br>
+        <span style="font-size:0.88rem; color:#555;">
+        法定の週1日の休みがありません。<strong>買い上げでは解消できません。</strong>必ず休みを取らせてください。</span></div>`;
+    }
+    for (const x of warn) {
+      html += `<div style="padding:12px 14px; background:#fff8e1; border-left:5px solid var(--yellow); border-radius:6px; margin-bottom:8px;">
+        <strong style="color:#b87b00;">⚠️ ${x.from}の週　${formatMinutes(x.min)}（出勤${x.workDays}日・休み${x.offDays}日）</strong><br>
+        <span style="font-size:0.88rem; color:#555;">
+        ${x.over > 0 ? `法定40時間を <strong>${formatMinutes(x.over)}</strong> 超えています。次週以降で取り戻してください。<br>
+          <strong>取り戻しても、超えた分の割増（1.25倍）は消えません。</strong>` :
+          '週休二日を割っています。二日目を削ると週40時間を超えやすくなります。'}
+        </span></div>`;
+    }
+  }
+
+  // 36協定
+  html += `<h3 style="margin-top:20px;">36協定</h3>
+    <table style="max-width:520px;"><tbody>
+      <tr><th style="width:14em;">当月の時間外</th><td style="text-align:right; font-weight:bold;">${formatMinutes(w36.cur)}</td>
+        <td style="color:#888; font-size:0.85rem;">原則 45:00</td></tr>
+      <tr><th>今年の累計</th><td style="text-align:right;">${formatMinutes(w36.yearOt)}</td>
+        <td style="color:#888; font-size:0.85rem;">原則 360:00 ／ 上限 720:00</td></tr>
+      <tr><th>月45時間を超えた月</th><td style="text-align:right;">${w36.over45} 回</td>
+        <td style="color:#888; font-size:0.85rem;">年6回まで</td></tr>
+    </tbody></table>`;
+  if (w36.alerts.length > 0) {
+    for (const a of w36.alerts) {
+      const bad2 = a.level === 'bad';
+      html += `<div style="padding:12px 14px; margin-top:8px; border-radius:6px;
+        background:${bad2 ? '#ffe9e9' : '#fff8e1'}; border-left:5px solid ${bad2 ? 'var(--red)' : 'var(--yellow)'};">
+        <strong style="color:${bad2 ? 'var(--red)' : '#b87b00'};">${bad2 ? '🚨' : '⚠️'} ${a.text}</strong></div>`;
+    }
+  } else {
+    html += `<div class="form-hint" style="margin-top:8px; color:var(--green);">✅ いまのところ、上限の範囲に収まっています。</div>`;
+  }
+  html += `<div class="form-hint" style="margin-top:8px;">
+    2026年9月から、月45時間超で一律に指導票が出る運用は廃止されました。
+    <strong>上限そのものは変わっていません。</strong>指導が来なくなったぶん、ここで見ておいてください。
+  </div>`;
+  return html;
+}
+
+// その月の時給（月間勤務計画の上書きがあればそれ）
+function contractRateOf(empId, year, month) {
+  const p = (state.work_plans || []).find(wp => wp.employee_id === empId && wp.year === year && wp.month === month);
+  if (p && p.hourly_rate) return p.hourly_rate;
+  const e = state.employees.find(x => x.id === empId);
+  return e ? (e.hourly_rate || null) : null;
+}
+
+// 計画の合計を1枚にまとめて出す（月間勤務計画・従業員マスタ・本人のカレンダーで使う）
+function renderPlanTotalBox(empId, year, month, contractHours) {
+  const t = monthPlanTotals(empId, year, month);
+  if (t.workDays === 0) {
+    return `<div style="padding:12px 14px; background:#fafafa; border-left:5px solid #ccc; border-radius:6px; font-size:0.9rem;">
+      <strong>${year}年${month}月の勤務計画は、まだ入っていません。</strong><br>
+      <span style="color:#888;">「🗓️ 日別計画作成」で標準パターンか月別の計画を決めてください。</span>
+    </div>`;
+  }
+  const over = (contractHours != null && contractHours > 0) ? t.netMin - contractHours * 60 : null;
+  const legalOver = t.netMin - t.legalCapMin;
+  let html = `<div style="padding:12px 14px; background:#e8f4ee; border-left:5px solid var(--green); border-radius:6px; font-size:0.92rem; line-height:1.9;">
+    <strong>📊 ${year}年${month}月の計画</strong><br>
+    出勤 <strong>${t.workDays}日</strong> ／ 休日 <strong>${t.offDays}日</strong>
+    ${t.noTimeDays > 0 ? `<span style="color:#888;">（うち時刻なし ${t.noTimeDays}日）</span>` : ''}<br>
+    所定労働時間 <strong style="font-size:1.05rem;">${formatMinutes(t.netMin)}</strong>`;
+  if (contractHours != null && contractHours > 0) {
+    html += `　／　契約 ${contractHours}時間
+      ${over > 0 ? `<br><span style="color:var(--red); font-weight:bold;">⚠️ 契約を ${formatMinutes(over)} 超えています</span>`
+                 : `<br><span style="color:var(--green);">✅ 契約の中に収まっています（残り ${formatMinutes(-over)}）</span>`}`;
+  }
+  html += `<br><span style="color:#666;">法定の枠 ${formatMinutes(t.legalCapMin)}（週40時間 × ${t.lastDay}日 ÷ 7）</span>
+    ${legalOver > 0 ? `<br><span style="color:var(--red); font-weight:bold;">⚠️ 法定の枠を ${formatMinutes(legalOver)} 超えています</span>` : ''}`;
+  if (t.overWeeks.length > 0) {
+    html += `<div style="margin-top:8px; padding:10px 12px; background:#ffe9e9; border-radius:6px;">
+      <strong style="color:var(--red);">⚠️ 週40時間を超える週が ${t.overWeeks.length} つあります</strong><br>
+      <span style="font-size:0.86rem;">
+      ${t.overWeeks.map(x => `${x.from}の週　${x.days}日　${formatMinutes(x.min)}（${formatMinutes(x.over)}超過）`).join('<br>')}
+      </span><br>
+      <span style="font-size:0.84rem; color:#555;">
+      超えた分は<strong>1.25倍</strong>の対象です。計画のうちに休日を入れ替えるか、次週以降で取り戻してください。</span>
+    </div>`;
+  }
+  html += `</div>`;
+  return html;
+}
+
+// 【2026-09-07】時刻の入っていない計画（残業なしの区分の「出勤だけ」）を弾く
+function hasPlannedTimes(p) { return !!(p && p.start && p.end); }
+
 function getPlannedTimes(empId, dateObj) {
   const y = dateObj.getFullYear(), m = dateObj.getMonth() + 1, d = dateObj.getDate();
   const dp = (state.daily_plans || []).find(x => x.employee_id === empId && x.year === y && x.month === m);
@@ -6120,6 +7514,8 @@ function canDeclare(empId, dateStr, kind) {
 // 戻り値：{ early_min, overtime_min, grace_min, need_min, sum } / 予定が無い日は null
 function findDeclarable(empId, dateObj) {
   const dateStr = isoDateOnly(dateObj);
+  const emp0 = state.employees.find(e => e.id === empId);
+  if (!canDeclareOt(emp0)) return null;             // 【2026-09-07】残業が付かない立場の方
   if (shucchouOfDay(empId, dateStr)) return null;   // 【2026-09-05】出張の日は早出も延長も付かない
   const sum = calcDayLaborSummary(empId, dateObj);
   if (!sum || !sum.has_plan || !sum.start_time) return null;
@@ -9758,6 +11154,39 @@ function renderAppSettings() {
     </div>
 
     <div class="card admin-section">
+      <h2>🧳 出張の規定（全員共通）</h2>
+      <div class="form-hint" style="margin-bottom:14px;">
+        日当と宿泊費の上限です。<strong>額が決まったら入れてください。</strong>0のままだと計算されません。
+      </div>
+      <div class="emp-form">
+        <div class="form-row">
+          <label class="form-label">日当</label>
+          <div style="display:flex; align-items:center; gap:8px;">
+            <input type="number" id="setting-allow-day" value="${state.app_settings.allowance_day != null ? state.app_settings.allowance_day : 2000}" min="0" step="100" style="width:120px;" />
+            <span>円／日</span>
+          </div>
+          <div class="form-hint">
+            <strong>初日から最終日の前日まで</strong>に付きます。<br>
+            初日は移動が遅くても日中は仕事をしてもらうため付き、
+            <strong>最終日は朝から帰るだけなので付きません。</strong><br>
+            日帰りは0円です。
+          </div>
+        </div>
+        <div class="form-row">
+          <label class="form-label">宿泊費の上限</label>
+          <div style="display:flex; align-items:center; gap:8px;">
+            <input type="number" id="setting-hotel-limit" value="${state.app_settings.hotel_limit != null ? state.app_settings.hotel_limit : 0}" min="0" step="500" style="width:120px;" />
+            <span>円／泊</span>
+          </div>
+          <div class="form-hint">0 のときは上限なしとして扱います。</div>
+        </div>
+        <div class="form-actions">
+          <button class="primary-btn" data-action="save-travel-settings">💾 出張の規定を保存</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="card admin-section">
       <h2>🧪 テスト・動作確認用（注意）</h2>
       <div class="form-hint" style="margin-bottom:14px;">
         テストや動作確認のため、打刻・記録のみをクリアできます。<br>
@@ -9884,11 +11313,39 @@ function renderEmployeeEdit() {
           <div class="form-hint">漢字またはカタカナで入力</div>
         </div>
         <div class="form-row">
+          <label class="form-label">区分</label>
+          <select id="ef-emp-type" data-action="ef-type-change" onchange="toggleEmpTypeRows()">
+            <option value="part"${!emp || emp.emp_type !== 'staff' ? ' selected' : ''}>パート（時給で計算する）</option>
+            <option value="staff"${emp && emp.emp_type === 'staff' ? ' selected' : ''}>社員（月給。時給は使わない）</option>
+          </select>
+          <div class="form-hint">
+            社員は<strong>名前と残業の有無だけ</strong>で足ります。時給は使いません。<br>
+            残業は時間（分）だけ記録し、金額は出しません。
+          </div>
+        </div>
+        <div class="form-row">
+          <label class="form-label">残業（早出・延長）</label>
+          <label style="display:flex; align-items:center; gap:8px; font-size:0.98rem;">
+            <input type="checkbox" id="ef-ot-eligible" ${!emp || emp.ot_eligible !== false ? 'checked' : ''} />
+            <span>早出・延長が付く</span>
+          </label>
+          <div class="form-hint">
+            外すと、この方は<strong>早出・延長を申請できなくなります</strong>。管理監督者など、残業が付かない立場の方に使います。
+          </div>
+        </div>
+        <div id="ef-staff-note" class="form-row" style="display:none;">
+          <div style="padding:10px 14px; background:#e8eef5; border-left:5px solid var(--header); border-radius:6px; font-size:0.9rem; line-height:1.8;">
+            社員は<strong>月給</strong>のため、月間契約労働時間・時給・扶養区分は使いません。<br>
+            残業は<strong>時間（分）だけ</strong>記録します。金額は出しません。
+          </div>
+        </div>
+        <div class="form-row ef-part-only">
           <label class="form-label">月間契約労働時間 <span class="required">必須</span></label>
           <div style="display:flex; align-items:center; gap:8px;">
             <input type="number" id="ef-contract-hours" value="${emp ? (emp.monthly_contract_hours || 120) : 120}" min="0" max="200" step="1" style="width:120px;" />
             <span>時間／月</span>
           </div>
+          ${emp ? `<div style="margin-top:10px;">${renderPlanTotalBox(emp.id, new Date().getFullYear(), new Date().getMonth() + 1, emp.monthly_contract_hours || null)}</div>` : ''}
           <div class="form-hint">例：120時間／月</div>
         </div>
         <div class="form-row">
@@ -9917,7 +11374,7 @@ function renderEmployeeEdit() {
             <input type="hidden" id="ef-emoji" value="${currentEmoji}" />
           </div>
         </div>
-        <div class="form-row">
+        <div class="form-row ef-part-only">
           <label class="form-label">時給 <span class="required">必須</span></label>
           <div style="display:flex; align-items:center; gap:8px;">
             <input type="number" id="ef-hourly-rate" value="${emp ? (emp.hourly_rate || '') : ''}" min="0" max="10000" step="10" style="width:120px;" placeholder="1000" />
@@ -9952,7 +11409,7 @@ function renderEmployeeEdit() {
             業務で自家用車を使う以上、必ず確認してください。満期の2か月前から画面でお知らせします。
           </div>
         </div>
-        <div class="form-row">
+        <div class="form-row ef-part-only">
           <label class="form-label">扶養区分</label>
           <select id="ef-fuyo">
             <option value="inside" ${(!emp || (emp.fuyo_type || 'inside') === 'inside') ? 'selected' : ''}>扶養内（目標所得から総枠を逆算）</option>
@@ -10028,6 +11485,11 @@ function renderWorkPlan() {
     </div>
     <div class="card admin-section">
       <h2>📅 月間勤務計画（${year}年${month}月）</h2>
+      <div class="form-hint" style="margin-bottom:10px;">
+        月ごとの<strong>時給と契約時間</strong>を決めるところです。<br>
+        時給を使わない社員の方は<span style="color:#888;">グレー</span>で出しています。登録は要りません。<br>
+        始業・終業・休憩は「🗓️ 日別計画作成」で決めます。
+      </div>
       <div style="margin-bottom:14px; display:flex; gap:12px; align-items:center;">
         <label class="form-label" style="margin:0;">対象月</label>
         <select id="plan-ym" data-action="change-plan-ym">${monthOptions.join('')}</select>
@@ -10045,12 +11507,18 @@ function renderWorkPlan() {
     const faceCell = emp.photo 
       ? `<img src="${emp.photo}" style="width:36px;height:36px;border-radius:50%;object-fit:cover;" alt=""/>`
       : `<span style="font-size:1.4rem;">${emp.emoji}</span>`;
-    const baseCh = emp.monthly_contract_hours ? `${emp.monthly_contract_hours}h` : '-';
-    const planRate = plan ? `${plan.hourly_rate.toLocaleString()}円` : '<span style="color:#bbb;">未設定</span>';
-    const planHours = plan ? `${plan.contract_hours}h` : '<span style="color:#bbb;">未設定</span>';
+    const baseCh = isStaff(emp) ? '<span style="color:#ccc;">—</span>'
+      : (emp.monthly_contract_hours ? `${emp.monthly_contract_hours}h` : '-');
+    // 【2026-09-07】社員は月給なので、時給と契約時間を使わない
+    const noWage = isStaff(emp);
+    const planRate = noWage ? '<span style="color:#ccc;">—</span>'
+      : (plan ? `${plan.hourly_rate.toLocaleString()}円` : '<span style="color:#bbb;">未設定</span>');
+    const planHours = noWage ? '<span style="color:#ccc;">—</span>'
+      : (plan ? `${plan.contract_hours}h` : '<span style="color:#bbb;">未設定</span>');
     const planNotes = plan ? (plan.notes || '') : '';
-    const btnLabel = plan ? '編集' : '＋登録';
+    const btnLabel = noWage ? '—' : (plan ? '編集' : '＋登録');
     const btnStyle = plan ? '' : 'background:var(--green); color:white; border-color:var(--green);';
+    if (noWage) { /* 社員は月給。この画面での登録は要らない */ }
     html += `<tr>
       <td>${emp.id}</td>
       <td style="text-align:center;">${faceCell}</td>
@@ -10059,7 +11527,8 @@ function renderWorkPlan() {
       <td>${planRate}</td>
       <td>${planHours}</td>
       <td style="font-size:0.85rem; color:#555;">${planNotes}</td>
-      <td><button class="nav-btn" data-action="edit-work-plan" data-emp-id="${emp.id}" style="padding:4px 10px; font-size:0.85rem; ${btnStyle}">${btnLabel}</button></td>
+      <td>${noWage ? '<span style="color:#ccc; font-size:0.85rem;">登録は要りません</span>'
+        : `<button class="nav-btn" data-action="edit-work-plan" data-emp-id="${emp.id}" style="padding:4px 10px; font-size:0.85rem; ${btnStyle}">${btnLabel}</button>`}</td>
     </tr>`;
   }
   if (activeEmps.length === 0) {
@@ -10103,8 +11572,13 @@ function renderWorkPlanEdit() {
           <div style="font-size:0.85rem; color:#888;">登録時の月契約：${emp.monthly_contract_hours || '-'}時間／月</div>
         </div>
       </div>
-      <div class="emp-form">
-        <div class="form-row">
+      ${renderPlanTotalBox(empId, year, month, isStaff(emp) ? null : hours)}
+      ${isStaff(emp) ? `<div style="margin-top:14px; padding:12px 14px; background:#e8eef5; border-left:5px solid var(--header); border-radius:6px; font-size:0.92rem; line-height:1.8;">
+        <strong>この方は社員です。</strong>月給のため、時給と契約労働時間は使いません。<br>
+        始業・終業・休憩は「🗓️ 日別計画作成」で決めてください。
+      </div>` : ''}
+      <div class="emp-form" style="margin-top:14px;">
+        <div class="form-row ${isStaff(emp) ? 'wp-part-only' : ''}" ${isStaff(emp) ? 'style="display:none;"' : ''}>
           <label class="form-label">当月の時給 <span class="required">必須</span></label>
           <div style="display:flex; align-items:center; gap:8px;">
             <input type="number" id="wp-rate" value="${rate}" min="0" step="10" style="width:140px;" />
@@ -10112,7 +11586,7 @@ function renderWorkPlanEdit() {
           </div>
           <div class="form-hint">給与計算用。画面には表示されません</div>
         </div>
-        <div class="form-row">
+        <div class="form-row ${isStaff(emp) ? 'wp-part-only' : ''}" ${isStaff(emp) ? 'style="display:none;"' : ''}>
           <label class="form-label">当月の契約労働時間 <span class="required">必須</span></label>
           <div style="display:flex; align-items:center; gap:8px;">
             <input type="number" id="wp-hours" value="${hours}" min="0" max="200" step="1" style="width:140px;" />
@@ -10153,6 +11627,190 @@ function formatTimeStr(minutes) {
 // 労基法準拠の自動休憩計算
 // 【2026-09-04 幸采事務所版】brk を渡すとその休憩で計算する。
 //   ただし労基法の下限は下回らせない（下回る数字が来たら下限まで引き上げる）。
+// =========================================================
+// 【2026-09-07】割増（労働基準法37条）
+//
+//   時間外（法定労働時間超）      1.25
+//   　うち月60時間を超えた分       1.50
+//   深夜（22:00〜翌5:00）         +0.25
+//   法定休日                      1.35 … このアプリでは使いません。
+//                                 休日に出るときは勤務計画を出勤に変更する
+//                                 （振替）ため、法定休日労働になりません。
+//
+//   大事な点：所定を超えた分がそのまま1.25倍ではありません。
+//   所定7時間の人が7時間35分働いても、法定8時間の中なので1.0倍です。
+//   1.25倍になるのは、1日8時間・週40時間を超えてからです。
+// =========================================================
+const LEGAL_DAY_MIN = 8 * 60;        // 1日の法定労働時間
+const LEGAL_WEEK_MIN = 40 * 60;      // 1週の法定労働時間
+const OT60_MIN = 60 * 60;            // 月60時間
+const NIGHT_FROM = 22 * 60;          // 深夜の始まり 22:00
+const NIGHT_TO = 5 * 60;             // 深夜の終わり 翌5:00
+
+// その日の労働のうち、深夜（22:00〜翌5:00）にかかる分
+function nightMinutesOfDay(empId, dateStr) {
+  const punches = state.punches
+    .filter(p => p.employee_id === empId && isOnDate(p.timestamp, dateStr))
+    .sort((a, b) => String(a.timestamp).localeCompare(String(b.timestamp)));
+  const st = punches.find(p => p.type === 'START');
+  if (!st) return 0;
+  const en = [...punches].reverse().find(p => p.type === 'END');
+  if (!en) return 0;
+  const base = new Date(dateStr + 'T00:00:00');
+  const a = Math.round((new Date(st.timestamp) - base) / 60000);
+  const b = Math.round((new Date(en.timestamp) - base) / 60000);
+  if (b <= a) return 0;
+  // 0:00〜5:00 と 22:00〜24:00 の2つの帯に重なる分
+  const lap = (s1, e1, s2, e2) => Math.max(0, Math.min(e1, e2) - Math.max(s1, s2));
+  return lap(a, b, 0, NIGHT_TO) + lap(a, b, NIGHT_FROM, 24 * 60);
+}
+
+// 週の頭（日曜）の日付
+function weekStartOf(dateStr) {
+  const d = new Date(dateStr + 'T00:00:00');
+  d.setDate(d.getDate() - d.getDay());
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+}
+
+// その月の割増の内訳を出す
+//   normal   … 1.00 の分
+//   ot125    … 1.25 の分（月60時間まで）
+//   ot150    … 1.50 の分（月60時間を超えた分）
+//   night    … 深夜の分（上の区分と重なる。+0.25 として別に足す）
+function monthPremium(empId, year, month) {
+  const lastDay = new Date(year, month, 0).getDate();
+  const days = [];
+  const weekSum = {};   // 週の頭 → その週のここまでの合計（分）
+  let totalOt = 0, normal = 0, night = 0;
+
+  for (let d = 1; d <= lastDay; d++) {
+    const ds = `${year}-${String(month).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+    const t = dayTotals(empId, ds);
+    const worked = t.workMinutes || 0;
+    if (worked <= 0) { days.push({ date: ds, worked: 0, ot: 0, normal: 0, night: 0 }); continue; }
+
+    // ① 1日8時間を超えた分
+    const otDay = Math.max(0, worked - LEGAL_DAY_MIN);
+    const inDay = worked - otDay;               // 8時間の中の分
+
+    // ② 週40時間を超えた分（①と重ならないように、8時間の中の分だけで数える）
+    const wk = weekStartOf(ds);
+    if (weekSum[wk] === undefined) weekSum[wk] = 0;
+    const before = weekSum[wk];
+    weekSum[wk] += inDay;
+    const otWeek = Math.max(0, weekSum[wk] - LEGAL_WEEK_MIN) - Math.max(0, before - LEGAL_WEEK_MIN);
+
+    const ot = otDay + otWeek;
+    const nrm = worked - ot;
+    const ni = nightMinutesOfDay(empId, ds);
+    totalOt += ot; normal += nrm; night += ni;
+    days.push({ date: ds, worked, ot, normal: nrm, night: ni });
+  }
+
+  // ③ 月60時間を超えた時間外は 1.50
+  const ot150 = Math.max(0, totalOt - OT60_MIN);
+  const ot125 = totalOt - ot150;
+  return { normal, ot125, ot150, night, totalOt, days };
+}
+
+// =========================================================
+// 【2026-09-07】36協定の上限と、休日のアラーム
+//
+//   36協定（労基法36条）
+//     原則      月45時間 ／ 年360時間
+//     特別条項  年720時間 ／ 単月100時間未満 ／ 複数月平均80時間以内
+//               月45時間を超えられるのは年6回まで
+//
+//   2026年9月から、月45時間超で一律に指導票が出る運用は廃止されました。
+//   ただし上限そのものは変わっていません。指導が来なくなったぶん、
+//   自分で見ておく必要があります。
+//
+//   休日
+//     法定は週1日。二日目を削ると、週40時間を超えます。
+//     超えた分の割増は、翌週に取り戻しても消えません。
+//     法定の週1日は、買い上げでは解消できません。必ず休ませてください。
+// =========================================================
+const OT_MONTH_LIMIT = 45 * 60;      // 36協定の原則（月）
+const OT_MONTH_HARD = 100 * 60;      // 単月の上限（未満であること）
+const OT_AVG_LIMIT = 80 * 60;        // 複数月平均
+const OT_YEAR_LIMIT = 360 * 60;      // 原則（年）
+const OT_YEAR_HARD = 720 * 60;       // 特別条項（年）
+const OT_OVER45_TIMES = 6;           // 月45時間超は年6回まで
+
+// その月の36協定まわりを見る
+function check36(empId, year, month) {
+  const cur = monthPremium(empId, year, month).totalOt;
+  // 直近6か月ぶん（平均を見るため）
+  const hist = [];
+  for (let i = 5; i >= 0; i--) {
+    const d = new Date(year, month - 1 - i, 1);
+    hist.push({ y: d.getFullYear(), m: d.getMonth() + 1,
+                ot: monthPremium(empId, d.getFullYear(), d.getMonth() + 1).totalOt });
+  }
+  // 2〜6か月の平均
+  const avgs = [];
+  for (let n = 2; n <= 6; n++) {
+    const part = hist.slice(-n);
+    const avg = part.reduce((a, x) => a + x.ot, 0) / n;
+    avgs.push({ n, avg });
+  }
+  // 年（その年の1月から当月まで）
+  let yearOt = 0, over45 = 0;
+  for (let m = 1; m <= month; m++) {
+    const o = monthPremium(empId, year, m).totalOt;
+    yearOt += o;
+    if (o > OT_MONTH_LIMIT) over45++;
+  }
+  const alerts = [];
+  if (cur >= OT_MONTH_HARD) {
+    alerts.push({ level: 'bad', text: `単月100時間の上限に達しています（${formatMinutes(cur)}）。100時間<strong>未満</strong>でなければなりません。` });
+  } else if (cur > OT_MONTH_LIMIT) {
+    alerts.push({ level: 'warn', text: `36協定の原則（月45時間）を超えています（${formatMinutes(cur)}）。特別条項の範囲で運用してください。` });
+  }
+  for (const a of avgs) {
+    if (a.avg > OT_AVG_LIMIT) {
+      alerts.push({ level: 'bad', text: `直近${a.n}か月の平均が80時間を超えています（平均 ${formatMinutes(Math.round(a.avg))}）。` });
+      break;
+    }
+  }
+  if (yearOt > OT_YEAR_HARD) {
+    alerts.push({ level: 'bad', text: `年720時間を超えています（${formatMinutes(yearOt)}）。` });
+  } else if (yearOt > OT_YEAR_LIMIT) {
+    alerts.push({ level: 'warn', text: `36協定の原則（年360時間）を超えています（${formatMinutes(yearOt)}）。` });
+  }
+  if (over45 > OT_OVER45_TIMES) {
+    alerts.push({ level: 'bad', text: `月45時間を超えた月が ${over45} 回あります。年6回までです。` });
+  } else if (over45 === OT_OVER45_TIMES) {
+    alerts.push({ level: 'warn', text: `月45時間を超えた月が ${over45} 回です。これ以上は超えられません。` });
+  }
+  return { cur, yearOt, over45, hist, avgs, alerts };
+}
+
+// その月の週ごとの実績（週40時間・休日）
+function checkWeeks(empId, year, month) {
+  const lastDay = new Date(year, month, 0).getDate();
+  const weeks = {};
+  for (let d = 1; d <= lastDay; d++) {
+    const ds = `${year}-${String(month).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+    const wk = weekStartOf(ds);
+    if (!weeks[wk]) weeks[wk] = { min: 0, workDays: 0, days: 0 };
+    weeks[wk].days++;
+    const t = dayTotals(empId, ds);
+    if (t.workMinutes > 0) { weeks[wk].min += t.workMinutes; weeks[wk].workDays++; }
+  }
+  const out = [];
+  for (const k of Object.keys(weeks).sort()) {
+    const w = weeks[k];
+    if (w.days < 7) continue;             // 月をまたぐ端の週は見ない
+    const over = w.min - LEGAL_WEEK_MIN;
+    const offDays = 7 - w.workDays;
+    if (over > 0 || offDays <= 1) {
+      out.push({ from: k, min: w.min, over: Math.max(0, over), workDays: w.workDays, offDays });
+    }
+  }
+  return out;
+}
+
 // 【2026-09-07】分と時給から賃金を出す。1円未満は切り上げ。
 //   60進法のまま計算する（0.58時間のような中途半端な数字を経由しない）。
 function wageOfMinutes(minutes, hourlyRate) {
@@ -10163,6 +11821,7 @@ function wageOfMinutes(minutes, hourlyRate) {
 }
 
 function calcLaborMinutes(start, end, brk) {
+  // 時刻が空でも壊れない（残業なしの区分は時刻を入れないことがある）
   if (!start || !end) return { grossMin: 0, breakMin: 0, netMin: 0 };
   const grossMin = parseTimeStr(end) - parseTimeStr(start);
   if (grossMin <= 0) return { grossMin: 0, breakMin: 0, netMin: 0 };
@@ -10375,6 +12034,9 @@ function renderPatternEdit() {
         <button class="nav-btn" data-action="back-daily-plan-list">キャンセル</button>
       </div>
       <div class="form-hint" style="margin-top:10px;">
+        ${isNoOt(emp) ? `<strong style="color:var(--header);">この方は残業が付かない区分です。</strong>
+          <strong>出勤か休日かだけ</strong>決まっていれば足ります。時刻は空のままで構いません。<br>
+          （出張を入れるために、出勤日と休日は決めておいてください）<br>` : ''}
         💡 休憩は法令の下限が最初から入ります。長くするのは自由ですが、<strong>下限より短くはできません</strong>。<br>
         💡 時刻を入力すると拘束時間・休憩・実労働が自動計算されます。休憩は労基法準拠（6h超→45分、8h45m超→60分）。
       </div>
@@ -12583,7 +14245,12 @@ function getAdminTodoCount() {
   const trip = (state.trips || []).filter(t => t.status === 'pending').length;
   const claim = (state.punch_claims || []).filter(c => c.status === 'pending').length;
   const order = (state.ot_orders || []).filter(o => (o.status || 'approved') === 'pending').length;
-  return { requests: req, trips: trip, claims: claim, orders: order, total: req + trip + claim + order };
+  const trv = (state.travels || []).filter(t => t.status === 'requested').length;
+  const trvRep = (state.travels || []).filter(t => t.status === 'reported').length;
+  const trvUns = (state.travels || []).filter(travelUnsettled).length;
+  return { requests: req, trips: trip, claims: claim, orders: order, travels: trv, travelReports: trvRep,
+           travelUnsettled: trvUns,
+           total: req + trip + claim + order + trv + trvRep };
 }
 
 // 【2026-09-04 幸采事務所版】本人の「やること」件数
@@ -12596,7 +14263,8 @@ function getEmployeeTodoCount(empId) {
   const waiting = (state.change_requests || []).filter(r => r.emp_id === empId && r.status === 'pending').length
                 + (state.trips || []).filter(t => t.emp_id === empId && t.status === 'pending').length
                 + (state.punch_claims || []).filter(c => c.emp_id === empId && c.status === 'pending').length
-                + (state.ot_orders || []).filter(o => o.emp_id === empId && (o.status || 'approved') === 'pending').length;
+                + (state.ot_orders || []).filter(o => o.emp_id === empId && (o.status || 'approved') === 'pending').length
+                + (state.travels || []).filter(t => t.emp_id === empId && ['requested', 'reported'].includes(t.status)).length;
   const confirm = getUnreadNotifications(empId).length;
   return { need, waiting, confirm };
 }
@@ -13475,6 +15143,9 @@ function renderAdmin() {
                 todo.trips    > 0 ? `移動記録 ${todo.trips}件` : '',
                 todo.claims   > 0 ? `打刻もれ申告 ${todo.claims}件` : '',
                 todo.orders   > 0 ? `早出延長の事前申請 ${todo.orders}件` : '',
+                todo.travels  > 0 ? `出張の申請 ${todo.travels}件` : '',
+                todo.travelReports > 0 ? `出張の報告 ${todo.travelReports}件` : '',
+                todo.travelUnsettled > 0 ? `未精算の出張 ${todo.travelUnsettled}件` : '',
               ].filter(Boolean).join(' ／ ')}
             </span>
           </div>
@@ -13483,6 +15154,7 @@ function renderAdmin() {
             ${todo.trips    > 0 ? `<button class="approval-badge-btn" data-action="go-trips" style="background:#1f4e79;">🚗 移動記録 ${todo.trips}件 →</button>` : ''}
             ${todo.claims   > 0 ? `<button class="approval-badge-btn" data-action="go-claims" style="background:#c62828;">🛠 打刻もれ申告 ${todo.claims}件 →</button>` : ''}
             ${todo.orders   > 0 ? `<button class="approval-badge-btn" data-action="go-ot-orders" style="background:#b87b00;">📋 事前申請 ${todo.orders}件 →</button>` : ''}
+            ${(todo.travels + todo.travelReports) > 0 ? `<button class="approval-badge-btn" data-action="go-travel-admin" style="background:#1f4e79;">🧳 出張 ${todo.travels + todo.travelReports}件 →</button>` : ''}
           </div>
         </div>
       </div>
@@ -13506,6 +15178,7 @@ function renderAdmin() {
         <button class="nav-btn" data-action="go-month-sum-admin" style="background:#e8eef5; color:#1f4e79; border-color:#1f4e79; font-weight:bold;">📊 月別集計</button>
         <button class="nav-btn" data-action="go-claims" style="background:#ffebee; color:#c62828; border-color:#c62828; font-weight:bold;">🛠 打刻もれ申告</button>
         <button class="nav-btn" data-action="go-ot-orders" style="background:#fff8e1; color:#b87b00; border-color:#d9b347; font-weight:bold;">📋 早出・延長の指示</button>
+        <button class="nav-btn" data-action="go-travel-admin" style="background:#e8eef5; color:#1f4e79; border-color:#1f4e79; font-weight:bold;">🧳 出張</button>
         <button class="nav-btn" data-action="go-insurance" style="background:#e8eef5; color:#1f4e79; border-color:#1f4e79; font-weight:bold;">🚗 通勤距離・任意保険</button>
         <button class="nav-btn" data-action="go-permits" style="background:#e8eef5; color:#1f4e79; border-color:#1f4e79; font-weight:bold;">🔑 運転許可</button>
         <button class="nav-btn" data-action="go-trips" style="background:#e8eef5; color:#1f4e79; border-color:#1f4e79; font-weight:bold;">🚗 移動記録</button>
@@ -13517,7 +15190,7 @@ function renderAdmin() {
           <input type="checkbox" id="show-retired" data-action="toggle-retired" ${state._showRetired ? 'checked' : ''} /> 退職者も表示
         </label>
       </div>
-      <table><thead><tr><th>NO</th><th>顔</th><th>名前</th><th>月契約時間</th><th>通勤(片道)</th><th>任意保険</th><th>状態</th><th>操作</th></tr></thead><tbody>
+      <table><thead><tr><th>NO</th><th>顔</th><th>名前</th><th>区分</th><th>月契約時間</th><th>通勤(片道)</th><th>任意保険</th><th>状態</th><th>操作</th></tr></thead><tbody>
   `;
   const showAll = state._showRetired;
   const filteredEmps = state.employees.filter(e => showAll || (e.status || 'active') === 'active');
@@ -13527,7 +15200,7 @@ function renderAdmin() {
     const faceCell = e.photo 
       ? `<img src="${e.photo}" style="width:40px;height:40px;border-radius:50%;object-fit:cover;" alt="" />`
       : `<span style="font-size:1.6rem;">${e.emoji}</span>`;
-    const ch = e.monthly_contract_hours ? `${e.monthly_contract_hours}h` : '-';
+    const ch = isStaff(e) ? '<span style="color:#aaa;">—</span>' : (e.monthly_contract_hours ? `${e.monthly_contract_hours}h` : '-');
     const ins = insuranceState(e);
     const insCell = ins.code === 'ok'      ? `<span style="color:var(--green);">✅ ${ins.until}</span>`
                   : ins.code === 'soon'    ? `<span style="color:#b87b00; font-weight:bold;">🔔 ${ins.until}</span>`
@@ -13538,6 +15211,9 @@ function renderAdmin() {
       <td>${e.id}</td>
       <td style="text-align:center;">${faceCell}</td>
       <td>${e.name}</td>
+      <td style="font-size:0.85rem;">${isStaff(e)
+        ? `<span style="color:var(--header); font-weight:bold;">社員</span>${isNoOt(e) ? '<br><span style="font-size:0.75rem; color:#888;">残業なし</span>' : ''}`
+        : 'パート'}</td>
       <td>${ch}</td>
       <td style="text-align:right;">${e.commute_km != null ? e.commute_km + ' km' : '<span style="color:var(--red);">未登録</span>'}</td>
       <td style="font-size:0.85rem;">${insCell}</td>
@@ -13546,7 +15222,7 @@ function renderAdmin() {
     </tr>`;
   }
   if (filteredEmps.length === 0) {
-    html += `<tr><td colspan="8" class="empty-message">該当する従業員がいません</td></tr>`;
+    html += `<tr><td colspan="9" class="empty-message">該当する従業員がいません</td></tr>`;
   }
   html += `</tbody></table>
     </div>
@@ -13611,7 +15287,9 @@ function attachHandlers() {
   document.querySelectorAll('[data-action]').forEach(el => {
     let evt = 'click';
     if (el.tagName === 'SELECT') evt = 'change';
-    else if (el.tagName === 'INPUT' && (el.type === 'date' || el.type === 'number' || el.type === 'time')) evt = 'change';
+    else if (el.tagName === 'INPUT' && (el.type === 'date' || el.type === 'number' ||
+             el.type === 'time' || el.type === 'month' || el.type === 'file' ||
+             el.type === 'checkbox' || el.type === 'radio')) evt = 'change';
     el.addEventListener(evt, handleClick);
   });
   // 写真アップロード input
@@ -13904,6 +15582,8 @@ async function handleClick(e) {
     state._editingEmpId = null;
     state.screen = 'employee_edit';
     render();
+  } else if (a === 'ef-type-change') {
+    toggleEmpTypeRows();
   } else if (a === 'edit-employee') {
     state._editingEmpId = id;
     state.screen = 'employee_edit';
@@ -13949,13 +15629,19 @@ async function handleClick(e) {
     const commuteKm = (ckEl && ckEl.value !== '') ? Math.round(parseFloat(ckEl.value) * 10) / 10 : null;
     const insEl = document.getElementById('ef-car-insured');
     const carInsured = insEl ? !!insEl.checked : false;
+    const typeEl = document.getElementById('ef-emp-type');
+    const empType = typeEl ? typeEl.value : 'part';
+    const isStaffNow = (empType === 'staff');
+    const otEl = document.getElementById('ef-ot-eligible');
+    const otEligible = otEl ? !!otEl.checked : true;
     const untilEl = document.getElementById('ef-insurance-until');
     const insuranceUntil = untilEl ? untilEl.value : '';
     if (carInsured && !insuranceUntil) {
       if (!confirm('任意保険の満期月が入っていません。\nこのまま保存しますか？\n\n（満期の管理ができなくなります）')) return;
     }
     if (!empId || !name) { alert('従業員NOと名前は必須です'); return; }
-    if (contractHours <= 0) { alert('月間契約労働時間は1時間以上を入力してください'); return; }
+    // 【2026-09-07】社員は月給なので、月契約時間・時給・扶養区分を使わない
+    if (!isStaffNow && contractHours <= 0) { alert('月間契約労働時間は1時間以上を入力してください'); return; }
     const isNew = state._editingEmpId === null;
     if (isNew) {
       if (state.employees.find(emp2 => emp2.id === empId)) { alert('その従業員NOは既に存在します'); return; }
@@ -13965,7 +15651,12 @@ async function handleClick(e) {
         location, status,
         hourly_rate: hourlyRate, fuyo_type: fuyoType,
         commute_km: commuteKm, car_insured: carInsured, insurance_until: insuranceUntil,
+        emp_type: empType, ot_eligible: otEligible,
       });
+      if (isStaffNow) {
+        const e9 = state.employees[state.employees.length - 1];
+        e9.monthly_contract_hours = null; e9.hourly_rate = null;
+      }
     } else {
       const existing = state.employees.find(emp2 => emp2.id === state._editingEmpId);
       if (existing) {
@@ -13980,6 +15671,9 @@ async function handleClick(e) {
         existing.commute_km = commuteKm;
         existing.car_insured = carInsured;
         existing.insurance_until = insuranceUntil;
+        existing.emp_type = empType;
+        existing.ot_eligible = otEligible;
+        if (isStaffNow) { existing.monthly_contract_hours = null; existing.hourly_rate = null; }
       }
     }
     await saveData(STORAGE_KEYS.EMPLOYEES, state.employees);
@@ -14009,8 +15703,12 @@ async function handleClick(e) {
     const rate = parseInt(document.getElementById('wp-rate').value || '0', 10);
     const hours = parseInt(document.getElementById('wp-hours').value || '0', 10);
     const notes = document.getElementById('wp-notes').value.trim();
-    if (rate <= 0) { alert('時給は1円以上を入力してください'); return; }
-    if (hours <= 0) { alert('契約時間は1時間以上を入力してください'); return; }
+    // 【2026-09-07】社員は月給なので、時給と契約時間を求めない
+    const empW = state.employees.find(x => x.id === empId);
+    if (!isStaff(empW)) {
+      if (rate <= 0) { alert('時給は1円以上を入力してください'); return; }
+      if (hours <= 0) { alert('契約時間は1時間以上を入力してください'); return; }
+    }
     const existing = findWorkPlan(empId, year, month);
     if (existing) {
       existing.hourly_rate = rate;
@@ -14309,13 +16007,316 @@ async function handleClick(e) {
     lines.push(['通勤', sck + 'km', rates.commute + '円/km', Math.ceil(sck * rates.commute) + '円'].join(','));
     lines.push(['合計', '', '', (Math.ceil(stk * rates.trip) + sf + Math.ceil(sck * rates.commute)) + '円'].join(','));
     downloadTextFile(`集計_${emp ? emp.name : empId}_${ym}.csv`, '\uFEFF' + lines.join('\n'), 'text/csv');
+  } else if (a === 'save-travel-settings') {
+    const d = parseInt(document.getElementById('setting-allow-day').value, 10);
+    const h = parseInt(document.getElementById('setting-hotel-limit').value, 10);
+    if ([d, h].some(x => isNaN(x) || x < 0)) { alert('0以上の数字を入れてください'); return; }
+    state.app_settings = state.app_settings || {};
+    state.app_settings.allowance_day = d;
+    state.app_settings.hotel_limit = h;
+    await saveData(STORAGE_KEYS.APP_SETTINGS, state.app_settings);
+    alert(`出張の規定を保存しました。\n日当 ${d}円／日（初日〜最終日の前日）／ 宿泊上限 ${h === 0 ? 'なし' : h + '円'}`);
+    render();
+  } else if (a === 'go-travel-list') {
+    state._travelAdmin = false;
+    state.screen = 'travel_list';
+    render();
+  } else if (a === 'new-travel-hold') {
+    const emp = state.employees.find(x => x.id === state.current_employee_id);
+    if (!emp) { alert('だれの出張か分かりません。打刻ホームからやり直してください。'); return; }
+    const t = {
+      id: 'TV' + Date.now(), emp_id: emp.id,
+      date_from: todayStr(), date_to: todayStr(),
+      destinations: [{ name: '', purpose: '' }],
+      schedule: [], transports: [], hotels: [], others: [], attachments: [],
+      report_note: '', status: 'hold',
+      created_at: new Date().toISOString(),
+    };
+    state.travels.push(t);
+    await saveData(STORAGE_KEYS.TRAVELS, state.travels);
+    state._travelId = t.id; state._travelTab = 'plan'; state._travelAdmin = false;
+    state.screen = 'travel_edit';
+    render();
+  } else if (a === 'new-travel') {
+    const emp = state.employees.find(x => x.id === state.current_employee_id);
+    if (!emp) { alert('だれの申請か分かりません。打刻ホームからやり直してください。'); return; }
+    const t = {
+      id: 'TV' + Date.now(), emp_id: emp.id,
+      date_from: todayStr(), date_to: todayStr(),
+      destinations: [{ name: '', purpose: '' }],
+      schedule: [], transports: [], hotels: [], others: [], attachments: [],
+      report_note: '', status: 'draft',
+      created_at: new Date().toISOString(),
+    };
+    state.travels.push(t);
+    await saveData(STORAGE_KEYS.TRAVELS, state.travels);
+    state._travelId = t.id;
+    state._travelTab = 'plan';
+    state._travelAdmin = false;
+    state.screen = 'travel_edit';
+    render();
+  } else if (a === 'open-travel') {
+    state._travelId = e.currentTarget.dataset.tid;
+    state._travelTab = 'plan';
+    state.screen = 'travel_edit';
+    render();
+  } else if (a === 'tv-allow-toggle') {
+    collectTravel();
+    render();
+  } else if (a === 'travel-tab') {
+    collectTravel();
+    state._travelTab = e.currentTarget.dataset.tab;
+    render();
+  } else if (a === 'travel-period') {
+    collectTravel();
+    const t = getTravel(state._travelId);
+    if (t && t.date_to && t.date_from && t.date_to < t.date_from) {
+      alert('終わりの日が始まりの日より前になっています。');
+      t.date_to = t.date_from;
+    }
+    if (t) syncTravelRows(t);
+    render();
+  } else if (a === 'travel-dest-add') {
+    collectTravel();
+    getTravel(state._travelId).destinations.push({ name: '', purpose: '' });
+    render();
+  } else if (a === 'travel-dest-del') {
+    collectTravel();
+    getTravel(state._travelId).destinations.splice(parseInt(e.currentTarget.dataset.i, 10), 1);
+    render();
+  } else if (a === 'travel-sch-add') {
+    collectTravel();
+    getTravel(state._travelId).schedule.push({ date: e.currentTarget.dataset.date, time: '', what: '' });
+    render();
+  } else if (a === 'travel-sch-del') {
+    collectTravel();
+    getTravel(state._travelId).schedule.splice(parseInt(e.currentTarget.dataset.i, 10), 1);
+    render();
+  } else if (a === 'travel-tr-add') {
+    collectTravel();
+    getTravel(state._travelId).transports.push({
+      date: e.currentTarget.dataset.date, from: '', to: '', mode: TRAVEL_MODES[0].label, plan_fee: '', real_fee: '' });
+    render();
+  } else if (a === 'travel-tr-del') {
+    collectTravel();
+    getTravel(state._travelId).transports.splice(parseInt(e.currentTarget.dataset.i, 10), 1);
+    render();
+  } else if (a === 'travel-ot-add') {
+    collectTravel();
+    const t = getTravel(state._travelId);
+    t.others.push({ date: travelDates(t)[0] || t.date_from, what: '', plan_fee: '', real_fee: '' });
+    render();
+  } else if (a === 'travel-ot-del') {
+    collectTravel();
+    getTravel(state._travelId).others.splice(parseInt(e.currentTarget.dataset.i, 10), 1);
+    render();
+  } else if (a === 'save-travel') {
+    collectTravel();
+    await saveData(STORAGE_KEYS.TRAVELS, state.travels);
+    alert('下書きを保存しました。');
+    render();
+  } else if (a === 'submit-travel') {
+    collectTravel();
+    const t = getTravel(state._travelId);
+    const err = checkTravel(t);
+    if (err) { alert(err); return; }
+    const tot = travelTotals(t, 'plan');
+    if (!confirm(
+      `${t.date_from} 〜 ${t.date_to}（${travelDates(t).length}日間）の出張を申請します。\n\n` +
+      `　訪問先：${t.destinations.map(d => d.name).filter(Boolean).join('・')}\n` +
+      `　見込みの金額：${tot.total.toLocaleString()} 円\n\n` +
+      `よろしいですか？`)) return;
+    t.status = 'requested';
+    t.requested_at = new Date().toISOString();
+    t.reject_reason = '';
+    await saveData(STORAGE_KEYS.TRAVELS, state.travels);
+    alert('申請しました。管理者が承認すると、報告が書けるようになります。');
+    render();
+  } else if (a === 'delete-travel') {
+    const t = getTravel(state._travelId);
+    if (!t) return;
+    if (!confirm(`${t.date_from} の出張を削除します。よろしいですか？`)) return;
+    state.travels = state.travels.filter(x => x.id !== t.id);
+    await saveData(STORAGE_KEYS.TRAVELS, state.travels);
+    state.screen = 'travel_list';
+    render();
+  } else if (a === 'withdraw-travel') {
+    const t = getTravel(state._travelId);
+    if (!t || t.status !== 'requested') return;
+    if (!confirm('申請を取り下げます。下書きに戻ります。\nよろしいですか？')) return;
+    t.status = 'draft';
+    t.withdrawn_at = new Date().toISOString();
+    await saveData(STORAGE_KEYS.TRAVELS, state.travels);
+    alert('取り下げました。内容を直して、また申請できます。');
+    render();
+  } else if (a === 'cancel-travel') {
+    const t = getTravel(state._travelId);
+    if (!t || t.status !== 'approved') return;
+    const why = prompt(
+      '出張を取り消します。理由を書いてください。\n（病気・先方の都合・予定変更 など）\n\n' +
+      '※ 勤務計画は出張のままです。取り消したあと、\n' +
+      '　「勤務予定の変更を申請する」から通常の勤務に戻してください。', '');
+    if (why === null) return;
+    if (!why.trim()) { alert('理由を書いてください。記録に残します。'); return; }
+    t.status = 'canceled';
+    t.cancel_reason = why.trim();
+    t.canceled_at = new Date().toISOString();
+    await saveData(STORAGE_KEYS.TRAVELS, state.travels);
+    alert('取り消しました。\n\n勤務予定を通常に戻す必要があれば、\n「勤務予定の変更を申請する」から出してください。');
+    render();
+  } else if (a === 'go-travel-admin') {
+    state._travelAdmin = true;
+    state.screen = 'travel_admin';
+    render();
+  } else if (a === 'admin-open-travel') {
+    state._travelId = e.currentTarget.dataset.tid;
+    state._travelTab = e.currentTarget.dataset.tab || 'plan';
+    state._travelAdmin = true;
+    state.screen = 'travel_edit';
+    render();
+  } else if (a === 'approve-travel' || a === 'reject-travel') {
+    const t = getTravel(state._travelId);
+    if (!t) return;
+    const emp2 = state.employees.find(x => x.id === t.emp_id);
+    if (a === 'approve-travel') {
+      const tot = travelTotals(t, 'plan');
+      if (!confirm(
+        `${emp2 ? emp2.name : t.emp_id} さんの出張を承認します。\n\n` +
+        `　${t.date_from} 〜 ${t.date_to}\n` +
+        `　見込みの金額：${tot.total.toLocaleString()} 円\n\n` +
+        `よろしいですか？`)) return;
+      t.status = 'approved';
+    } else {
+      const note = prompt('却下の理由（任意・本人に表示）：', '');
+      if (note === null) return;
+      t.status = 'rejected';
+      t.reject_reason = note || '';
+    }
+    t.decided_at = new Date().toISOString();
+    await saveData(STORAGE_KEYS.TRAVELS, state.travels);
+    await addEmployeeNotification(t.emp_id, {
+      type: 'travel', target_date: t.date_from,
+      message: t.status === 'approved'
+        ? `✅ ${t.date_from} からの出張が承認されました。帰ったら報告を書いてください。`
+        : `❌ ${t.date_from} からの出張の申請は承認されませんでした。${t.reject_reason ? '（' + t.reject_reason + '）' : ''}`,
+    });
+    render();
+  } else if (a === 'attach-pick') {
+    const el = e.currentTarget;
+    const file = el.files && el.files[0];
+    if (!file) return;
+    const t = getTravel(state._travelId);
+    if (!t) return;
+    const ext = fileExt(file.name);
+    const isImg = /^image\//.test(file.type);
+    if (!isImg && !ATTACH_OK_EXT.includes(ext)) {
+      alert(ext === 'pdf'
+        ? 'PDFは入れられません。\n\nスキャンしたPDFは小さくできず、端末に入りきらなくなるためです。\n資料は写真に撮ってください。'
+        : '写真かExcelを選んでください。\n（jpg / png / xlsx / xls / csv）');
+      el.value = '';
+      return;
+    }
+    if (!isImg && file.size > ATTACH_HARD_BYTES) {
+      alert(`このファイルは ${fmtBytes(file.size)} あって大きすぎます。\n${fmtBytes(ATTACH_HARD_BYTES)} までにしてください。`);
+      el.value = '';
+      return;
+    }
+    collectTravel();
+    try {
+      const data = isImg ? await shrinkImage(file) : await fileToDataUrl(file);
+      const bytes = Math.round(data.length * 0.75);   // base64 から元の大きさを見積もる
+      if (!isImg && bytes > ATTACH_WARN_BYTES) {
+        if (!confirm(`このファイルは ${fmtBytes(bytes)} あります。\n端末に入る量には限りがあります。\n\nこのまま付けますか？`)) { el.value = ''; return; }
+      }
+      const noteEl = document.getElementById('attach-note');
+      if (!Array.isArray(t.attachments)) t.attachments = [];
+      t.attachments.push({
+        id: 'AT' + Date.now(), kind: isImg ? 'photo' : 'file',
+        name: file.name, mime: file.type || '', bytes, data,
+        note: noteEl ? noteEl.value.trim() : '',
+        added_at: new Date().toISOString(),
+      });
+      await saveData(STORAGE_KEYS.TRAVELS, state.travels);
+      el.value = '';
+      render();
+    } catch (err) {
+      console.error('[幸采] 添付に失敗', err);
+      alert('このファイルを読めませんでした。\n別のものをお試しください。');
+      el.value = '';
+    }
+  } else if (a === 'attach-del') {
+    collectTravel();
+    const t = getTravel(state._travelId);
+    const i2 = parseInt(e.currentTarget.dataset.i, 10);
+    const at = (t.attachments || [])[i2];
+    if (!at) return;
+    if (!confirm(`「${at.name}」を外します。よろしいですか？`)) return;
+    t.attachments.splice(i2, 1);
+    await saveData(STORAGE_KEYS.TRAVELS, state.travels);
+    render();
+  } else if (a === 'attach-open' || a === 'attach-save') {
+    const t = getTravel(state._travelId);
+    const at = (t.attachments || [])[parseInt(e.currentTarget.dataset.i, 10)];
+    if (!at) return;
+    const link = document.createElement('a');
+    link.href = at.data;
+    link.download = at.name || 'file';
+    if (a === 'attach-open' && at.kind === 'photo') { link.target = '_blank'; link.removeAttribute('download'); }
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  } else if (a === 'print-travel') {
+    collectTravel();
+    await saveData(STORAGE_KEYS.TRAVELS, state.travels);
+    printTravelReport(getTravel(state._travelId));
+  } else if (a === 'save-travel-report') {
+    collectTravel();
+    await saveData(STORAGE_KEYS.TRAVELS, state.travels);
+    alert('報告を保存しました。');
+    render();
+  } else if (a === 'submit-travel-report') {
+    collectTravel();
+    const t = getTravel(state._travelId);
+    const err = checkTravelReport(t);
+    if (err) { alert(err); return; }
+    const r = travelTotals(t, 'real');
+    if (!confirm(`報告を提出します。\n\n実際にかかった金額：${r.total.toLocaleString()} 円\n\nよろしいですか？`)) return;
+    t.status = 'reported';
+    t.reported_at = new Date().toISOString();
+    await saveData(STORAGE_KEYS.TRAVELS, state.travels);
+    alert('報告を提出しました。');
+    render();
+  } else if (a === 'settle-travel') {
+    const t = getTravel(state._travelId);
+    if (!t) return;
+    const r = travelTotals(t, 'real');
+    const emp2 = state.employees.find(x => x.id === t.emp_id);
+    if (!confirm(
+      `${emp2 ? emp2.name : t.emp_id} さんの出張の清算を確定します。\n\n` +
+      `　${t.date_from} 〜 ${t.date_to}\n` +
+      `　支払う金額：${r.total.toLocaleString()} 円\n\n` +
+      `よろしいですか？`)) return;
+    t.status = 'settled';
+    t.settled_at = new Date().toISOString();
+    await saveData(STORAGE_KEYS.TRAVELS, state.travels);
+    await addEmployeeNotification(t.emp_id, {
+      type: 'travel', target_date: t.date_from,
+      message: `✅ ${t.date_from} からの出張の清算が確定しました（${r.total.toLocaleString()}円）。`,
+    });
+    render();
   } else if (a === 'go-ot-request') {
+    const emp9 = state.employees.find(x => x.id === state.current_employee_id);
+    if (!canDeclareOt(emp9)) {
+      alert('この方は早出・延長が付かない区分のため、申請できません。\n\n管理者にご確認ください。');
+      return;
+    }
     state._otReqForm = { date: todayStr(), type: 'overtime', minutes: 30, reason: OT_REASONS[0], note: '' };
     state.screen = 'ot_request';
     render();
   } else if (a === 'submit-ot-request') {
     const emp = state.employees.find(x => x.id === state.current_employee_id);
     if (!emp) { alert('だれの申請か分かりません。打刻ホームからやり直してください。'); return; }
+    if (!canDeclareOt(emp)) { alert('この方は早出・延長が付かない区分のため、申請できません。'); return; }
     const date = document.getElementById('otreq-date').value;
     const type = document.getElementById('otreq-type').value;
     const minutes = parseInt(document.getElementById('otreq-min').value, 10);
@@ -14380,6 +16381,7 @@ async function handleClick(e) {
     const note = document.getElementById('order-note').value.trim();
     const emp2 = state.employees.find(x => x.id === empId);
     if (!emp2) { alert('だれへの指示か選んでください'); return; }
+    if (!canDeclareOt(emp2)) { alert(`${emp2.name} さんは早出・延長が付かない区分のため、指示を出せません。`); return; }
     if (isNaN(minutes) || minutes <= 0) { alert('時間を1分以上で入れてください'); return; }
     if (otOrderOf(empId, d, type)) {
       if (!confirm('この方のこの日の指示は、すでに出ています。\nもう1件出しますか？')) return;
@@ -16288,7 +18290,9 @@ async function handleClick(e) {
     const day = e.currentTarget.dataset.day;
     // 既に時刻が入っていればそれを保持、無ければデフォルト
     if (!state._patternBuf[day]) {
-      state._patternBuf[day] = { start: '09:00', end: '17:00' };
+      // 【2026-09-07】残業なしの区分は、出勤か休日かだけ決まればよい。時刻は空でも通す。
+      const empP = state.employees.find(x => x.id === state._editingPatternEmpId);
+      state._patternBuf[day] = isNoOt(empP) ? { start: '', end: '' } : { start: '09:00', end: '17:00' };
     }
     render();
   } else if (a === 'pattern-time-change') {
@@ -16494,7 +18498,7 @@ async function handleClick(e) {
 // サーバー上のHTMLの先頭だけを読みに行き、版数が自分より新しければ画面上部に帯を出す。
 // 通信できないときは黙って何もしない。打刻の邪魔は一切しない。
 // =========================================================
-const APP_VERSION = 'v1.0';
+const APP_VERSION = 'v1.2';
 const UPDATE_CHECK_INTERVAL_MS = 5 * 60 * 1000;    // 5分おきに確認
 //   先頭4KBだけ読むので回線の負担は小さい。
 //   30分だと「上げたのに変わらない」時間が長すぎたため短くした（2026-08-16）。
@@ -16693,6 +18697,7 @@ async function bootstrap() {
     await initializeData();
     await fixSiteNameOnce();
     await topUpPlacesOnce();
+    await setTravelRulesOnce();
     state.employees = await loadData(STORAGE_KEYS.EMPLOYEES, []);
     state.work_items = await loadData(STORAGE_KEYS.WORK_ITEMS, []);
     state.punches = await loadData(STORAGE_KEYS.PUNCHES, []);
@@ -16724,6 +18729,7 @@ async function bootstrap() {
     state.punch_claims = await loadData(STORAGE_KEYS.PUNCH_CLAIMS, []);
     state.drive_permits = await loadData(STORAGE_KEYS.DRIVE_PERMITS, []);
     state.ot_orders = await loadData(STORAGE_KEYS.OT_ORDERS, []);
+    state.travels = await loadData(STORAGE_KEYS.TRAVELS, []);
     state.visit_places = await loadData(STORAGE_KEYS.VISIT_PLACES, []);
     if (!Array.isArray(state.visit_places) || state.visit_places.length === 0) {
       state.visit_places = JSON.parse(JSON.stringify(DEFAULT_VISIT_PLACES));
