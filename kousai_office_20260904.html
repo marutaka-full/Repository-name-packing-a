@@ -6,7 +6,7 @@
 
 <!-- 版数の目印。自動更新の確認でここだけを読みに行くので、必ず<head>の先頭付近に置くこと。
      版を上げるときは、この content と APP_VERSION と <title> と画面下のフッターの4か所を揃える。 -->
-<meta name="app-version" content="v1.9">
+<meta name="app-version" content="v2.0">
 <!-- ★GitHub Pages は HTML に「10分はキャッシュしてよい」を付けて返す。
      そのため上げ直しても10分は古い版が開く。ブラウザにも使わないよう伝えておく。
      （サーバーの指示が優先されることが多いので、決め手は「🔄 更新を確認」ボタン） -->
@@ -55,7 +55,7 @@
   } catch (e) {}
 })();
 </script>
-<title>幸采事務所 打刻管理 v1.9</title>
+<title>幸采事務所 打刻管理 v2.0</title>
 <style>
   :root {
     --green: #1d9e75;
@@ -1683,7 +1683,7 @@
 
 <main id="app"></main>
 
-<div class="footer-note">幸采事務所版 v1.9<span id="storage-mode-note"></span> ／ <a href="javascript:resetAppData()" style="color:#999; text-decoration:underline; font-size:0.85rem;">🆘 緊急リセット</a></div>
+<div class="footer-note">幸采事務所版 v2.0<span id="storage-mode-note"></span> ／ <a href="javascript:resetAppData()" style="color:#999; text-decoration:underline; font-size:0.85rem;">🆘 緊急リセット</a></div>
 
 <script>
 // ストレージモードをフッターに表示
@@ -12075,12 +12075,11 @@ function renderDailyPlanList() {
       let weekGross = 0, weekNet = 0, workDays = 0;
       for (const key of WEEKDAY_KEYS) {
         const day = pat.pattern[key];
-        if (day && day.start && day.end) {
-          const calc = planDayCalc(day);
-          weekGross += calc.grossMin;
-          weekNet += calc.netMin;
-          workDays++;
-        }
+        if (!day) continue;                 // 休み
+        workDays++;                         // 時刻が空でも出勤日として数える
+        const calc = planDayCalc(day);
+        weekGross += calc.grossMin;
+        weekNet += calc.netMin;
       }
       patSummary = `週${workDays}日 ／ 実労働 ${formatHMin(weekNet)}／週`;
     }
@@ -12113,14 +12112,19 @@ function renderPatternEdit() {
   const pat = (existing && existing.pattern) || {};
   // 編集中のバッファ
   if (!state._patternBuf || state._patternBufEmpId !== empId) {
+    // 【2026-09-07】残業が付かない区分（役員クラス）は、毎日出るのが普通。
+    //   まだ何も決めていないときは、全部「出勤」で始めて、休みにする日だけ押してもらう。
+    //   時刻は空のままでよいし、入れれば所定が出る。
+    const blank = isNoOt(emp) && !existing;
+    const def = () => (blank ? { start: '', end: '' } : null);
     state._patternBuf = {
-      sun: pat.sun ? { ...pat.sun } : null,
-      mon: pat.mon ? { ...pat.mon } : null,
-      tue: pat.tue ? { ...pat.tue } : null,
-      wed: pat.wed ? { ...pat.wed } : null,
-      thu: pat.thu ? { ...pat.thu } : null,
-      fri: pat.fri ? { ...pat.fri } : null,
-      sat: pat.sat ? { ...pat.sat } : null,
+      sun: pat.sun ? { ...pat.sun } : def(),
+      mon: pat.mon ? { ...pat.mon } : def(),
+      tue: pat.tue ? { ...pat.tue } : def(),
+      wed: pat.wed ? { ...pat.wed } : def(),
+      thu: pat.thu ? { ...pat.thu } : def(),
+      fri: pat.fri ? { ...pat.fri } : def(),
+      sat: pat.sat ? { ...pat.sat } : def(),
     };
     state._patternBufEmpId = empId;
   }
@@ -12129,10 +12133,10 @@ function renderPatternEdit() {
   let weekGross = 0, weekNet = 0, workDays = 0;
   for (const key of WEEKDAY_KEYS) {
     const d = buf[key];
-    if (d && d.start && d.end) {
-      const c = planDayCalc(d);
-      weekGross += c.grossMin; weekNet += c.netMin; workDays++;
-    }
+    if (!d) continue;                     // 休み
+    workDays++;                           // 時刻が空でも出勤日として数える
+    const c = planDayCalc(d);
+    weekGross += c.grossMin; weekNet += c.netMin;
   }
   const faceHtml = emp.photo 
     ? `<img src="${emp.photo}" style="width:48px;height:48px;border-radius:50%;object-fit:cover;" alt=""/>`
@@ -12174,12 +12178,12 @@ function renderPatternEdit() {
       <td class="${colorClass}" style="font-weight:bold; text-align:center;">${label}</td>
       <td>${isOff ? '<span style="color:#bbb;">休</span>' : `<input type="time" class="pattern-time" data-action="pattern-time-change" data-day="${key}" data-field="start" value="${start}" />`}</td>
       <td>${isOff ? '<span style="color:#bbb;">休</span>' : `<input type="time" class="pattern-time" data-action="pattern-time-change" data-day="${key}" data-field="end" value="${end}" />`}</td>
-      <td style="text-align:center;">${isOff ? '-' : formatHMin(calc.grossMin)}</td>
-      <td style="text-align:center;">${isOff ? '-' : `
+      <td style="text-align:center;">${(isOff || !start || !end) ? '-' : formatHMin(calc.grossMin)}</td>
+      <td style="text-align:center;">${(isOff || !start || !end) ? '-' : `
         <input type="number" class="pattern-brk" data-action="pattern-brk-change" data-day="${key}" min="${legalMin}" step="5"
                value="${calc.breakMin}" style="width:64px; padding:4px; text-align:right;" title="法令の下限は ${legalMin} 分です" />
         <div style="font-size:0.7rem; color:#888;">下限 ${legalMin}分</div>`}</td>
-      <td style="text-align:center; font-weight:bold; color:${isOff ? '#bbb' : 'var(--green)'};">${isOff ? '-' : formatHMin(calc.netMin)}</td>
+      <td style="text-align:center; font-weight:bold; color:${isOff ? '#bbb' : 'var(--green)'};">${isOff ? '-' : (start && end ? formatHMin(calc.netMin) : '出勤')}</td>
       <td style="text-align:center;">
         ${isOff 
           ? `<button class="nav-btn" data-action="pattern-set-work" data-day="${key}" style="padding:4px 10px; font-size:0.8rem;">出勤に</button>`
@@ -12196,7 +12200,8 @@ function renderPatternEdit() {
       </div>
       <div class="form-hint" style="margin-top:10px;">
         ${isNoOt(emp) ? `<strong style="color:var(--header);">この方は残業が付かない区分です。</strong>
-          <strong>出勤か休日かだけ</strong>決まっていれば足ります。時刻は空のままで構いません。<br>
+          <strong>最初は全部「出勤」で出しています。休みの曜日だけ「休に」を押してください。</strong><br>
+          時刻は空のままで構いません。入れれば所定労働時間が出ます。<br>
           （出張を入れるために、出勤日と休日は決めておいてください）<br>` : ''}
         💡 休憩は法令の下限が最初から入ります。長くするのは自由ですが、<strong>下限より短くはできません</strong>。<br>
         💡 時刻を入力すると拘束時間・休憩・実労働が自動計算されます。休憩は労基法準拠（6h超→45分、8h45m超→60分）。
@@ -12231,10 +12236,10 @@ function renderDailyPlanMonth() {
   let monthGross = 0, monthNet = 0, workDays = 0;
   for (let d = 1; d <= lastDay; d++) {
     const dayData = days[d];
-    if (dayData && dayData.start && dayData.end) {
-      const c = planDayCalc(dayData);
-      monthGross += c.grossMin; monthNet += c.netMin; workDays++;
-    }
+    if (!dayData) continue;               // 休み
+    workDays++;                           // 時刻が空でも出勤日として数える
+    const c = planDayCalc(dayData);
+    monthGross += c.grossMin; monthNet += c.netMin;
   }
   // 当月の月間計画（時給・契約時間）
   const wp = findWorkPlan(empId, year, month);
@@ -12307,15 +12312,16 @@ function renderDailyPlanMonth() {
   let col = firstDow;
   while (dayNum <= lastDay) {
     const dayData = days[dayNum];
-    const isOff = !dayData;
-    const isWork = dayData && dayData.start && dayData.end;
+    // 【2026-09-07】時刻が空でも「出勤」。残業が付かない区分は出勤か休日かだけ決めればよい。
+    const isWork = !!dayData;
+    const hasTime = dayData && dayData.start && dayData.end;
     let cellContent = `<div class="cal-day-num">${dayNum}</div>`;
-    if (isWork) {
+    if (hasTime) {
       const c = planDayCalc(dayData);
       cellContent += `<div class="cal-time">${dayData.start}<br>〜${dayData.end}</div>`;
       cellContent += `<div class="cal-hours">${formatHMin(c.netMin)}</div>`;
-    } else if (Object.keys(days).length > 0 && (dayData === null || dayData === undefined && days[dayNum] !== undefined)) {
-      cellContent += `<div class="cal-off">休</div>`;
+    } else if (isWork) {
+      cellContent += `<div class="cal-hours" style="color:var(--green);">出勤</div>`;
     } else if (dayData === null) {
       cellContent += `<div class="cal-off">休</div>`;
     }
@@ -18654,6 +18660,8 @@ async function handleClick(e) {
       const day = el.dataset.day;
       const d = state._patternBuf[day];
       if (!d) return;
+      // 時刻が入っていない日（残業なしの区分）は休憩を持たせない
+      if (!d.start || !d.end) { delete d.brk; return; }
       const legal = calcLaborMinutes(d.start, d.end).breakMin;
       const v = parseInt(el.value, 10);
       d.brk = (isNaN(v) || v < legal) ? legal : v;
@@ -18708,9 +18716,12 @@ async function handleClick(e) {
       const dow = new Date(year, month - 1, d).getDay();
       const key = WEEKDAY_KEYS[dow];
       const dayPattern = pattern.pattern[key];
-      if (dayPattern && dayPattern.start && dayPattern.end) {
-        // 【2026-09-07】休憩も写す。ここで写し忘れると、月別計画が休憩0分で計算されます。
-        days[d] = { start: dayPattern.start, end: dayPattern.end, brk: dayPattern.brk };
+      // 【2026-09-07】時刻が空でも「出勤」として写す。
+      //   残業が付かない区分は、出勤か休日かだけ決めればよいため。
+      //   これまでは時刻が無いと休日に落ちていた。
+      if (dayPattern) {
+        // 休憩も写す。写し忘れると、月別計画が休憩0分で計算されます。
+        days[d] = { start: dayPattern.start || '', end: dayPattern.end || '', brk: dayPattern.brk };
       } else {
         days[d] = null;  // 休
       }
@@ -18837,7 +18848,7 @@ async function handleClick(e) {
 // サーバー上のHTMLの先頭だけを読みに行き、版数が自分より新しければ画面上部に帯を出す。
 // 通信できないときは黙って何もしない。打刻の邪魔は一切しない。
 // =========================================================
-const APP_VERSION = 'v1.9';
+const APP_VERSION = 'v2.0';
 const UPDATE_CHECK_INTERVAL_MS = 5 * 60 * 1000;    // 5分おきに確認
 //   先頭4KBだけ読むので回線の負担は小さい。
 //   30分だと「上げたのに変わらない」時間が長すぎたため短くした（2026-08-16）。
