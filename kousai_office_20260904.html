@@ -6,7 +6,7 @@
 
 <!-- 版数の目印。自動更新の確認でここだけを読みに行くので、必ず<head>の先頭付近に置くこと。
      版を上げるときは、この content と APP_VERSION と <title> と画面下のフッターの4か所を揃える。 -->
-<meta name="app-version" content="v2.0">
+<meta name="app-version" content="v2.1">
 <!-- ★GitHub Pages は HTML に「10分はキャッシュしてよい」を付けて返す。
      そのため上げ直しても10分は古い版が開く。ブラウザにも使わないよう伝えておく。
      （サーバーの指示が優先されることが多いので、決め手は「🔄 更新を確認」ボタン） -->
@@ -55,7 +55,7 @@
   } catch (e) {}
 })();
 </script>
-<title>幸采事務所 打刻管理 v2.0</title>
+<title>幸采事務所 打刻管理 v2.1</title>
 <style>
   :root {
     --green: #1d9e75;
@@ -1683,7 +1683,7 @@
 
 <main id="app"></main>
 
-<div class="footer-note">幸采事務所版 v2.0<span id="storage-mode-note"></span> ／ <a href="javascript:resetAppData()" style="color:#999; text-decoration:underline; font-size:0.85rem;">🆘 緊急リセット</a></div>
+<div class="footer-note">幸采事務所版 v2.1<span id="storage-mode-note"></span> ／ <a href="javascript:resetAppData()" style="color:#999; text-decoration:underline; font-size:0.85rem;">🆘 緊急リセット</a></div>
 
 <script>
 // ストレージモードをフッターに表示
@@ -4049,7 +4049,7 @@ function renderMyTodoBar(empId) {
   };
   return `
     <div style="display:flex; gap:10px; flex-wrap:wrap; margin:12px 0;">
-      ${cell('要申告', c.need,    { bg: '#fff8e1', line: '#b87b00' }, 'go-ot-declare')}
+      ${cell('打刻もれ', c.need,  { bg: '#ffe9e9', line: '#c0392b' }, null)}
       ${cell('申告中', c.waiting, { bg: '#e8eef5', line: '#1f4e79' }, null)}
       ${cell('承認済・要確認', c.confirm, { bg: '#e8f4ee', line: '#1d9e75' }, 'toggle-notif-panel-self')}
     </div>`;
@@ -4086,11 +4086,10 @@ function calDayInfo(empId, dateStr) {
     t.date_from && t.date_to && t.date_from <= dateStr && dateStr <= t.date_to);
   const orders = getOtOrders(empId, dateStr);                    // 承認済みの早出・延長の指示
   const ordersPend = getOtOrdersAll(empId, dateStr).filter(o => (o.status || 'approved') === 'pending');
+  // 【2026-09-14 v2.1】予定と打刻のズレは「実績」として出すだけ。
+  //   申告を促す印（declare）は付けない。
   const decl = isFuture ? null : findDeclarable(empId, dateObj);
-  const needDeclare = !!decl && (
-    (decl.early_min > 0 && canDeclare(empId, dateStr, 'early')) ||
-    (decl.overtime_min > 0 && canDeclare(empId, dateStr, 'overtime'))
-  );
+  const needDeclare = false;
 
   // 打刻もれ：過ぎた日で、計画があるのに欠けているもの。
   //   ・出勤／退勤 … 無ければ欠け（直帰の申告が承認済みなら退勤は欠けとしない）
@@ -4162,7 +4161,7 @@ const CAL_COLORS = {
   plain:    { bg: '#ffffff', line: '#e0e0e0', label: '通常' },
   off:      { bg: '#f2f2f2', line: '#e0e0e0', label: '休み・計画なし' },
   future:   { bg: '#fbfdff', line: '#d8e4ee', label: 'これから' },
-  declare:  { bg: '#fff8e1', line: '#d9a300', label: '要申告' },
+  declare:  { bg: '#fff8e1', line: '#d9a300', label: '—' },   // 【2026-09-14 v2.1】使わない
   missing:  { bg: '#ffe9e9', line: '#c62828', label: '打刻もれ' },
   waiting:  { bg: '#e8eef5', line: '#1f4e79', label: '申告中' },
   approved: { bg: '#e8f4ee', line: '#1d9e75', label: '承認済' },
@@ -4209,7 +4208,8 @@ function renderMonthCalendar() {
 
   // 凡例
   html += `<div style="display:flex; gap:8px; flex-wrap:wrap; margin:10px 0 14px;">`;
-  for (const k of ['declare', 'missing', 'waiting', 'approved', 'travel', 'off']) {
+  // 【2026-09-14 v2.1】'declare'（要申告）は使わなくなったので凡例から外す
+  for (const k of ['missing', 'waiting', 'approved', 'travel', 'off']) {
     const c = CAL_COLORS[k];
     html += `<span style="font-size:0.78rem; padding:3px 9px; border-radius:12px; background:${c.bg}; border:1.5px solid ${c.line}; color:#444;">${c.label}</span>`;
   }
@@ -4259,7 +4259,7 @@ function renderMonthCalendar() {
   html += `</tr></tbody></table>`;
 
   html += `<div style="margin-top:12px; font-size:0.9rem; color:#555;">
-    この月：要申告 <strong>${counts.declare}</strong>日 ／ 打刻もれ <strong style="color:var(--red);">${counts.missing}</strong>日
+    この月：打刻もれ <strong style="color:var(--red);">${counts.missing}</strong>日
     ／ 申告中 <strong>${counts.waiting}</strong>日 ／ 承認済 <strong style="color:var(--green);">${counts.approved}</strong>日
     ${counts.travel > 0 ? `／ 出張 <strong style="color:#7b1fa2;">${counts.travel}</strong>日` : ''}
   </div>
@@ -4324,8 +4324,7 @@ function renderCalDayDetail(empId, ds, isAdmin) {
        ${t.status === 'approved' ? '承認済' : t.status === 'rejected' ? '差戻し' : '承認待ち'}</span>`).join('<br>')}</td></tr>`;
   }
   if (i.decl && (i.decl.early_min > 0 || i.decl.overtime_min > 0)) {
-    html += `<tr><th>早出・延長</th><td>${i.decl.early_min > 0 ? `早出 ${i.decl.early_min}分　` : ''}${i.decl.overtime_min > 0 ? `延長 ${i.decl.overtime_min}分` : ''}
-      ${i.needDeclare ? '<span style="color:#b87b00; font-weight:bold;">← 申告してください</span>' : ''}</td></tr>`;
+    html += `<tr><th>予定とのズレ</th><td>${i.decl.early_min > 0 ? `始業より ${i.decl.early_min}分 早く打刻　` : ''}${i.decl.overtime_min > 0 ? `終業より ${i.decl.overtime_min}分 遅く打刻` : ''}</td></tr>`;
   }
   if (i.adj.exists) {
     html += `<tr><th>認定済み</th><td style="color:var(--green);">早出 ${i.adj.early_min}分 ／ 延長 ${i.adj.overtime_min}分</td></tr>`;
@@ -4350,7 +4349,7 @@ function renderCalDayDetail(empId, ds, isAdmin) {
     }
   } else {
     const emp9 = state.employees.find(x => x.id === empId);
-    if (i.needDeclare && canDeclareOt(emp9)) html += `<button class="primary-btn" data-action="go-ot-declare" style="background:var(--orange);">📝 早出・延長を申告する</button>`;
+    // 【2026-09-14 v2.1】日ごとの画面から申告へ誘導しない。入口は自分の画面の常設ボタンだけ。
     if (i.openMissing.length > 0) {
       const first = i.openMissing[0];
       const doneCount = i.missingList.length - i.openMissing.length;
@@ -6705,20 +6704,21 @@ function renderPersonal() {
     </div>
   `;
 
-  // 📝 早出・延長の申告（2026-08-16 v2.1）
-  const declCount = listDeclarable(emp.id, DECLARE_BACK_DAYS).length;
+  // 📝 早出・延長の申告
+  // 【2026-09-14 v2.1】申告できる日の件数を出さない。こちらから勧めない（社長確定）。
+  //   このカードは、ただの常設の入口。押した先に、計画済分の申告と事後申告がある。
   const declPending = (state.change_requests || []).filter(r =>
     r.emp_id === emp.id && r.status === 'pending' && (r.type === 'early' || r.type === 'overtime')).length;
   // 【2026-09-07】残業が付かない区分の方には、この欄そのものを出さない
   if (canDeclareOt(emp)) html += `
-    <div class="card" style="background:${declCount > 0 ? '#fff8e1' : '#fafafa'};">
+    <div class="card" style="background:#fafafa;">
       <div style="display:flex; align-items:center; gap:14px; flex-wrap:wrap;">
         <div style="font-size:1.8rem;">📝</div>
         <div style="flex:1; min-width:180px;">
           <div style="font-weight:bold; font-size:1.02rem;">早出・延長を申告する</div>
           <div style="font-size:0.85rem; color:#666; margin-top:2px;">
-            終業から5分までは申告不要です。それを超えた分と早出はここから
-            ${declCount > 0 ? `<br><span style="color:var(--orange); font-weight:bold;">🔔 申告できる日が ${declCount}日 あります</span>` : ''}
+            早出・延長は<strong>前もって申請する</strong>のが基本です。<br>
+            働いたあとの実績は、ここから自分で出してください。
             ${declPending > 0 ? `<br><span style="color:#888;">承認待ち：${declPending}件</span>` : ''}
           </div>
         </div>
@@ -7687,10 +7687,12 @@ function findDeclarable(empId, dateObj) {
   const aStart = new Date(sum.start_time).getTime();
   const aEnd   = sum.end_time ? new Date(sum.end_time).getTime() : null;
 
-  // 早出は猶予なし。予定始業より早く出た分がそのまま総量。
-  const early = Math.max(0, Math.round((pStart - aStart) / 60000));
+  // 【2026-09-14 v2.1】秒は切り捨てる（社長確定）。
+  //   終業して、片付けて、打刻機まで歩く時間は労働ではない。ゆっくり来てよい。
+  //   四捨五入だと 15:16:40 が 17分になり、実態より長く出てしまう。
+  const early = Math.max(0, Math.floor((pStart - aStart) / 60000));
   // 延長は予定終業を超えた分の総量。5分の猶予は引かない。
-  const over  = aEnd === null ? 0 : Math.max(0, Math.round((aEnd - pEnd) / 60000));
+  const over  = aEnd === null ? 0 : Math.max(0, Math.floor((aEnd - pEnd) / 60000));
 
   // 5分以内の延長は申告しなくてよい（放っておいても賃金がつく）
   const overNeedsDeclare = over > OVERTIME_GRACE_MIN;
@@ -7705,6 +7707,27 @@ function findDeclarable(empId, dateObj) {
     unpaid_overtime_min: sum.unpaid_overtime_min,
     sum,
   };
+}
+
+// 【2026-09-14 v2.1】事前に承認された指示・申請のうち、まだ実績を出していないもの。
+//   打刻からは作らない。本人が前もって出したもの（または上司の指示）だけを拾う。
+//   これから先の日は出さない。まだ働いていないため。
+function listPlannedDeclarable(empId, days) {
+  const out = [];
+  const t = todayStr();
+  const [ty, tm, td] = t.split('-').map(Number);
+  for (let i = 0; i < (days || DECLARE_BACK_DAYS); i++) {
+    const d = new Date(ty, tm - 1, td - i);
+    const ds = isoDateOnly(d);
+    if (isDateClosed(ds)) continue;
+    for (const o of getOtOrders(empId, ds)) {
+      if (o.type !== 'early' && o.type !== 'overtime') continue;
+      if (!canDeclare(empId, ds, o.type)) continue;
+      out.push({ date: ds, type: o.type, minutes: Number(o.minutes) || 0,
+                 reason: o.reason || '', note: o.note || '', from: o.from || 'self' });
+    }
+  }
+  return out;
 }
 
 // 直近◯日で、まだ申告していない日を拾う
@@ -7985,26 +8008,110 @@ function renderOtRequest() {
 function renderOtDeclareList() {
   const emp = state.employees.find(e => e.id === state.current_employee_id);
   if (!emp) { state.screen = 'home'; return ''; }
-  const list = listDeclarable(emp.id, DECLARE_BACK_DAYS);
+  const planned = listPlannedDeclarable(emp.id, DECLARE_BACK_DAYS);
   const mine = (state.change_requests || []).filter(r =>
     r.emp_id === emp.id && (r.type === 'early' || r.type === 'overtime'));
+  const f = state._otAfterForm || {};
+
+  // さかのぼれる日付（今日から DECLARE_BACK_DAYS 日前まで）
+  const dates = [];
+  const t0 = todayStr();
+  const [ty, tm, td] = t0.split('-').map(Number);
+  for (let i = 0; i < DECLARE_BACK_DAYS; i++) {
+    const d = new Date(ty, tm - 1, td - i);
+    dates.push(isoDateOnly(d));
+  }
+  const wdOf = (ds) => ['日','月','火','水','木','金','土'][new Date(ds + 'T12:00:00').getDay()];
+
   let html = `
     <div class="nav-row"><button class="nav-btn" data-action="back-personal">← 戻る</button></div>
     <div class="card">
       <h2>📝 早出・延長を申告する</h2>
       <div class="form-hint">
-        直近2週間で、まだ申告していない日を出しています。<br>
-        終業から<strong>5分まで</strong>は申告なしで賃金がつきます。それを超えた分と早出は申告が要ります。
+        早出・延長は<strong>前もって申請する</strong>のが基本です。<br>
+        前もって出したものは下の「計画済みの分」に並びます。<br>
+        当日その場で言われて働いた分は「あとから申告する」から出してください。
       </div>
     </div>`;
-  if (list.length === 0) {
-    html += `<div class="card"><div class="empty-message" style="padding:26px;">
-      申告できる日はありません<br>
-      <span style="font-size:0.85rem; color:#888;">予定どおりに働けています</span>
-    </div></div>`;
+
+  // ① 計画済みの分
+  html += `<div class="card">
+    <h3 style="margin-top:0;">📋 計画済みの分を申告する</h3>`;
+  if (planned.length === 0) {
+    html += `<div class="empty-message" style="padding:20px;">
+      申告できる計画はありません<br>
+      <span style="font-size:0.85rem; color:#888;">前もって申請したものが承認されると、ここに出ます</span>
+    </div>`;
   } else {
-    for (const f of list) html += renderDeclareCard(f, emp);
+    html += `<div style="font-size:0.85rem; color:#666; margin-bottom:10px;">
+      承認された計画です。<strong>実際に働いた分だけ</strong>申告してください。</div>`;
+    for (const o of planned) {
+      const lbl = o.type === 'early' ? '🌅 早出' : '🌆 延長';
+      html += `
+        <div style="background:#f7f7f7; border-radius:8px; padding:12px; margin-bottom:10px;">
+          <div style="font-weight:bold;">${o.date}（${wdOf(o.date)}）　${lbl} ${o.minutes}分</div>
+          <div style="font-size:0.85rem; color:#666; margin:4px 0 10px;">
+            ${o.reason || ''}${o.note ? '　' + o.note : ''}
+            ／ ${o.from === 'admin' ? '上司の指示' : '本人の事前申請'}
+          </div>
+          <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+            <input type="number" min="1" max="600" value="${o.minutes}"
+                   id="plan-min-${o.date}-${o.type}" style="width:90px; text-align:right;" />
+            <span>分</span>
+            <button class="primary-btn" data-action="decl-planned"
+                    data-date="${o.date}" data-kind="${o.type}" data-reason="${(o.reason || '').replace(/"/g, '&quot;')}"
+                    style="background:var(--green);">この分を申告する</button>
+          </div>
+        </div>`;
+    }
   }
+  html += `</div>`;
+
+  // ② あとから申告する（事後申告）
+  html += `
+    <div class="card">
+      <h3 style="margin-top:0;">🕐 あとから申告する</h3>
+      <div class="form-hint" style="margin-bottom:14px;">
+        計画に無かった分です。当日に上司から言われて、そのまま作業に入った場合などに使います。<br>
+        管理者が承認すると賃金に入ります。
+      </div>
+      <div class="form-row">
+        <label>日付</label>
+        <select id="otaf-date">
+          ${dates.map(d => `<option value="${d}"${f.date === d ? ' selected' : ''}>${d}（${wdOf(d)}）</option>`).join('')}
+        </select>
+      </div>
+      <div class="form-row">
+        <label>区分</label>
+        <select id="otaf-type">
+          <option value="overtime"${f.type === 'overtime' ? ' selected' : ''}>🌆 延長（終業のあと）</option>
+          <option value="early"${f.type === 'early' ? ' selected' : ''}>🌅 早出（始業の前）</option>
+        </select>
+      </div>
+      <div class="form-row">
+        <label>時間</label>
+        <div style="display:flex; align-items:center; gap:8px;">
+          <input type="number" id="otaf-min" min="1" max="600" value="${f.minutes || ''}" style="width:100px; text-align:right;" />
+          <span>分</span>
+        </div>
+      </div>
+      <div class="form-row">
+        <label>理由</label>
+        <select id="otaf-reason">
+          <option value="">-- 理由を選ぶ --</option>
+          ${OT_REASONS.map(r => `<option value="${r}"${f.reason === r ? ' selected' : ''}>${r}</option>`).join('')}
+        </select>
+      </div>
+      <div class="form-row">
+        <label>ひとこと（任意）</label>
+        <input type="text" id="otaf-note" value="${(f.note || '').replace(/"/g, '&quot;')}" placeholder="必要なら書いてください" />
+      </div>
+      <div style="text-align:center; margin-top:16px;">
+        <button class="primary-btn" data-action="submit-ot-after" style="background:var(--orange);">この内容で申告する</button>
+      </div>
+    </div>`;
+
+  // ③ これまでの申告
   if (mine.length > 0) {
     html += `<div class="card"><h3 style="margin-top:0;">これまでの申告</h3><table style="width:100%; font-size:0.9rem;">
       <thead><tr><th style="text-align:left;">日付</th><th style="text-align:left;">区分</th><th style="text-align:right;">分</th><th style="text-align:center;">状態</th></tr></thead><tbody>`;
@@ -8021,6 +8128,7 @@ function renderOtDeclareList() {
   }
   return html;
 }
+
 
 
 // =========================================================
@@ -14495,12 +14603,14 @@ function getAdminTodoCount() {
 }
 
 // 【2026-09-04 幸采事務所版】本人の「やること」件数
-//   要申告  … まだ出していない早出・延長がある日の数
+//   要申告  … 打刻もれ（出勤の押し忘れ）だけ。【2026-09-14 v2.1】早出・延長の未申告は数えない
 //   申告中  … 出したが、まだ承認されていない件数（勤務計画の変更・早出延長・移動記録）
 //   要確認  … 承認や却下の通知で、まだ本人が確認していない件数
 function getEmployeeTodoCount(empId) {
   const ovd = startOverdue(empId);
-  const need = listDeclarable(empId, DECLARE_BACK_DAYS).length + ((ovd && !ovd.claimed) ? 1 : 0);
+  // 【2026-09-14 v2.1】早出・延長の未申告は数えない。こちらから促さない（社長確定）。
+  //   残すアラームは 打刻もれ・出張報告・任意保険 の3つだけ。
+  const need = (ovd && !ovd.claimed) ? 1 : 0;
   const waiting = (state.change_requests || []).filter(r => r.emp_id === empId && r.status === 'pending').length
                 + (state.trips || []).filter(t => t.emp_id === empId && t.status === 'pending').length
                 + (state.punch_claims || []).filter(c => c.emp_id === empId && c.status === 'pending').length
@@ -15693,22 +15803,9 @@ async function handleClick(e) {
     } else {
       await punch(type, null, null);
     }
-    // 【2026-08-16 v2.1】退勤したら、その場で早出・延長を聞く。
-    // 予定どおりの日は何も出さない。「今はしない」を選べば、あとから自分の画面で出せる。
-    if (type === 'END') {
-      const f = findDeclarable(state.current_employee_id, new Date());
-      if (f) {
-        const canE = f.early_min > 0 && canDeclare(state.current_employee_id, f.date, 'early');
-        const canO = f.overtime_min > 0 && canDeclare(state.current_employee_id, f.date, 'overtime');
-        if (canE || canO) {
-          state._declTarget = { ...f, canEarly: canE, canOvertime: canO };
-          state._declReason = {};
-          state.screen = 'ot_declare';
-          render();
-          return;
-        }
-      }
-    }
+    // 【2026-09-14 v2.1】退勤したら、そこで終わり。
+    //   以前はここで「延長◯分ありますよ」と申告画面を出していた。
+    //   それは押させているのと同じ。申告は本人が自分で入っていくもの（社長確定）。
     render();
   } else if (a === 'check-update-now') {
     await checkForUpdateNow();
@@ -15776,6 +15873,50 @@ async function handleClick(e) {
     // 理由の選択を覚えておく（日付＋区分ごと）
     state._declReason = state._declReason || {};
     state._declReason[e.currentTarget.dataset.date + '__' + e.currentTarget.dataset.kind] = e.currentTarget.value;
+  } else if (a === 'decl-planned') {
+    // 【2026-09-14 v2.1】計画済みの分の実績を出す。理由は事前申請のものを引き継ぐ。
+    const d = e.currentTarget.dataset;
+    const el = document.getElementById('plan-min-' + d.date + '-' + d.kind);
+    const min = Math.max(0, Math.floor(Number(el ? el.value : 0) || 0));
+    const label = d.kind === 'early' ? '早出' : '延長';
+    if (min <= 0) { alert('分数を入れてください'); return; }
+    if (!canDeclare(state.current_employee_id, d.date, d.kind)) {
+      alert('この日はすでに申告済みか、認定済みです'); render(); return;
+    }
+    if (!confirm(`${d.date} の ${label} ${min}分 を申告します。\n\nよろしいですか？`)) return;
+    const rp = await submitDeclaration(state.current_employee_id, d.date, d.kind, min,
+      { category: d.reason || '', note: '計画済みの分' }, 'self');
+    if (!rp) { alert('申告できませんでした'); render(); return; }
+    alert(`${label} ${min}分 を申告しました。\n管理者が承認すると賃金に反映されます。`);
+    render();
+  } else if (a === 'submit-ot-after') {
+    // 【2026-09-14 v2.1】事後申告。本人が日付と分数を入れて出す。
+    const dEl = document.getElementById('otaf-date');
+    const tEl = document.getElementById('otaf-type');
+    const mEl = document.getElementById('otaf-min');
+    const rEl = document.getElementById('otaf-reason');
+    const nEl = document.getElementById('otaf-note');
+    const date = dEl ? dEl.value : '';
+    const kind = tEl ? tEl.value : '';
+    const min  = Math.max(0, Math.floor(Number(mEl ? mEl.value : 0) || 0));
+    const cat  = rEl ? rEl.value : '';
+    const note = nEl ? nEl.value : '';
+    state._otAfterForm = { date, type: kind, minutes: min || '', reason: cat, note };
+    if (!date) { alert('日付を選んでください'); return; }
+    if (min <= 0) { alert('時間（分）を入れてください'); return; }
+    if (!cat) { alert('理由を選んでください'); return; }
+    if (isDateClosed(date)) { alert('この月はすでに締められています'); return; }
+    if (!canDeclare(state.current_employee_id, date, kind)) {
+      alert('この日はすでに申告済みか、認定済みです'); render(); return;
+    }
+    const label2 = kind === 'early' ? '早出' : '延長';
+    if (!confirm(`${date} の ${label2} ${min}分 を申告します。\n理由：${cat}\n\nよろしいですか？`)) return;
+    const ra = await submitDeclaration(state.current_employee_id, date, kind, min,
+      { category: cat, note }, 'self');
+    if (!ra) { alert('申告できませんでした'); render(); return; }
+    state._otAfterForm = {};
+    alert(`${label2} ${min}分 を申告しました。\n管理者が承認すると賃金に反映されます。`);
+    render();
   } else if (a === 'decl-submit') {
     const d = e.currentTarget.dataset;
     const key = d.date + '__' + d.kind;
@@ -18848,7 +18989,7 @@ async function handleClick(e) {
 // サーバー上のHTMLの先頭だけを読みに行き、版数が自分より新しければ画面上部に帯を出す。
 // 通信できないときは黙って何もしない。打刻の邪魔は一切しない。
 // =========================================================
-const APP_VERSION = 'v2.0';
+const APP_VERSION = 'v2.1';
 const UPDATE_CHECK_INTERVAL_MS = 5 * 60 * 1000;    // 5分おきに確認
 //   先頭4KBだけ読むので回線の負担は小さい。
 //   30分だと「上げたのに変わらない」時間が長すぎたため短くした（2026-08-16）。
