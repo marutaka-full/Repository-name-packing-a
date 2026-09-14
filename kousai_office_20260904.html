@@ -6,7 +6,7 @@
 
 <!-- 版数の目印。自動更新の確認でここだけを読みに行くので、必ず<head>の先頭付近に置くこと。
      版を上げるときは、この content と APP_VERSION と <title> と画面下のフッターの4か所を揃える。 -->
-<meta name="app-version" content="v2.1">
+<meta name="app-version" content="v2.2">
 <!-- ★GitHub Pages は HTML に「10分はキャッシュしてよい」を付けて返す。
      そのため上げ直しても10分は古い版が開く。ブラウザにも使わないよう伝えておく。
      （サーバーの指示が優先されることが多いので、決め手は「🔄 更新を確認」ボタン） -->
@@ -55,7 +55,7 @@
   } catch (e) {}
 })();
 </script>
-<title>幸采事務所 打刻管理 v2.1</title>
+<title>幸采事務所 打刻管理 v2.2</title>
 <style>
   :root {
     --green: #1d9e75;
@@ -1683,7 +1683,7 @@
 
 <main id="app"></main>
 
-<div class="footer-note">幸采事務所版 v2.1<span id="storage-mode-note"></span> ／ <a href="javascript:resetAppData()" style="color:#999; text-decoration:underline; font-size:0.85rem;">🆘 緊急リセット</a></div>
+<div class="footer-note">幸采事務所版 v2.2<span id="storage-mode-note"></span> ／ <a href="javascript:resetAppData()" style="color:#999; text-decoration:underline; font-size:0.85rem;">🆘 緊急リセット</a></div>
 
 <script>
 // ストレージモードをフッターに表示
@@ -4588,10 +4588,176 @@ function tripFareOfDay(empId, dateStr) {
 
 
 // =========================================================
+// 【2026-09-14 v2.2】拠点全員の月別集計
+//   個人の表とまったく同じ形にして、数字を全員分足す。
+//   出勤・退勤は時刻を足せないので「何名」で出す。
+// =========================================================
+function renderMonthSummaryAll() {
+  const ym = state._sumMonth || todayStr().substring(0, 7);
+  const [Y, M] = ym.split('-').map(Number);
+  const lastDay = new Date(Y, M, 0).getDate();
+  const rates = kmRates();
+  const emps = employeesActive();
+
+  let sumWork = 0, sumTrip = 0, sumCommute = 0, sumFare = 0, manDays = 0;
+  let rows = '';
+  for (let d = 1; d <= lastDay; d++) {
+    const ds = `${Y}-${String(M).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+    let nStart = 0, nEnd = 0, nGo = 0, nBack = 0;
+    let work = 0, tKm = 0, cKm = 0, fare = 0;
+    for (const e2 of emps) {
+      const punches = state.punches
+        .filter(p => p.employee_id === e2.id && isOnDate(p.timestamp, ds))
+        .sort((a2, b2) => String(a2.timestamp).localeCompare(String(b2.timestamp)));
+      const st = punches.find(p => p.type === 'START');
+      const en = [...punches].reverse().find(p => p.type === 'END');
+      const trips = (state.trips || []).filter(t => t.emp_id === e2.id && t.date === ds && t.status !== 'rejected');
+      const shu = trips.find(t => t.kind === 'shucchou');
+      if (trips.some(t => t.kind === 'chokkou' || t.kind === 'both')) nGo++;
+      if (trips.some(t => t.kind === 'chokki'  || t.kind === 'both')) nBack++;
+      if (st || shu) { nStart++; manDays++; work += dayTotals(e2.id, ds).workMinutes; }
+      if (en || shu) nEnd++;
+      tKm  += tripKmOfDay(e2.id, ds);
+      cKm  += commuteKmOfDay(e2.id, ds);
+      fare += tripFareOfDay(e2.id, ds);
+    }
+    sumWork += work; sumTrip += tKm; sumCommute += cKm; sumFare += fare;
+    tKm = Math.round(tKm * 10) / 10;
+    cKm = Math.round(cKm * 10) / 10;
+    fare = Math.round(fare);
+
+    const dObj = new Date(Y, M - 1, d);
+    const dow = dObj.getDay();
+    const col = dow === 0 ? '#c62828' : (dow === 6 ? '#1565c0' : '#333');
+    const isToday = ds === todayStr();
+    rows += `<tr style="${isToday ? 'background:#fffbe6;' : (nStart > 0 ? '' : 'color:#bbb;')}">
+      <td style="text-align:center; color:${col}; font-weight:bold;">${d}<span style="font-size:0.78rem;">(${WEEKDAYS[dow]})</span></td>
+      <td style="text-align:center;">${nStart > 0 ? nStart + '名' : '—'}</td>
+      <td style="text-align:center; color:var(--header); font-weight:bold;">${nGo > 0 ? nGo : ''}</td>
+      <td style="text-align:center;">${nEnd > 0 ? nEnd + '名' : (nStart > 0 ? '?' : '—')}</td>
+      <td style="text-align:center; color:var(--header); font-weight:bold;">${nBack > 0 ? nBack : ''}</td>
+      <td style="text-align:right;">${nStart > 0 ? formatMinutes(work) : ''}</td>
+      <td style="text-align:right;">${tKm > 0 ? tKm : ''}</td>
+      <td style="text-align:right;">${fare > 0 ? fare.toLocaleString() : ''}</td>
+      <td style="text-align:right;">${cKm > 0 ? cKm : ''}</td>
+    </tr>`;
+  }
+
+  sumTrip = Math.round(sumTrip * 10) / 10;
+  sumFare = Math.round(sumFare);
+  sumCommute = Math.round(sumCommute * 10) / 10;
+  const tripYen = Math.ceil(sumTrip * rates.trip);
+  const commuteYen = Math.ceil(sumCommute * rates.commute);
+
+  // 全員の所定（勤務計画の積み上げ）
+  let planDays = 0, planMin = 0;
+  for (const e2 of emps) {
+    const pt = monthPlanTotals(e2.id, Y, M);
+    planDays += pt.workDays; planMin += pt.netMin;
+  }
+  const diff = sumWork - planMin;
+  const dsign = diff > 0 ? '+' : (diff < 0 ? '−' : '±');
+  const dcol = diff > 0 ? 'var(--red)' : (diff < 0 ? 'var(--blue)' : '#888');
+
+  let html = `
+    <div class="nav-row">
+      <button class="nav-btn" data-action="back-admin">← 戻る</button>
+      <button class="nav-btn" data-action="export-summary-csv">📥 CSVで書き出す</button>
+    </div>
+    <div class="card">
+      <h2>📊 👥 拠点全員の ${Y}年${M}月</h2>
+      <div class="filter-options" style="margin:8px 0;">
+        <button class="filter-chip active" data-action="sum-emp-all">👥 全員</button>`;
+  for (const e2 of emps) {
+    html += `<button class="filter-chip" data-action="sum-emp-select" data-emp-id="${e2.id}">${e2.emoji} ${e2.name}</button>`;
+  }
+  html += `</div>
+      <div class="shift-navbar">
+        <button class="nav-btn" data-action="sum-prev">← 前の月</button>
+        <div class="shift-date-label">${Y}年${M}月</div>
+        <button class="nav-btn" data-action="sum-today">今月</button>
+        <button class="nav-btn" data-action="sum-next">次の月 →</button>
+      </div>
+      <div class="form-hint" style="margin-bottom:8px;">
+        在籍 ${emps.length}名の合計です。出勤・退勤は時刻を足せないので<strong>人数</strong>で出しています。
+      </div>
+      <div style="overflow-x:auto;">
+      <table style="width:100%; min-width:560px;">
+        <thead><tr>
+          <th style="text-align:center;">日</th>
+          <th style="text-align:center;">出勤</th>
+          <th style="text-align:center;">直行</th>
+          <th style="text-align:center;">退勤</th>
+          <th style="text-align:center;">直帰</th>
+          <th style="text-align:right;">実労働</th>
+          <th style="text-align:right;">移動km</th>
+          <th style="text-align:right;">公共円</th>
+          <th style="text-align:right;">通勤km</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+        <tfoot>
+          <tr style="background:var(--green-bg); font-weight:bold;">
+            <td style="text-align:center;">合計</td>
+            <td style="text-align:center;">延${manDays}日</td>
+            <td colspan="3"></td>
+            <td style="text-align:right;">${formatMinutes(sumWork)}</td>
+            <td style="text-align:right;">${sumTrip}</td>
+            <td style="text-align:right;">${sumFare.toLocaleString()}</td>
+            <td style="text-align:right;">${sumCommute}</td>
+          </tr>
+          ${planDays === 0 ? '' : `
+          <tr style="background:#fafafa;">
+            <td style="text-align:center; color:#666;">所定</td>
+            <td style="text-align:center; color:#666;">延${planDays}日</td>
+            <td colspan="3"></td>
+            <td style="text-align:right; color:#666;">${formatMinutes(planMin)}</td>
+            <td colspan="3"></td>
+          </tr>
+          <tr style="background:#fafafa;">
+            <td style="text-align:center; color:#666;">差</td>
+            <td style="text-align:center; color:${manDays - planDays === 0 ? '#888' : dcol};">
+              ${manDays - planDays > 0 ? '+' : (manDays - planDays < 0 ? '−' : '±')}${Math.abs(manDays - planDays)}日</td>
+            <td colspan="3"></td>
+            <td style="text-align:right; color:${dcol}; font-weight:bold;">${dsign}${formatMinutes(Math.abs(diff))}</td>
+            <td colspan="3"></td>
+          </tr>`}
+        </tfoot>
+      </table>
+      </div>
+
+      <h3 style="margin-top:20px;">交通費・通勤（拠点合計）</h3>
+      <div class="form-hint" style="margin-bottom:8px;">
+        労働時間の賃金は出していません。社員の方は月給で、時給の方と足すと意味のない数字になるためです。
+      </div>
+      <table style="max-width:560px;"><tbody>
+        <tr><th style="width:12em;">業務移動（車）</th>
+            <td style="text-align:right;">${sumTrip} km × ${rates.trip} 円</td>
+            <td style="text-align:right; font-weight:bold;">${tripYen.toLocaleString()} 円</td></tr>
+        <tr><th>業務移動（公共）</th>
+            <td style="text-align:right; color:#888;">実費</td>
+            <td style="text-align:right; font-weight:bold;">${sumFare.toLocaleString()} 円</td></tr>
+        <tr><th>通勤</th>
+            <td style="text-align:right;">${sumCommute} km × ${rates.commute} 円</td>
+            <td style="text-align:right; font-weight:bold;">${commuteYen.toLocaleString()} 円</td></tr>
+        <tr style="background:var(--green-bg);"><th>合計</th><td></td>
+            <td style="text-align:right; font-weight:bold; font-size:1.1rem;">${(tripYen + sumFare + commuteYen).toLocaleString()} 円</td></tr>
+      </tbody></table>
+      <div class="form-hint" style="margin-top:10px;">
+        💡 移動は<strong>承認済みの申告</strong>だけを数えます。承認待ちは入りません。<br>
+        💡 一人ずつの中身は、上の名前を押すと出ます。
+      </div>
+    </div>
+  `;
+  return html;
+}
+
+// =========================================================
 // 【2026-09-05 幸采事務所版】個人の月別集計
 //   縦に日、横に 出勤・直行・退勤・直帰・実労働・移動km・通勤km
 // =========================================================
 function renderMonthSummary() {
+  // 【2026-09-14 v2.2】管理者が「全員」を選んだときは拠点合計の表を出す
+  if (state._sumAll && state._sumAdmin) return renderMonthSummaryAll();
   const empId = state._sumEmpId || state._calEmpId || (employeesActive()[0] || {}).id;
   const emp = state.employees.find(e => e.id === empId);
   if (!emp) { state.screen = 'admin'; return renderAdmin(); }
@@ -4655,6 +4821,7 @@ function renderMonthSummary() {
   `;
   if (isAdmin) {
     html += `<div class="filter-options" style="margin:8px 0;">`;
+    html += `<button class="filter-chip" data-action="sum-emp-all">👥 全員</button>`;
     for (const e2 of employeesActive()) {
       const on = e2.id === empId ? ' active' : '';
       html += `<button class="filter-chip${on}" data-action="sum-emp-select" data-emp-id="${e2.id}">${e2.emoji} ${e2.name}</button>`;
@@ -16390,7 +16557,11 @@ async function handleClick(e) {
     state._sumMonth = state._sumMonth || todayStr().substring(0, 7);
     state.screen = 'month_sum';
     render();
+  } else if (a === 'sum-emp-all') {
+    state._sumAll = true;
+    render();
   } else if (a === 'sum-emp-select') {
+    state._sumAll = false;
     state._sumEmpId = e.currentTarget.dataset.empId;
     render();
   } else if (a === 'sum-prev' || a === 'sum-next') {
@@ -16401,6 +16572,44 @@ async function handleClick(e) {
   } else if (a === 'sum-today') {
     state._sumMonth = todayStr().substring(0, 7);
     render();
+  } else if (a === 'export-summary-csv' && state._sumAll && state._sumAdmin) {
+    // 【2026-09-14 v2.2】拠点全員の月別集計をCSVに出す
+    const ym = state._sumMonth || todayStr().substring(0, 7);
+    const [Y, M] = ym.split('-').map(Number);
+    const lastDay = new Date(Y, M, 0).getDate();
+    const rates = kmRates();
+    const emps = employeesActive();
+    const lines = [['日付', '曜日', '出勤(名)', '直行(名)', '退勤(名)', '直帰(名)', '実労働(分)', '移動km', '公共円', '通勤km'].join(',')];
+    let sw = 0, stk = 0, sck = 0, sf = 0, md = 0;
+    for (let d = 1; d <= lastDay; d++) {
+      const ds = `${Y}-${String(M).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+      let nS = 0, nE = 0, nG = 0, nB = 0, wk = 0, tk = 0, ck = 0, fr = 0;
+      for (const e2 of emps) {
+        const pcs = state.punches.filter(p => p.employee_id === e2.id && isOnDate(p.timestamp, ds))
+          .sort((a2, b2) => String(a2.timestamp).localeCompare(String(b2.timestamp)));
+        const st2 = pcs.find(p => p.type === 'START');
+        const en2 = [...pcs].reverse().find(p => p.type === 'END');
+        const tps = (state.trips || []).filter(t => t.emp_id === e2.id && t.date === ds && t.status !== 'rejected');
+        const shu2 = tps.find(t => t.kind === 'shucchou');
+        if (tps.some(t => t.kind === 'chokkou' || t.kind === 'both')) nG++;
+        if (tps.some(t => t.kind === 'chokki'  || t.kind === 'both')) nB++;
+        if (st2 || shu2) { nS++; md++; wk += dayTotals(e2.id, ds).workMinutes; }
+        if (en2 || shu2) nE++;
+        tk += tripKmOfDay(e2.id, ds); ck += commuteKmOfDay(e2.id, ds); fr += tripFareOfDay(e2.id, ds);
+      }
+      sw += wk; stk += tk; sck += ck; sf += fr;
+      lines.push([ds, WEEKDAYS[new Date(Y, M - 1, d).getDay()],
+        nS || '', nG || '', nE || '', nB || '',
+        nS > 0 ? wk : '', Math.round(tk * 10) / 10 || '', Math.round(fr) || '', Math.round(ck * 10) / 10 || ''].join(','));
+    }
+    stk = Math.round(stk * 10) / 10; sck = Math.round(sck * 10) / 10; sf = Math.round(sf);
+    lines.push(['合計', '延' + md + '日', '', '', '', '', sw, stk, sf, sck].join(','));
+    lines.push([]);
+    lines.push(['業務移動（車）', stk + 'km', rates.trip + '円/km', Math.ceil(stk * rates.trip) + '円'].join(','));
+    lines.push(['業務移動（公共）', '実費', '', sf + '円'].join(','));
+    lines.push(['通勤', sck + 'km', rates.commute + '円/km', Math.ceil(sck * rates.commute) + '円'].join(','));
+    lines.push(['合計', '', '', (Math.ceil(stk * rates.trip) + sf + Math.ceil(sck * rates.commute)) + '円'].join(','));
+    downloadTextFile(`集計_拠点全員_${ym}.csv`, '\uFEFF' + lines.join('\n'), 'text/csv');
   } else if (a === 'export-summary-csv') {
     const empId = state._sumEmpId || state.current_employee_id;
     const emp = state.employees.find(x => x.id === empId);
@@ -18989,7 +19198,7 @@ async function handleClick(e) {
 // サーバー上のHTMLの先頭だけを読みに行き、版数が自分より新しければ画面上部に帯を出す。
 // 通信できないときは黙って何もしない。打刻の邪魔は一切しない。
 // =========================================================
-const APP_VERSION = 'v2.1';
+const APP_VERSION = 'v2.2';
 const UPDATE_CHECK_INTERVAL_MS = 5 * 60 * 1000;    // 5分おきに確認
 //   先頭4KBだけ読むので回線の負担は小さい。
 //   30分だと「上げたのに変わらない」時間が長すぎたため短くした（2026-08-16）。
