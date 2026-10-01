@@ -6,7 +6,7 @@
 
 <!-- 版数の目印。自動更新の確認でここだけを読みに行くので、必ず<head>の先頭付近に置くこと。
      版を上げるときは、この content と APP_VERSION と <title> と画面下のフッターの4か所を揃える。 -->
-<meta name="app-version" content="v2.6">
+<meta name="app-version" content="v2.7">
 <!-- ★GitHub Pages は HTML に「10分はキャッシュしてよい」を付けて返す。
      そのため上げ直しても10分は古い版が開く。ブラウザにも使わないよう伝えておく。
      （サーバーの指示が優先されることが多いので、決め手は「🔄 更新を確認」ボタン） -->
@@ -55,7 +55,7 @@
   } catch (e) {}
 })();
 </script>
-<title>味采 パッケージセンター 打刻システム v2.6</title>
+<title>味采 パッケージセンター 打刻システム v2.7</title>
 <style>
   :root {
     --green: #1d9e75;
@@ -1675,7 +1675,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
 
 <main id="app"></main>
 
-<div class="footer-note">味采版 v2.6（まる労務 v0.4 ベース）<span id="storage-mode-note"></span> ／ <a href="javascript:resetAppData()" style="color:#999; text-decoration:underline; font-size:0.85rem;">🆘 緊急リセット</a></div>
+<div class="footer-note">味采版 v2.7（まる労務 v0.4 ベース）<span id="storage-mode-note"></span> ／ <a href="javascript:resetAppData()" style="color:#999; text-decoration:underline; font-size:0.85rem;">🆘 緊急リセット</a></div>
 
 <script>
 // ストレージモードをフッターに表示
@@ -2495,6 +2495,13 @@ function fyTodayStr() {
 
 // 戻り値：実行したら記録オブジェクト、しなければ null
 function runNewYearResetOnce() {
+  // ★【2026-10-01】止めました。
+  //   9月1日の一度きりのつもりでしたが、印（_fy_reset）が失われると
+  //   また走ります。実機で9月の打刻・作業記録が消えました。
+  //   年度の切り替えは、人が確かめてから手で行うべきものです。
+  //   必要になったら、この return null を外してください。
+  return null;
+  /* eslint-disable no-unreachable */
   try {
     if (typeof localStorage === 'undefined') return null;
     if (localStorage.getItem(APP_NS + '_fy_reset') === FY_RESET_ID) return null; // 実行済み
@@ -2535,6 +2542,7 @@ function runNewYearResetOnce() {
     console.error('[味采] 新年度リセットに失敗', e);
     return null;
   }
+  /* eslint-enable no-unreachable */
 }
 
 // ストレージ抽象化：Claude.ai 内 → window.storage、ローカルブラウザ → localStorage
@@ -14162,7 +14170,7 @@ async function handleClick(e) {
 // サーバー上のHTMLの先頭だけを読みに行き、版数が自分より新しければ画面上部に帯を出す。
 // 通信できないときは黙って何もしない。打刻の邪魔は一切しない。
 // =========================================================
-const APP_VERSION = 'v2.6';
+const APP_VERSION = 'v2.7';
 const UPDATE_CHECK_INTERVAL_MS = 5 * 60 * 1000;    // 5分おきに確認
 //   先頭4KBだけ読むので回線の負担は小さい。
 //   30分だと「上げたのに変わらない」時間が長すぎたため短くした（2026-08-16）。
