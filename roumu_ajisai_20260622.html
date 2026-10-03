@@ -6,7 +6,7 @@
 
 <!-- 版数の目印。自動更新の確認でここだけを読みに行くので、必ず<head>の先頭付近に置くこと。
      版を上げるときは、この content と APP_VERSION と <title> と画面下のフッターの4か所を揃える。 -->
-<meta name="app-version" content="v3.0">
+<meta name="app-version" content="v3.2">
 <!-- ★GitHub Pages は HTML に「10分はキャッシュしてよい」を付けて返す。
      そのため上げ直しても10分は古い版が開く。ブラウザにも使わないよう伝えておく。
      （サーバーの指示が優先されることが多いので、決め手は「🔄 更新を確認」ボタン） -->
@@ -55,7 +55,7 @@
   } catch (e) {}
 })();
 </script>
-<title>味采 パッケージセンター 打刻システム v3.0</title>
+<title>味采 パッケージセンター 打刻システム v3.2</title>
 <style>
   :root {
     --green: #1d9e75;
@@ -1675,7 +1675,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
 
 <main id="app"></main>
 
-<div class="footer-note">味采版 v3.0（まる労務 v0.4 ベース）<span id="storage-mode-note"></span> ／ <a href="javascript:resetAppData()" style="color:#999; text-decoration:underline; font-size:0.85rem;">🆘 緊急リセット</a></div>
+<div class="footer-note">味采版 v3.2（まる労務 v0.4 ベース）<span id="storage-mode-note"></span> ／ <a href="javascript:resetAppData()" style="color:#999; text-decoration:underline; font-size:0.85rem;">🆘 緊急リセット</a></div>
 
 <script>
 // ストレージモードをフッターに表示
@@ -2095,7 +2095,7 @@ const DEFAULT_WORK_PRODUCTS = [
   { id: 'P13', name: 'リンゴ',     emoji: '🍎' },
   { id: 'P14', name: 'パクチー',   emoji: '🌿' },
   { id: 'P15', name: 'セロリ',     emoji: '🥬' },
-  { id: 'P16', name: 'サツマイモ', emoji: '🍠', specs: [
+  { id: 'P16', name: '甘藷', emoji: '🍠', specs: [
       { id:'S1', label:'500g', sec:20, src:'★社長指示 2026-08-15（甘藷）' },
       { id:'S2', label:'800g', sec:30, src:'★社長指示 2026-08-15（甘藷）' },
       { id:'S3', label:'1000g', sec:40, src:'★社長指示 2026-08-15（甘藷）' },
@@ -2109,7 +2109,7 @@ const DEFAULT_WORK_PRODUCTS = [
 
 // 2026-08-05 に追加した品目の名前。既存端末へ配布するときの対象を、この11件だけに限定する。
 // （DEFAULT_WORK_PRODUCTS 全体を対象にすると、拠点が意図的に消した品目まで復活してしまう）
-const PRODUCT_SEED_V2_NAMES = ['ミニトマト','エノキ','リンゴ','パクチー','セロリ','サツマイモ','長芋','レンコン','里芋','その他野菜','その他果物'];
+const PRODUCT_SEED_V2_NAMES = ['ミニトマト','エノキ','リンゴ','パクチー','セロリ','甘藷','長芋','レンコン','里芋','その他野菜','その他果物'];
 const PRODUCT_SEED_VERSION = 2;
 
 // 単価マスタ初期データ（社長指示：経験ベースのたたき台）
@@ -2166,7 +2166,7 @@ const DEFAULT_WORK_PRICES = (() => {
     { id:'P13', base:'P07', over:{ TH02:20 }, why:'リンゴ：複製元みかん／確定単価⑪ りんご類袋詰め 20円 袋（n=2・暫定）' },
     { id:'P14', base:'P06', over:{ TH02:18 }, why:'パクチー：複製元長ネギ／確定単価③ 袋詰め(葉物) 18円 袋' },
     { id:'P15', base:'P06', over:{ TH02:18 }, why:'セロリ：複製元長ネギ／確定単価③ 袋詰め(葉物:サニー/GL/ニラ/セロリ) 18円 袋。セロリは出所に実名あり' },
-    { id:'P16', base:'P03', over:{},          why:'サツマイモ：複製元じゃがいも／実績なし・複製のみ' },
+    { id:'P16', base:'P03', over:{},          why:'甘藷：複製元じゃがいも／実績なし・複製のみ' },
     { id:'P17', base:'P08', over:{},          why:'長芋：複製元大根（長物）／実績なし・複製のみ' },
     { id:'P18', base:'P03', over:{},          why:'レンコン：複製元じゃがいも（根菜）／実績なし・複製のみ' },
     { id:'P19', base:'P03', over:{},          why:'里芋：複製元じゃがいも（根菜）／実績なし・複製のみ' },
@@ -2612,6 +2612,7 @@ async function initializeData() {
   if (!sites || sites.length === 0) await saveData(STORAGE_KEYS.SITES, DEFAULT_SITES);
   if (!(await loadData(STORAGE_KEYS.ADMIN_PIN, null))) await saveData(STORAGE_KEYS.ADMIN_PIN, DEFAULT_ADMIN_PIN);
   await migrateSpecsOnce();   // 【v2.3】単価の分離（一度きり）
+  await renameKanshoOnce();           // 【2026-10-03】サツマイモ → 甘藷（一度きり）
   await migrateMikanSpecOnce();       // 【2026-10-01】みかんの規格を2段に（一度きり）
   await fixNasuTamanegiPriceOnce();   // 【2026-10-01】単価を入れる（一度きり）
 }
@@ -4163,10 +4164,12 @@ function calcDayLaborSummary(employeeId, dateObj) {
   const grossMin = Math.max(0, Math.floor((calcEndT - calcStartT) / 60000));
   const netMin = Math.max(0, grossMin - breakMin);
   // 時給取得
+  //   【2026-10-03】ここも hourlyRateOf を通す。
+  //   月間勤務計画 → 無ければ従業員マスタ、の順で探す。
+  //   直接 work_plans を読んでいたため、連動が効いていなかった。
   const year = dateObj.getFullYear();
   const month = dateObj.getMonth() + 1;
-  const plan = state.work_plans.find(wp => wp.employee_id === employeeId && wp.year === year && wp.month === month);
-  const hourlyRate = plan ? (plan.hourly_rate || 0) : 0;
+  const hourlyRate = hourlyRateOf(employeeId, year, month);
   const netHours = netMin / 60;
   const dailyWage = Math.round(netHours * hourlyRate);
   return {
@@ -4993,6 +4996,32 @@ function prodColor(v) {
 //   作業は「袋詰め」（TH02）です。単価は作業賃だけで、包材費は別枠。
 //   すでに単価が入っている規格には触れません（上書きしません）。
 // =========================================================
+// 【2026-10-03】「サツマイモ」を「甘藷」に改名する（一度きり）。
+//   ファスが「甘藷」を使っているので、2社で名前を揃えます（社長の指示）。
+//   品目ID（P16）は変えないので、これまでの記録はそのまま残ります。
+//   名前だけが変わります。
+const RENAME_ID = 'rename_kansho_2026_10';
+
+async function renameKanshoOnce() {
+  try {
+    if (typeof localStorage === 'undefined') return null;
+    if (localStorage.getItem(APP_NS + '_rename') === RENAME_ID) return null;
+
+    const prods = (await loadData(STORAGE_KEYS.WORK_PRODUCTS, null)) || [];
+    let n = 0;
+    for (const p of prods) {
+      if (p.name === 'サツマイモ') { p.name = '甘藷'; n++; }
+    }
+    if (n > 0) await saveData(STORAGE_KEYS.WORK_PRODUCTS, prods);
+    localStorage.setItem(APP_NS + '_rename', RENAME_ID);
+    if (n > 0) console.log('[味采] サツマイモ → 甘藷 に変えました', { 件数: n });
+    return n;
+  } catch (e) {
+    console.error('[味采] 改名に失敗', e);
+    return null;
+  }
+}
+
 const PRICE_FIX_ID = 'price_fix_2026_10b';
 
 const PRICE_FIX_ROWS = [
@@ -5011,8 +5040,8 @@ const PRICE_FIX_ROWS = [
   { pid: 'P03', sid: 'S3', label: 'じゃがいも 1000g',    price: 40 },
   { pid: 'P06', sid: 'S1', label: '長ネギ 1本',          price: 15 },
   { pid: 'P06', sid: 'S2', label: '長ネギ 2本',          price: 25 },
-  { pid: 'P16', sid: 'S1', label: 'サツマイモ 500g',     price: 25 },
-  { pid: 'P16', sid: 'S2', label: 'サツマイモ 800g',     price: 25 },
+  { pid: 'P16', sid: 'S1', label: '甘藷 500g',           price: 25 },
+  { pid: 'P16', sid: 'S2', label: '甘藷 800g',           price: 25 },
   { pid: 'P21', sid: '',   label: 'その他果物',          price: 25 },
   { pid: 'P01', sid: 'S5', label: 'きゅうり 5本',        price: 30 },
   { pid: 'P01', sid: 'S2', label: 'きゅうり 2本',        price: 25 },
@@ -6986,10 +7015,24 @@ function calcMonthlyVolumeSum(employeeId, year, month) {
 // =========================================================
 
 // 指定の年月における、その人の時給
+// 【2026-10-03】時給を取るところ。ここ1か所で、集計・品目別・稼働率・
+//   ゼロの原因・人件費、すべてに効きます。
+//
+//   ① 月間勤務計画に、その月の時給があればそれを使う
+//      → 特定の月だけ時給を変えたいときのため
+//   ② 無ければ、従業員マスタの時給を使う  ★2026-10-03 に足した
+//      → 毎月入れ直さなくてよくなる
+//   ③ どちらも無ければ 0。これまでどおり「時給未設定」として出る
+//
+//   ★ 2026年9月、月間勤務計画が未登録だったため、7名とも人件費0円で
+//     集計されました。②が無かったためです。
 function hourlyRateOf(empId, year, month) {
   const plan = state.work_plans.find(wp =>
     wp.employee_id === empId && wp.year === year && wp.month === month);
-  return plan ? (plan.hourly_rate || 0) : 0;
+  if (plan && plan.hourly_rate > 0) return plan.hourly_rate;      // ① その月の指定
+  const emp = state.employees.find(e => e.id === empId);
+  if (emp && emp.hourly_rate > 0) return emp.hourly_rate;         // ② 従業員マスタ
+  return 0;                                                        // ③ 未設定
 }
 
 // 記録に関わった人ごとの内訳を返す
@@ -14293,7 +14336,7 @@ async function handleClick(e) {
 // サーバー上のHTMLの先頭だけを読みに行き、版数が自分より新しければ画面上部に帯を出す。
 // 通信できないときは黙って何もしない。打刻の邪魔は一切しない。
 // =========================================================
-const APP_VERSION = 'v3.0';
+const APP_VERSION = 'v3.2';
 const UPDATE_CHECK_INTERVAL_MS = 5 * 60 * 1000;    // 5分おきに確認
 //   先頭4KBだけ読むので回線の負担は小さい。
 //   30分だと「上げたのに変わらない」時間が長すぎたため短くした（2026-08-16）。
