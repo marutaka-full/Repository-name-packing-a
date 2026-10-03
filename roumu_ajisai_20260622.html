@@ -6,7 +6,7 @@
 
 <!-- 版数の目印。自動更新の確認でここだけを読みに行くので、必ず<head>の先頭付近に置くこと。
      版を上げるときは、この content と APP_VERSION と <title> と画面下のフッターの4か所を揃える。 -->
-<meta name="app-version" content="v2.7">
+<meta name="app-version" content="v3.0">
 <!-- ★GitHub Pages は HTML に「10分はキャッシュしてよい」を付けて返す。
      そのため上げ直しても10分は古い版が開く。ブラウザにも使わないよう伝えておく。
      （サーバーの指示が優先されることが多いので、決め手は「🔄 更新を確認」ボタン） -->
@@ -55,7 +55,7 @@
   } catch (e) {}
 })();
 </script>
-<title>味采 パッケージセンター 打刻システム v2.7</title>
+<title>味采 パッケージセンター 打刻システム v3.0</title>
 <style>
   :root {
     --green: #1d9e75;
@@ -1675,7 +1675,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
 
 <main id="app"></main>
 
-<div class="footer-note">味采版 v2.7（まる労務 v0.4 ベース）<span id="storage-mode-note"></span> ／ <a href="javascript:resetAppData()" style="color:#999; text-decoration:underline; font-size:0.85rem;">🆘 緊急リセット</a></div>
+<div class="footer-note">味采版 v3.0（まる労務 v0.4 ベース）<span id="storage-mode-note"></span> ／ <a href="javascript:resetAppData()" style="color:#999; text-decoration:underline; font-size:0.85rem;">🆘 緊急リセット</a></div>
 
 <script>
 // ストレージモードをフッターに表示
@@ -2063,11 +2063,12 @@ const DEFAULT_WORK_PRODUCTS = [
       { id:'S5', label:'5本', sec:35, src:'naganegi AI 15+secIdx*5' },
       { id:'S6', label:'6本', sec:40, src:'naganegi AI 15+secIdx*5' },
   ] },
+  // 【2026-10-01】社長の指示で、個数の刻みをやめて2段にした。
+  //   6〜15個 → 30円 ／ 16個以上 → 35円
+  //   それまでの 5個/10個/18個/20個 の記録は、S1（6〜15個）S2（16個以上）へ付け替える。
   { id: 'P07', name: 'みかん', emoji: '🍊', specs: [
-      { id:'S1', label:'5個', sec:15, src:'mikan AI 袋詰め laborCost(15)' },
-      { id:'S2', label:'10個', sec:15, src:'mikan AI 袋詰め laborCost(15)' },
-      { id:'S3', label:'18個', sec:15, src:'mikan AI 袋詰め laborCost(15)' },
-      { id:'S4', label:'20個', sec:15, src:'mikan AI 袋詰め laborCost(15)' },
+      { id:'S1', label:'6〜15個', sec:74, src:'2026-10-01 社長の指示＋9月の実績' },
+      { id:'S2', label:'16個以上', sec:90, src:'2026-10-01 社長の指示＋9月の実績' },
   ] },
   { id: 'P08', name: '大根',       emoji: '🥬' },
   { id: 'P09', name: 'なす', emoji: '🍆', specs: [
@@ -2611,6 +2612,8 @@ async function initializeData() {
   if (!sites || sites.length === 0) await saveData(STORAGE_KEYS.SITES, DEFAULT_SITES);
   if (!(await loadData(STORAGE_KEYS.ADMIN_PIN, null))) await saveData(STORAGE_KEYS.ADMIN_PIN, DEFAULT_ADMIN_PIN);
   await migrateSpecsOnce();   // 【v2.3】単価の分離（一度きり）
+  await migrateMikanSpecOnce();       // 【2026-10-01】みかんの規格を2段に（一度きり）
+  await fixNasuTamanegiPriceOnce();   // 【2026-10-01】単価を入れる（一度きり）
 }
 
 // ===========================================
@@ -4971,6 +4974,122 @@ function prodColor(v) {
 // =========================================================
 
 // Excel（日本語版）で開いたときに文字化けしないよう BOM を付ける
+
+// =========================================================
+// 【2026-10-01】なす・玉ねぎの単価を入れる（一度きり）
+//
+//   9月の記録で、この2品目の単価が入っておらず出来高が0でした。
+//   社長から額をいただいたので、起動時に一度だけ入れます。
+//
+//   なす（規格はグラム表記のまま。中身は本数）
+//     100g = 3本  20円
+//     150g = 4本  20円
+//     300g = 5本  25円
+//     ※ 200g の行も、それ以上は5本と同じ扱いで 25円
+//
+//   玉ねぎ
+//     1500g  65円
+//
+//   作業は「袋詰め」（TH02）です。単価は作業賃だけで、包材費は別枠。
+//   すでに単価が入っている規格には触れません（上書きしません）。
+// =========================================================
+const PRICE_FIX_ID = 'price_fix_2026_10b';
+
+const PRICE_FIX_ROWS = [
+  // 品目ID, 規格ID, 規格の名前, 単価
+  // ── なす（規格はグラム表記のまま。中身は本数）
+  { pid: 'P09', sid: 'S1', label: 'なす 100g（3本）',    price: 20 },
+  { pid: 'P09', sid: 'S2', label: 'なす 150g（4本）',    price: 20 },
+  { pid: 'P09', sid: 'S3', label: 'なす 200g（5本扱い）', price: 25 },
+  { pid: 'P09', sid: 'S4', label: 'なす 300g（5本）',    price: 25 },
+  // ── 玉ねぎ
+  { pid: 'P05', sid: 'S5', label: '玉ねぎ 1500g',        price: 65 },
+  // ── 【2026-10-01】社長の指示で追加
+  { pid: 'P10', sid: 'S3', label: 'ピーマン 200g',       price: 30 },
+  { pid: 'P07', sid: 'S1', label: 'みかん 6〜15個',      price: 30 },
+  { pid: 'P07', sid: 'S2', label: 'みかん 16個以上',     price: 35 },
+  { pid: 'P03', sid: 'S3', label: 'じゃがいも 1000g',    price: 40 },
+  { pid: 'P06', sid: 'S1', label: '長ネギ 1本',          price: 15 },
+  { pid: 'P06', sid: 'S2', label: '長ネギ 2本',          price: 25 },
+  { pid: 'P16', sid: 'S1', label: 'サツマイモ 500g',     price: 25 },
+  { pid: 'P16', sid: 'S2', label: 'サツマイモ 800g',     price: 25 },
+  { pid: 'P21', sid: '',   label: 'その他果物',          price: 25 },
+  { pid: 'P01', sid: 'S5', label: 'きゅうり 5本',        price: 30 },
+  { pid: 'P01', sid: 'S2', label: 'きゅうり 2本',        price: 25 },
+  { pid: 'P01', sid: 'S1', label: 'きゅうり 定番1本',    price: 10 },
+  // ── 入れないもの
+  //   里芋   量が分からないため（社長の指示）
+  //   えのき 1袋いくらか決まっていないため
+];
+
+// 【2026-10-01】みかんの記録を、新しい規格（6〜15個／16個以上）へ付け替える。
+//   それまでの 5個=S1 / 10個=S2 / 18個=S3 / 20個=S4 を、
+//   S1（6〜15個）と S2（16個以上）の2つに寄せる。
+//   5個は6未満だが、記録が無く、あっても小さい袋なので S1 に寄せる。
+const MIKAN_SPEC_MAP = { S1: 'S1', S2: 'S1', S3: 'S2', S4: 'S2' };
+
+async function migrateMikanSpecOnce() {
+  try {
+    if (typeof localStorage === 'undefined') return null;
+    if (localStorage.getItem(APP_NS + '_mikan_spec') === PRICE_FIX_ID) return null;
+
+    // 作業記録の規格を付け替える
+    const recs = (await loadData(STORAGE_KEYS.WORK_RECORDS, null)) || [];
+    let n1 = 0;
+    for (const r of recs) {
+      if (r.main_product_id !== 'P07') continue;
+      const to = MIKAN_SPEC_MAP[r.main_spec_id];
+      if (to && to !== r.main_spec_id) { r.main_spec_id = to; n1++; }
+    }
+    if (n1 > 0) await saveData(STORAGE_KEYS.WORK_RECORDS, recs);
+
+    // 古い規格に付いていた単価の行は、もう使われないので消す
+    const prices = (await loadData(STORAGE_KEYS.WORK_PRICES, null)) || [];
+    const before = prices.length;
+    const kept = prices.filter(p =>
+      !(p.product_id === 'P07' && ['S3', 'S4'].includes(p.spec_id || '')));
+    if (kept.length !== before) await saveData(STORAGE_KEYS.WORK_PRICES, kept);
+
+    localStorage.setItem(APP_NS + '_mikan_spec', PRICE_FIX_ID);
+    console.log('[味采] みかんの規格を付け替えました',
+      { 記録: n1 + '件', 消した単価: (before - kept.length) + '件' });
+    return n1;
+  } catch (e) {
+    console.error('[味采] みかんの規格の付け替えに失敗', e);
+    return null;
+  }
+}
+
+async function fixNasuTamanegiPriceOnce() {
+  try {
+    if (typeof localStorage === 'undefined') return null;
+    if (localStorage.getItem(APP_NS + '_price_fix') === PRICE_FIX_ID) return null;
+
+    const prices = (await loadData(STORAGE_KEYS.WORK_PRICES, null)) || [];
+    const added = [], skipped = [];
+    for (const r of PRICE_FIX_ROWS) {
+      const hit = prices.find(p =>
+        p.task_id === SPEC_TASK_ID && p.product_id === r.pid && (p.spec_id || '') === r.sid);
+      if (hit && hit.unit_price > 0) { skipped.push(r.label); continue; }
+      if (hit) {
+        hit.unit_price = r.price;           // 0円で入っていたら埋める
+      } else {
+        prices.push({ task_id: SPEC_TASK_ID, product_id: r.pid, spec_id: r.sid,
+                      unit_price: r.price, unit: '袋' });
+      }
+      added.push(`${r.label} ${r.price}円`);
+    }
+    if (added.length > 0) await saveData(STORAGE_KEYS.WORK_PRICES, prices);
+    localStorage.setItem(APP_NS + '_price_fix', PRICE_FIX_ID);
+    console.log('[味采] なす・玉ねぎの単価を入れました', { 入れた: added, 既にあった: skipped });
+    return added.length;
+  } catch (e) {
+    console.error('[味采] 単価の設定に失敗', e);
+    return null;
+  }
+}
+
+
 const CSV_BOM = '\uFEFF';
 
 function csvLine(arr) { return arr.map(csvCell).join(','); }
@@ -5161,7 +5280,7 @@ function csvRecords(from, to, label) {
           '個人時給(円)', '個人人件費(円)', '個人出来高(円)', '個人粗利(円)', 'ゼロの理由']);
   for (const x of recordsInRange(from, to)) {
     const r = x.record;
-    const task = state.work_tasks.find(t => t.id === r.task_id);
+    const task = state.work_tasks.find(t => t.id === r.main_task_id);
     const prod = state.work_products.find(p => p.id === r.main_product_id);
     const totalMin = x.parts.reduce((a, p) => a + p.minutes, 0);
     const why = [];
@@ -5173,7 +5292,7 @@ function csvRecords(from, to, label) {
       if (!p.hourlyRate || p.hourlyRate === 0) why2.push('時給未設定');
       L.push([x.date, formatTime(r.work_started_at),
               r.work_ended_at ? formatTime(r.work_ended_at) : '',
-              task ? task.name : (r.task_id || ''),
+              task ? task.name : (r.main_task_id || ''),
               prod ? prod.name : (r.main_product_id || '（品目なし）'),
               r.main_spec_id ? specLabel(r.main_product_id, r.main_spec_id) : '',
               round1(r.quantity), r.unit || '', yen(r.unit_price),
@@ -5209,7 +5328,7 @@ function csvZeroReasons(kind, anchor, from, to, label) {
     const r = x.record;
     const rev = (r.unit_price || 0) * (r.quantity || 0);
     if (rev > 0) continue;
-    const task = state.work_tasks.find(t => t.id === r.task_id);
+    const task = state.work_tasks.find(t => t.id === r.main_task_id);
     const prod = state.work_products.find(p => p.id === r.main_product_id);
     const totalMin = x.parts.reduce((a, p) => a + p.minutes, 0);
     const why = [];
@@ -5217,7 +5336,7 @@ function csvZeroReasons(kind, anchor, from, to, label) {
     if (!r.unit_price || r.unit_price === 0) why.push('A 単価未設定');
     if (!r.quantity || r.quantity === 0) why.push('C 数量0');
     zeroMin += totalMin; zeroCount++;
-    L.push([x.date, task ? task.name : (r.task_id || ''),
+    L.push([x.date, task ? task.name : (r.main_task_id || ''),
             prod ? prod.name : '（品目なし）',
             r.main_spec_id ? specLabel(r.main_product_id, r.main_spec_id) : '',
             round1(r.quantity), yen(r.unit_price), Math.round(totalMin),
@@ -12563,7 +12682,11 @@ async function handleClick(e) {
     const tid = e.currentTarget.dataset.taskId;
     const t = state.work_tasks.find(x => x.id === tid);
     if (!t) return;
-    const usedRecords = state.work_records.filter(r => r.task_id === tid).length;
+    // 【2026-10-01 修正】r.task_id を読んでいたため、作業記録があっても
+    //   常に0件と判定され、使われている作業を削除できてしまっていた。
+    //   実際の記録は main_task_id（8/12 にも同じ誤りを直している）。
+    const usedRecords = state.work_records.filter(r =>
+      (r.main_task_id || r.task_id) === tid).length;
     if (usedRecords > 0) {
       alert(`「${t.name}」は作業記録が ${usedRecords} 件あるため削除できません。\n記録を残したまま使わなくする場合は、名称の先頭に「（廃止）」を付けてください。`);
       return;
@@ -14170,7 +14293,7 @@ async function handleClick(e) {
 // サーバー上のHTMLの先頭だけを読みに行き、版数が自分より新しければ画面上部に帯を出す。
 // 通信できないときは黙って何もしない。打刻の邪魔は一切しない。
 // =========================================================
-const APP_VERSION = 'v2.7';
+const APP_VERSION = 'v3.0';
 const UPDATE_CHECK_INTERVAL_MS = 5 * 60 * 1000;    // 5分おきに確認
 //   先頭4KBだけ読むので回線の負担は小さい。
 //   30分だと「上げたのに変わらない」時間が長すぎたため短くした（2026-08-16）。
