@@ -6,7 +6,7 @@
 
 <!-- 版数の目印。自動更新の確認でここだけを読みに行くので、必ず<head>の先頭付近に置くこと。
      版を上げるときは、この content と APP_VERSION と <title> と画面下のフッターの4か所を揃える。 -->
-<meta name="app-version" content="v2.4">
+<meta name="app-version" content="v2.5">
 <!-- ★GitHub Pages は HTML に「10分はキャッシュしてよい」を付けて返す。
      そのため上げ直しても10分は古い版が開く。ブラウザにも使わないよう伝えておく。
      （サーバーの指示が優先されることが多いので、決め手は「🔄 更新を確認」ボタン） -->
@@ -55,7 +55,7 @@
   } catch (e) {}
 })();
 </script>
-<title>ファス パッケージセンター 打刻システム v2.4</title>
+<title>ファス パッケージセンター 打刻システム v2.5</title>
 <style>
   :root {
     --green: #1d9e75;
@@ -1677,7 +1677,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
 
 <main id="app"></main>
 
-<div class="footer-note">ファス版 v2.4<span id="storage-mode-note"></span> ／ <a href="javascript:resetAppData()" style="color:#999; text-decoration:underline; font-size:0.85rem;">🆘 緊急リセット</a></div>
+<div class="footer-note">ファス版 v2.5<span id="storage-mode-note"></span> ／ <a href="javascript:resetAppData()" style="color:#999; text-decoration:underline; font-size:0.85rem;">🆘 緊急リセット</a></div>
 
 <script>
 // ストレージモードをフッターに表示
@@ -2680,7 +2680,7 @@ async function initializeData() {
   await migrateSpecsOnce();   // 【v2.3】単価の分離（一度きり）
   await migrateMikanSpecOnce();     // 【2026-10-03】みかんの規格を2段に（一度きり）
   await fixPricesOnce();            // 【2026-10-03】単価を入れる（一度きり）
-  await setKomakiWageOnce();        // 【2026-10-03】小牧の時給（一度きり）
+  await setKomakiWageOnce();        // 【2026-10-08】小牧の時給 1,300円（一度きり）
   await applyCommonPricesOnce();    // 【2026-10-04】共通の単価（一度きり）
 }
 
@@ -5165,17 +5165,21 @@ async function fixPricesOnce() {
 }
 
 // =========================================================
-// 【2026-10-03】小牧支店の時給を入れる（一度きり）
+// 【2026-10-08】小牧支店の時給を入れる（一度きり）
 //
-//   愛知県の最低賃金 1,195円（2026年10月1日発効。1,140円から55円up）。
-//   小牧支店だけです。鳥栖（佐賀）・えびの（宮崎）は最低賃金が違うので触れません。
+//   社長の指示で 1,300円。小牧支店だけです。
+//   鳥栖（佐賀）・えびの（宮崎）は触れません。
 //
-//   ★ すでに時給が入っている方には触れません。
-//     これは最低賃金であって、その人の時給ではありません。
-//     実際の額は 管理画面 → 従業員マスタ → 編集 で入れてください。
+//   ★ すでに時給が入っている方も、1,300円に書き換えます（社長の指示）。
+//     10-03 に 1,195円（愛知県の最低賃金）を入れる版を作りましたが、
+//     1,300円に変わりました。印も新しくしてあるので、
+//     1,195円が入った端末でも、開けば 1,300円に直ります。
+//
+//   これは初期値です。人ごとに違う額にするときは
+//   管理画面 → 従業員マスタ → 編集 で入れてください。
 // =========================================================
-const KOMAKI_WAGE_ID = 'komaki_wage_2026_10';
-const AICHI_MIN_WAGE = 1195;     // 愛知県 最低賃金（2026-10-01 発効）
+const KOMAKI_WAGE_ID = 'komaki_wage_1300_2026_10';
+const KOMAKI_WAGE = 1300;        // 【2026-10-08】社長の指示
 
 async function setKomakiWageOnce() {
   try {
@@ -5183,18 +5187,17 @@ async function setKomakiWageOnce() {
     if (localStorage.getItem(APP_NS + '_komaki_wage') === KOMAKI_WAGE_ID) return null;
 
     const emps = (await loadData(STORAGE_KEYS.EMPLOYEES, null)) || [];
-    let n = 0;
+    let put = 0, changed = 0;
     for (const e of emps) {
       if (e.location !== '小牧支店') continue;
-      if (e.hourly_rate && e.hourly_rate > 0) continue;   // 入っていれば触らない
-      e.hourly_rate = AICHI_MIN_WAGE;
-      n++;
+      if (!e.hourly_rate || e.hourly_rate <= 0) { e.hourly_rate = KOMAKI_WAGE; put++; }
+      else if (e.hourly_rate !== KOMAKI_WAGE) { e.hourly_rate = KOMAKI_WAGE; changed++; }
     }
-    if (n > 0) await saveData(STORAGE_KEYS.EMPLOYEES, emps);
+    if (put + changed > 0) await saveData(STORAGE_KEYS.EMPLOYEES, emps);
     localStorage.setItem(APP_NS + '_komaki_wage', KOMAKI_WAGE_ID);
     console.log('[ファス] 小牧支店の時給を入れました',
-      { 人数: n, 時給: AICHI_MIN_WAGE, 根拠: '愛知県 最低賃金 2026-10-01 発効' });
-    return n;
+      { 新しく入れた: put, 書き換え: changed, 時給: KOMAKI_WAGE, 根拠: '社長の指示 2026-10-08' });
+    return put + changed;
   } catch (e) {
     console.error('[ファス] 小牧の時給の設定に失敗', e);
     return null;
@@ -14544,7 +14547,7 @@ async function handleClick(e) {
 // サーバー上のHTMLの先頭だけを読みに行き、版数が自分より新しければ画面上部に帯を出す。
 // 通信できないときは黙って何もしない。打刻の邪魔は一切しない。
 // =========================================================
-const APP_VERSION = 'v2.4';
+const APP_VERSION = 'v2.5';
 const UPDATE_CHECK_INTERVAL_MS = 5 * 60 * 1000;    // 5分おきに確認
 //   先頭4KBだけ読むので回線の負担は小さい。
 //   30分だと「上げたのに変わらない」時間が長すぎたため短くした（2026-08-16）。
