@@ -6,7 +6,7 @@
 
 <!-- 版数の目印。自動更新の確認でここだけを読みに行くので、必ず<head>の先頭付近に置くこと。
      版を上げるときは、この content と APP_VERSION と <title> と画面下のフッターの4か所を揃える。 -->
-<meta name="app-version" content="v2.3">
+<meta name="app-version" content="v2.4">
 <!-- ★GitHub Pages は HTML に「10分はキャッシュしてよい」を付けて返す。
      そのため上げ直しても10分は古い版が開く。ブラウザにも使わないよう伝えておく。
      （サーバーの指示が優先されることが多いので、決め手は「🔄 更新を確認」ボタン） -->
@@ -55,7 +55,7 @@
   } catch (e) {}
 })();
 </script>
-<title>ファス パッケージセンター 打刻システム v2.3</title>
+<title>ファス パッケージセンター 打刻システム v2.4</title>
 <style>
   :root {
     --green: #1d9e75;
@@ -1677,7 +1677,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
 
 <main id="app"></main>
 
-<div class="footer-note">ファス版 v2.3<span id="storage-mode-note"></span> ／ <a href="javascript:resetAppData()" style="color:#999; text-decoration:underline; font-size:0.85rem;">🆘 緊急リセット</a></div>
+<div class="footer-note">ファス版 v2.4<span id="storage-mode-note"></span> ／ <a href="javascript:resetAppData()" style="color:#999; text-decoration:underline; font-size:0.85rem;">🆘 緊急リセット</a></div>
 
 <script>
 // ストレージモードをフッターに表示
@@ -2681,6 +2681,7 @@ async function initializeData() {
   await migrateMikanSpecOnce();     // 【2026-10-03】みかんの規格を2段に（一度きり）
   await fixPricesOnce();            // 【2026-10-03】単価を入れる（一度きり）
   await setKomakiWageOnce();        // 【2026-10-03】小牧の時給（一度きり）
+  await applyCommonPricesOnce();    // 【2026-10-04】共通の単価（一度きり）
 }
 
 // ===========================================
@@ -5196,6 +5197,130 @@ async function setKomakiWageOnce() {
     return n;
   } catch (e) {
     console.error('[ファス] 小牧の時給の設定に失敗', e);
+    return null;
+  }
+}
+
+
+
+// =========================================================
+// 【2026-10-04】共通の単価マスタ（味采・ファス 共通／66規格・26品目）
+//
+//   社長が決めた額です。2社で同じ基準にしました。
+//   単価は「作業の単価」＝作業賃だけ。包材費（袋・ラベル）は別枠です。
+//   作業は「袋詰め」（SPEC_TASK_ID）。
+//
+//   決め方
+//     ・2026年9月の実績を見て決めたもの
+//     ・9月に実績が無かった31件を、規格の大小で筋が通るように決めたもの
+//     ・ピーマンと長ネギは全規格15円（社長の指示）
+//     ・重さが増えるのに単価が下がる逆転を、すべて直してある
+//
+//   ★ すでに入っている単価も上書きします。今回決めた額が正です。
+//     自動で作られたたたき台（migrateSpecsOnce）より優先します。
+//
+//   大きさ（L・M）と入れ物（袋・ネット・ダンボール）は、今回は分けません。
+//   分けるときは規格そのものを増やすことになります。
+// =========================================================
+const COMMON_PRICE_ID = 'common_price_2026_10';
+
+const COMMON_PRICES = [
+  { pid: 'P01', sid: 'S1', price: 10 },                       // きゅうり 定番1本
+  { pid: 'P01', sid: 'S2', price: 15 },                       // きゅうり 2本
+  { pid: 'P01', sid: 'S3', price: 15 },                       // きゅうり 3本
+  { pid: 'P01', sid: 'S4', price: 15 },                       // きゅうり 4本
+  { pid: 'P01', sid: 'S5', price: 15 },                       // きゅうり 5本
+  { pid: 'P02', sid: 'S1', price: 15 },                       // トマト 300g
+  { pid: 'P02', sid: 'S2', price: 15 },                       // トマト 400g
+  { pid: 'P02', sid: 'S3', price: 15 },                       // トマト 500g
+  { pid: 'P02', sid: 'S4', price: 20 },                       // トマト 600g
+  { pid: 'P02', sid: 'S5', price: 20 },                       // トマト 800g
+  { pid: 'P03', sid: 'S1', price: 20 },                       // じゃがいも 500g
+  { pid: 'P03', sid: 'S2', price: 20 },                       // じゃがいも 700g
+  { pid: 'P03', sid: 'S3', price: 20 },                       // じゃがいも 1000g
+  { pid: 'P03', sid: 'S4', price: 25 },                       // じゃがいも 1200g
+  { pid: 'P03', sid: 'S5', price: 25 },                       // じゃがいも 1500g
+  { pid: 'P04', sid: 'S1', price: 15 },                       // にんじん 500g
+  { pid: 'P04', sid: 'S2', price: 20 },                       // にんじん 700g
+  { pid: 'P04', sid: 'S3', price: 20 },                       // にんじん 1000g
+  { pid: 'P04', sid: 'S4', price: 25 },                       // にんじん 1200g
+  { pid: 'P04', sid: 'S5', price: 25 },                       // にんじん 1500g
+  { pid: 'P04', sid: 'S6', price: 25 },                       // にんじん 2000g
+  { pid: 'P05', sid: 'S1', price: 20 },                       // 玉ねぎ 500g
+  { pid: 'P05', sid: 'S2', price: 20 },                       // 玉ねぎ 700g
+  { pid: 'P05', sid: 'S3', price: 20 },                       // 玉ねぎ 1000g
+  { pid: 'P05', sid: 'S4', price: 25 },                       // 玉ねぎ 1200g
+  { pid: 'P05', sid: 'S5', price: 25 },                       // 玉ねぎ 1500g
+  { pid: 'P05', sid: 'S6', price: 25 },                       // 玉ねぎ 2000g
+  { pid: 'P06', sid: 'S1', price: 15 },                       // 長ネギ 1本
+  { pid: 'P06', sid: 'S2', price: 15 },                       // 長ネギ 2本
+  { pid: 'P06', sid: 'S3', price: 15 },                       // 長ネギ 3本
+  { pid: 'P06', sid: 'S4', price: 15 },                       // 長ネギ 4本
+  { pid: 'P06', sid: 'S5', price: 15 },                       // 長ネギ 5本
+  { pid: 'P06', sid: 'S6', price: 15 },                       // 長ネギ 6本
+  { pid: 'P07', sid: 'S1', price: 30 },                       // みかん 6〜15個
+  { pid: 'P07', sid: 'S2', price: 35 },                       // みかん 16個以上
+  { pid: 'P08', sid: '', price: 30 },                         // 大根
+  { pid: 'P09', sid: 'S1', price: 20 },                       // なす 100g
+  { pid: 'P09', sid: 'S2', price: 20 },                       // なす 150g
+  { pid: 'P09', sid: 'S3', price: 20 },                       // なす 200g
+  { pid: 'P09', sid: 'S4', price: 25 },                       // なす 300g
+  { pid: 'P10', sid: 'S1', price: 15 },                       // ピーマン 100g
+  { pid: 'P10', sid: 'S2', price: 15 },                       // ピーマン 150g
+  { pid: 'P10', sid: 'S3', price: 15 },                       // ピーマン 200g
+  { pid: 'P10', sid: 'S4', price: 15 },                       // ピーマン 300g
+  { pid: 'P10', sid: 'S5', price: 15 },                       // ピーマン 400g
+  { pid: 'P17', sid: 'S1', price: 15 },                       // ミニトマト 100g
+  { pid: 'P17', sid: 'S2', price: 15 },                       // ミニトマト 150g
+  { pid: 'P17', sid: 'S3', price: 15 },                       // ミニトマト 200g
+  { pid: 'P17', sid: 'S4', price: 25 },                       // ミニトマト 250g
+  { pid: 'P18', sid: '', price: 20 },                         // エノキ
+  { pid: 'P19', sid: '', price: 30 },                         // リンゴ
+  { pid: 'P20', sid: '', price: 25 },                         // パクチー
+  { pid: 'P21', sid: '', price: 10 },                         // セロリ
+  { pid: 'P16', sid: 'S1', price: 20 },                       // 甘藷 500g
+  { pid: 'P16', sid: 'S2', price: 20 },                       // 甘藷 800g
+  { pid: 'P16', sid: 'S3', price: 20 },                       // 甘藷 1000g
+  { pid: 'P22', sid: '', price: 20 },                         // 長芋
+  { pid: 'P23', sid: '', price: 20 },                         // レンコン
+  { pid: 'P24', sid: '', price: 30 },                         // 里芋
+  { pid: 'P25', sid: '', price: 20 },                         // その他野菜
+  { pid: 'P26', sid: '', price: 25 },                         // その他果物
+  { pid: 'P11', sid: '', price: 20 },                         // レタス
+  { pid: 'P12', sid: '', price: 20 },                         // キャベツ
+  { pid: 'P13', sid: '', price: 15 },                         // ごぼう
+  { pid: 'P14', sid: '', price: 10 },                         // 大葉
+  { pid: 'P15', sid: 'S1', price: 15 },                       // ニラ 1束
+];
+
+async function applyCommonPricesOnce() {
+  try {
+    if (typeof localStorage === 'undefined') return null;
+    if (localStorage.getItem(APP_NS + '_common_price') === COMMON_PRICE_ID) return null;
+
+    const prices = (await loadData(STORAGE_KEYS.WORK_PRICES, null)) || [];
+    let added = 0, changed = 0, same = 0;
+    for (const r of COMMON_PRICES) {
+      const hit = prices.find(p =>
+        p.task_id === SPEC_TASK_ID && p.product_id === r.pid && (p.spec_id || '') === r.sid);
+      if (!hit) {
+        prices.push({ task_id: SPEC_TASK_ID, product_id: r.pid, spec_id: r.sid,
+                      unit_price: r.price, unit: '袋' });
+        added++;
+      } else if (hit.unit_price !== r.price) {
+        hit.unit_price = r.price;
+        changed++;
+      } else {
+        same++;
+      }
+    }
+    await saveData(STORAGE_KEYS.WORK_PRICES, prices);
+    localStorage.setItem(APP_NS + '_common_price', COMMON_PRICE_ID);
+    console.log('[ファス] 共通の単価を入れました',
+      { 新しく追加: added, 書き換え: changed, 同じ: same, 合計: COMMON_PRICES.length });
+    return added + changed;
+  } catch (e) {
+    console.error('[ファス] 共通の単価の設定に失敗', e);
     return null;
   }
 }
@@ -14419,7 +14544,7 @@ async function handleClick(e) {
 // サーバー上のHTMLの先頭だけを読みに行き、版数が自分より新しければ画面上部に帯を出す。
 // 通信できないときは黙って何もしない。打刻の邪魔は一切しない。
 // =========================================================
-const APP_VERSION = 'v2.3';
+const APP_VERSION = 'v2.4';
 const UPDATE_CHECK_INTERVAL_MS = 5 * 60 * 1000;    // 5分おきに確認
 //   先頭4KBだけ読むので回線の負担は小さい。
 //   30分だと「上げたのに変わらない」時間が長すぎたため短くした（2026-08-16）。
