@@ -6,7 +6,7 @@
 
 <!-- 版数の目印。自動更新の確認でここだけを読みに行くので、必ず<head>の先頭付近に置くこと。
      版を上げるときは、この content と APP_VERSION と <title> と画面下のフッターの4か所を揃える。 -->
-<meta name="app-version" content="v2.2">
+<meta name="app-version" content="v2.1">
 <!-- ★GitHub Pages は HTML に「10分はキャッシュしてよい」を付けて返す。
      そのため上げ直しても10分は古い版が開く。ブラウザにも使わないよう伝えておく。
      （サーバーの指示が優先されることが多いので、決め手は「🔄 更新を確認」ボタン） -->
@@ -55,7 +55,7 @@
   } catch (e) {}
 })();
 </script>
-<title>幸采事務所 打刻管理 v2.2</title>
+<title>幸采事務所 打刻管理 v2.1</title>
 <style>
   :root {
     --green: #1d9e75;
@@ -1683,7 +1683,7 @@
 
 <main id="app"></main>
 
-<div class="footer-note">幸采事務所版 v2.2<span id="storage-mode-note"></span> ／ <a href="javascript:resetAppData()" style="color:#999; text-decoration:underline; font-size:0.85rem;">🆘 緊急リセット</a></div>
+<div class="footer-note">幸采事務所版 v2.1<span id="storage-mode-note"></span></div>
 
 <script>
 // ストレージモードをフッターに表示
@@ -2343,8 +2343,71 @@ function clearAppData() {
     for (const key of Object.values(STORAGE_KEYS)) localStorage.removeItem(nsKey(key));
   } catch (e) {}
 }
-function resetAppData() {
-  if (!confirm('幸采事務所の全データを初期化してリロードします。よろしいですか？\n※ この端末の他のアプリのデータには触れません。')) return;
+// =========================================================
+// 【2026-10-08】緊急リセットを安全にした
+//
+//   これまでの問題
+//     ・打刻画面のいちばん下にあった。従業員が立つ画面に、
+//       全データを消すリンクが置いてあった
+//     ・URLの末尾に #reset が付いていると、確認なしで即座に全消去
+//     ・消す前のバックアップが無く、押したら戻せなかった
+//
+//   2026-10-01、味采の実機で9月の打刻・作業記録が全部消えました。
+//   原因は年度リセットでしたが、この緊急リセットも同じ危うさを持っています。
+//
+//   直したこと
+//     ① 打刻画面から消し、管理画面 → 設定 の奥へ移した
+//     ② #reset は確認を出すようにした
+//     ③ 消す前に、かならずバックアップのファイルを落とす
+// =========================================================
+
+// 消す前のバックアップ。resetAppData と #reset の両方から呼ぶ。
+async function dumpBeforeReset(why) {
+  try {
+    const dump = {
+      _format: 'kousai_office_backup',
+      _version: 1,
+      _site: (typeof currentSite === 'function' ? currentSite() : ''),
+      _exported_at: new Date().toISOString(),
+      _reason: '消す直前の自動バックアップ（' + why + '）',
+      data: {},
+    };
+    for (const [k, key] of Object.entries(STORAGE_KEYS)) {
+      dump.data[key] = await loadData(key, null);
+    }
+    const name = '幸采事務所_消す前のバックアップ_'
+      + todayStr() + '_'
+      + String(new Date().getHours()).padStart(2, '0')
+      + String(new Date().getMinutes()).padStart(2, '0') + '.json';
+    downloadTextFile(name, JSON.stringify(dump, null, 2), 'application/json');
+    return name;
+  } catch (e) {
+    console.error('[幸采] 消す前のバックアップに失敗', e);
+    return null;
+  }
+}
+
+async function resetAppData() {
+  if (!confirm(
+    '幸采事務所の全データを消して、まっさらにします。\n\n'
+    + '消えるもの：打刻・作業記録・従業員・勤務計画・単価・設定、すべて\n'
+    + '※ この端末の他のアプリのデータには触れません。\n\n'
+    + '先にバックアップのファイルを落とします。\n'
+    + 'よろしいですか？')) return;
+
+  const name = await dumpBeforeReset('緊急リセット');
+  if (name) {
+    if (!confirm(
+      'バックアップを落としました。\n　' + name + '\n\n'
+      + 'ダウンロードのフォルダに入っているか確かめてください。\n\n'
+      + '確かめたら「OK」を押すと、データを消します。\n'
+      + 'まだなら「キャンセル」で止まります。')) return;
+  } else {
+    if (!confirm(
+      '★ バックアップを落とせませんでした。\n\n'
+      + 'このまま消すと、データは戻せません。\n'
+      + 'それでも消しますか？')) return;
+  }
   clearAppData();
   location.hash = '';
   location.reload();
@@ -4049,7 +4112,7 @@ function renderMyTodoBar(empId) {
   };
   return `
     <div style="display:flex; gap:10px; flex-wrap:wrap; margin:12px 0;">
-      ${cell('打刻もれ', c.need,  { bg: '#ffe9e9', line: '#c0392b' }, null)}
+      ${cell('要申告', c.need,    { bg: '#fff8e1', line: '#b87b00' }, 'go-ot-declare')}
       ${cell('申告中', c.waiting, { bg: '#e8eef5', line: '#1f4e79' }, null)}
       ${cell('承認済・要確認', c.confirm, { bg: '#e8f4ee', line: '#1d9e75' }, 'toggle-notif-panel-self')}
     </div>`;
@@ -4086,10 +4149,11 @@ function calDayInfo(empId, dateStr) {
     t.date_from && t.date_to && t.date_from <= dateStr && dateStr <= t.date_to);
   const orders = getOtOrders(empId, dateStr);                    // 承認済みの早出・延長の指示
   const ordersPend = getOtOrdersAll(empId, dateStr).filter(o => (o.status || 'approved') === 'pending');
-  // 【2026-09-14 v2.1】予定と打刻のズレは「実績」として出すだけ。
-  //   申告を促す印（declare）は付けない。
   const decl = isFuture ? null : findDeclarable(empId, dateObj);
-  const needDeclare = false;
+  const needDeclare = !!decl && (
+    (decl.early_min > 0 && canDeclare(empId, dateStr, 'early')) ||
+    (decl.overtime_min > 0 && canDeclare(empId, dateStr, 'overtime'))
+  );
 
   // 打刻もれ：過ぎた日で、計画があるのに欠けているもの。
   //   ・出勤／退勤 … 無ければ欠け（直帰の申告が承認済みなら退勤は欠けとしない）
@@ -4161,7 +4225,7 @@ const CAL_COLORS = {
   plain:    { bg: '#ffffff', line: '#e0e0e0', label: '通常' },
   off:      { bg: '#f2f2f2', line: '#e0e0e0', label: '休み・計画なし' },
   future:   { bg: '#fbfdff', line: '#d8e4ee', label: 'これから' },
-  declare:  { bg: '#fff8e1', line: '#d9a300', label: '—' },   // 【2026-09-14 v2.1】使わない
+  declare:  { bg: '#fff8e1', line: '#d9a300', label: '要申告' },
   missing:  { bg: '#ffe9e9', line: '#c62828', label: '打刻もれ' },
   waiting:  { bg: '#e8eef5', line: '#1f4e79', label: '申告中' },
   approved: { bg: '#e8f4ee', line: '#1d9e75', label: '承認済' },
@@ -4208,8 +4272,7 @@ function renderMonthCalendar() {
 
   // 凡例
   html += `<div style="display:flex; gap:8px; flex-wrap:wrap; margin:10px 0 14px;">`;
-  // 【2026-09-14 v2.1】'declare'（要申告）は使わなくなったので凡例から外す
-  for (const k of ['missing', 'waiting', 'approved', 'travel', 'off']) {
+  for (const k of ['declare', 'missing', 'waiting', 'approved', 'travel', 'off']) {
     const c = CAL_COLORS[k];
     html += `<span style="font-size:0.78rem; padding:3px 9px; border-radius:12px; background:${c.bg}; border:1.5px solid ${c.line}; color:#444;">${c.label}</span>`;
   }
@@ -4259,7 +4322,7 @@ function renderMonthCalendar() {
   html += `</tr></tbody></table>`;
 
   html += `<div style="margin-top:12px; font-size:0.9rem; color:#555;">
-    この月：打刻もれ <strong style="color:var(--red);">${counts.missing}</strong>日
+    この月：要申告 <strong>${counts.declare}</strong>日 ／ 打刻もれ <strong style="color:var(--red);">${counts.missing}</strong>日
     ／ 申告中 <strong>${counts.waiting}</strong>日 ／ 承認済 <strong style="color:var(--green);">${counts.approved}</strong>日
     ${counts.travel > 0 ? `／ 出張 <strong style="color:#7b1fa2;">${counts.travel}</strong>日` : ''}
   </div>
@@ -4324,7 +4387,8 @@ function renderCalDayDetail(empId, ds, isAdmin) {
        ${t.status === 'approved' ? '承認済' : t.status === 'rejected' ? '差戻し' : '承認待ち'}</span>`).join('<br>')}</td></tr>`;
   }
   if (i.decl && (i.decl.early_min > 0 || i.decl.overtime_min > 0)) {
-    html += `<tr><th>予定とのズレ</th><td>${i.decl.early_min > 0 ? `始業より ${i.decl.early_min}分 早く打刻　` : ''}${i.decl.overtime_min > 0 ? `終業より ${i.decl.overtime_min}分 遅く打刻` : ''}</td></tr>`;
+    html += `<tr><th>早出・延長</th><td>${i.decl.early_min > 0 ? `早出 ${i.decl.early_min}分　` : ''}${i.decl.overtime_min > 0 ? `延長 ${i.decl.overtime_min}分` : ''}
+      ${i.needDeclare ? '<span style="color:#b87b00; font-weight:bold;">← 申告してください</span>' : ''}</td></tr>`;
   }
   if (i.adj.exists) {
     html += `<tr><th>認定済み</th><td style="color:var(--green);">早出 ${i.adj.early_min}分 ／ 延長 ${i.adj.overtime_min}分</td></tr>`;
@@ -4349,7 +4413,7 @@ function renderCalDayDetail(empId, ds, isAdmin) {
     }
   } else {
     const emp9 = state.employees.find(x => x.id === empId);
-    // 【2026-09-14 v2.1】日ごとの画面から申告へ誘導しない。入口は自分の画面の常設ボタンだけ。
+    if (i.needDeclare && canDeclareOt(emp9)) html += `<button class="primary-btn" data-action="go-ot-declare" style="background:var(--orange);">📝 早出・延長を申告する</button>`;
     if (i.openMissing.length > 0) {
       const first = i.openMissing[0];
       const doneCount = i.missingList.length - i.openMissing.length;
@@ -4588,176 +4652,10 @@ function tripFareOfDay(empId, dateStr) {
 
 
 // =========================================================
-// 【2026-09-14 v2.2】拠点全員の月別集計
-//   個人の表とまったく同じ形にして、数字を全員分足す。
-//   出勤・退勤は時刻を足せないので「何名」で出す。
-// =========================================================
-function renderMonthSummaryAll() {
-  const ym = state._sumMonth || todayStr().substring(0, 7);
-  const [Y, M] = ym.split('-').map(Number);
-  const lastDay = new Date(Y, M, 0).getDate();
-  const rates = kmRates();
-  const emps = employeesActive();
-
-  let sumWork = 0, sumTrip = 0, sumCommute = 0, sumFare = 0, manDays = 0;
-  let rows = '';
-  for (let d = 1; d <= lastDay; d++) {
-    const ds = `${Y}-${String(M).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-    let nStart = 0, nEnd = 0, nGo = 0, nBack = 0;
-    let work = 0, tKm = 0, cKm = 0, fare = 0;
-    for (const e2 of emps) {
-      const punches = state.punches
-        .filter(p => p.employee_id === e2.id && isOnDate(p.timestamp, ds))
-        .sort((a2, b2) => String(a2.timestamp).localeCompare(String(b2.timestamp)));
-      const st = punches.find(p => p.type === 'START');
-      const en = [...punches].reverse().find(p => p.type === 'END');
-      const trips = (state.trips || []).filter(t => t.emp_id === e2.id && t.date === ds && t.status !== 'rejected');
-      const shu = trips.find(t => t.kind === 'shucchou');
-      if (trips.some(t => t.kind === 'chokkou' || t.kind === 'both')) nGo++;
-      if (trips.some(t => t.kind === 'chokki'  || t.kind === 'both')) nBack++;
-      if (st || shu) { nStart++; manDays++; work += dayTotals(e2.id, ds).workMinutes; }
-      if (en || shu) nEnd++;
-      tKm  += tripKmOfDay(e2.id, ds);
-      cKm  += commuteKmOfDay(e2.id, ds);
-      fare += tripFareOfDay(e2.id, ds);
-    }
-    sumWork += work; sumTrip += tKm; sumCommute += cKm; sumFare += fare;
-    tKm = Math.round(tKm * 10) / 10;
-    cKm = Math.round(cKm * 10) / 10;
-    fare = Math.round(fare);
-
-    const dObj = new Date(Y, M - 1, d);
-    const dow = dObj.getDay();
-    const col = dow === 0 ? '#c62828' : (dow === 6 ? '#1565c0' : '#333');
-    const isToday = ds === todayStr();
-    rows += `<tr style="${isToday ? 'background:#fffbe6;' : (nStart > 0 ? '' : 'color:#bbb;')}">
-      <td style="text-align:center; color:${col}; font-weight:bold;">${d}<span style="font-size:0.78rem;">(${WEEKDAYS[dow]})</span></td>
-      <td style="text-align:center;">${nStart > 0 ? nStart + '名' : '—'}</td>
-      <td style="text-align:center; color:var(--header); font-weight:bold;">${nGo > 0 ? nGo : ''}</td>
-      <td style="text-align:center;">${nEnd > 0 ? nEnd + '名' : (nStart > 0 ? '?' : '—')}</td>
-      <td style="text-align:center; color:var(--header); font-weight:bold;">${nBack > 0 ? nBack : ''}</td>
-      <td style="text-align:right;">${nStart > 0 ? formatMinutes(work) : ''}</td>
-      <td style="text-align:right;">${tKm > 0 ? tKm : ''}</td>
-      <td style="text-align:right;">${fare > 0 ? fare.toLocaleString() : ''}</td>
-      <td style="text-align:right;">${cKm > 0 ? cKm : ''}</td>
-    </tr>`;
-  }
-
-  sumTrip = Math.round(sumTrip * 10) / 10;
-  sumFare = Math.round(sumFare);
-  sumCommute = Math.round(sumCommute * 10) / 10;
-  const tripYen = Math.ceil(sumTrip * rates.trip);
-  const commuteYen = Math.ceil(sumCommute * rates.commute);
-
-  // 全員の所定（勤務計画の積み上げ）
-  let planDays = 0, planMin = 0;
-  for (const e2 of emps) {
-    const pt = monthPlanTotals(e2.id, Y, M);
-    planDays += pt.workDays; planMin += pt.netMin;
-  }
-  const diff = sumWork - planMin;
-  const dsign = diff > 0 ? '+' : (diff < 0 ? '−' : '±');
-  const dcol = diff > 0 ? 'var(--red)' : (diff < 0 ? 'var(--blue)' : '#888');
-
-  let html = `
-    <div class="nav-row">
-      <button class="nav-btn" data-action="back-admin">← 戻る</button>
-      <button class="nav-btn" data-action="export-summary-csv">📥 CSVで書き出す</button>
-    </div>
-    <div class="card">
-      <h2>📊 👥 拠点全員の ${Y}年${M}月</h2>
-      <div class="filter-options" style="margin:8px 0;">
-        <button class="filter-chip active" data-action="sum-emp-all">👥 全員</button>`;
-  for (const e2 of emps) {
-    html += `<button class="filter-chip" data-action="sum-emp-select" data-emp-id="${e2.id}">${e2.emoji} ${e2.name}</button>`;
-  }
-  html += `</div>
-      <div class="shift-navbar">
-        <button class="nav-btn" data-action="sum-prev">← 前の月</button>
-        <div class="shift-date-label">${Y}年${M}月</div>
-        <button class="nav-btn" data-action="sum-today">今月</button>
-        <button class="nav-btn" data-action="sum-next">次の月 →</button>
-      </div>
-      <div class="form-hint" style="margin-bottom:8px;">
-        在籍 ${emps.length}名の合計です。出勤・退勤は時刻を足せないので<strong>人数</strong>で出しています。
-      </div>
-      <div style="overflow-x:auto;">
-      <table style="width:100%; min-width:560px;">
-        <thead><tr>
-          <th style="text-align:center;">日</th>
-          <th style="text-align:center;">出勤</th>
-          <th style="text-align:center;">直行</th>
-          <th style="text-align:center;">退勤</th>
-          <th style="text-align:center;">直帰</th>
-          <th style="text-align:right;">実労働</th>
-          <th style="text-align:right;">移動km</th>
-          <th style="text-align:right;">公共円</th>
-          <th style="text-align:right;">通勤km</th>
-        </tr></thead>
-        <tbody>${rows}</tbody>
-        <tfoot>
-          <tr style="background:var(--green-bg); font-weight:bold;">
-            <td style="text-align:center;">合計</td>
-            <td style="text-align:center;">延${manDays}日</td>
-            <td colspan="3"></td>
-            <td style="text-align:right;">${formatMinutes(sumWork)}</td>
-            <td style="text-align:right;">${sumTrip}</td>
-            <td style="text-align:right;">${sumFare.toLocaleString()}</td>
-            <td style="text-align:right;">${sumCommute}</td>
-          </tr>
-          ${planDays === 0 ? '' : `
-          <tr style="background:#fafafa;">
-            <td style="text-align:center; color:#666;">所定</td>
-            <td style="text-align:center; color:#666;">延${planDays}日</td>
-            <td colspan="3"></td>
-            <td style="text-align:right; color:#666;">${formatMinutes(planMin)}</td>
-            <td colspan="3"></td>
-          </tr>
-          <tr style="background:#fafafa;">
-            <td style="text-align:center; color:#666;">差</td>
-            <td style="text-align:center; color:${manDays - planDays === 0 ? '#888' : dcol};">
-              ${manDays - planDays > 0 ? '+' : (manDays - planDays < 0 ? '−' : '±')}${Math.abs(manDays - planDays)}日</td>
-            <td colspan="3"></td>
-            <td style="text-align:right; color:${dcol}; font-weight:bold;">${dsign}${formatMinutes(Math.abs(diff))}</td>
-            <td colspan="3"></td>
-          </tr>`}
-        </tfoot>
-      </table>
-      </div>
-
-      <h3 style="margin-top:20px;">交通費・通勤（拠点合計）</h3>
-      <div class="form-hint" style="margin-bottom:8px;">
-        労働時間の賃金は出していません。社員の方は月給で、時給の方と足すと意味のない数字になるためです。
-      </div>
-      <table style="max-width:560px;"><tbody>
-        <tr><th style="width:12em;">業務移動（車）</th>
-            <td style="text-align:right;">${sumTrip} km × ${rates.trip} 円</td>
-            <td style="text-align:right; font-weight:bold;">${tripYen.toLocaleString()} 円</td></tr>
-        <tr><th>業務移動（公共）</th>
-            <td style="text-align:right; color:#888;">実費</td>
-            <td style="text-align:right; font-weight:bold;">${sumFare.toLocaleString()} 円</td></tr>
-        <tr><th>通勤</th>
-            <td style="text-align:right;">${sumCommute} km × ${rates.commute} 円</td>
-            <td style="text-align:right; font-weight:bold;">${commuteYen.toLocaleString()} 円</td></tr>
-        <tr style="background:var(--green-bg);"><th>合計</th><td></td>
-            <td style="text-align:right; font-weight:bold; font-size:1.1rem;">${(tripYen + sumFare + commuteYen).toLocaleString()} 円</td></tr>
-      </tbody></table>
-      <div class="form-hint" style="margin-top:10px;">
-        💡 移動は<strong>承認済みの申告</strong>だけを数えます。承認待ちは入りません。<br>
-        💡 一人ずつの中身は、上の名前を押すと出ます。
-      </div>
-    </div>
-  `;
-  return html;
-}
-
-// =========================================================
 // 【2026-09-05 幸采事務所版】個人の月別集計
 //   縦に日、横に 出勤・直行・退勤・直帰・実労働・移動km・通勤km
 // =========================================================
 function renderMonthSummary() {
-  // 【2026-09-14 v2.2】管理者が「全員」を選んだときは拠点合計の表を出す
-  if (state._sumAll && state._sumAdmin) return renderMonthSummaryAll();
   const empId = state._sumEmpId || state._calEmpId || (employeesActive()[0] || {}).id;
   const emp = state.employees.find(e => e.id === empId);
   if (!emp) { state.screen = 'admin'; return renderAdmin(); }
@@ -4821,7 +4719,6 @@ function renderMonthSummary() {
   `;
   if (isAdmin) {
     html += `<div class="filter-options" style="margin:8px 0;">`;
-    html += `<button class="filter-chip" data-action="sum-emp-all">👥 全員</button>`;
     for (const e2 of employeesActive()) {
       const on = e2.id === empId ? ' active' : '';
       html += `<button class="filter-chip${on}" data-action="sum-emp-select" data-emp-id="${e2.id}">${e2.emoji} ${e2.name}</button>`;
@@ -6871,21 +6768,20 @@ function renderPersonal() {
     </div>
   `;
 
-  // 📝 早出・延長の申告
-  // 【2026-09-14 v2.1】申告できる日の件数を出さない。こちらから勧めない（社長確定）。
-  //   このカードは、ただの常設の入口。押した先に、計画済分の申告と事後申告がある。
+  // 📝 早出・延長の申告（2026-08-16 v2.1）
+  const declCount = listDeclarable(emp.id, DECLARE_BACK_DAYS).length;
   const declPending = (state.change_requests || []).filter(r =>
     r.emp_id === emp.id && r.status === 'pending' && (r.type === 'early' || r.type === 'overtime')).length;
   // 【2026-09-07】残業が付かない区分の方には、この欄そのものを出さない
   if (canDeclareOt(emp)) html += `
-    <div class="card" style="background:#fafafa;">
+    <div class="card" style="background:${declCount > 0 ? '#fff8e1' : '#fafafa'};">
       <div style="display:flex; align-items:center; gap:14px; flex-wrap:wrap;">
         <div style="font-size:1.8rem;">📝</div>
         <div style="flex:1; min-width:180px;">
           <div style="font-weight:bold; font-size:1.02rem;">早出・延長を申告する</div>
           <div style="font-size:0.85rem; color:#666; margin-top:2px;">
-            早出・延長は<strong>前もって申請する</strong>のが基本です。<br>
-            働いたあとの実績は、ここから自分で出してください。
+            終業から5分までは申告不要です。それを超えた分と早出はここから
+            ${declCount > 0 ? `<br><span style="color:var(--orange); font-weight:bold;">🔔 申告できる日が ${declCount}日 あります</span>` : ''}
             ${declPending > 0 ? `<br><span style="color:#888;">承認待ち：${declPending}件</span>` : ''}
           </div>
         </div>
@@ -7854,12 +7750,10 @@ function findDeclarable(empId, dateObj) {
   const aStart = new Date(sum.start_time).getTime();
   const aEnd   = sum.end_time ? new Date(sum.end_time).getTime() : null;
 
-  // 【2026-09-14 v2.1】秒は切り捨てる（社長確定）。
-  //   終業して、片付けて、打刻機まで歩く時間は労働ではない。ゆっくり来てよい。
-  //   四捨五入だと 15:16:40 が 17分になり、実態より長く出てしまう。
-  const early = Math.max(0, Math.floor((pStart - aStart) / 60000));
+  // 早出は猶予なし。予定始業より早く出た分がそのまま総量。
+  const early = Math.max(0, Math.round((pStart - aStart) / 60000));
   // 延長は予定終業を超えた分の総量。5分の猶予は引かない。
-  const over  = aEnd === null ? 0 : Math.max(0, Math.floor((aEnd - pEnd) / 60000));
+  const over  = aEnd === null ? 0 : Math.max(0, Math.round((aEnd - pEnd) / 60000));
 
   // 5分以内の延長は申告しなくてよい（放っておいても賃金がつく）
   const overNeedsDeclare = over > OVERTIME_GRACE_MIN;
@@ -7874,27 +7768,6 @@ function findDeclarable(empId, dateObj) {
     unpaid_overtime_min: sum.unpaid_overtime_min,
     sum,
   };
-}
-
-// 【2026-09-14 v2.1】事前に承認された指示・申請のうち、まだ実績を出していないもの。
-//   打刻からは作らない。本人が前もって出したもの（または上司の指示）だけを拾う。
-//   これから先の日は出さない。まだ働いていないため。
-function listPlannedDeclarable(empId, days) {
-  const out = [];
-  const t = todayStr();
-  const [ty, tm, td] = t.split('-').map(Number);
-  for (let i = 0; i < (days || DECLARE_BACK_DAYS); i++) {
-    const d = new Date(ty, tm - 1, td - i);
-    const ds = isoDateOnly(d);
-    if (isDateClosed(ds)) continue;
-    for (const o of getOtOrders(empId, ds)) {
-      if (o.type !== 'early' && o.type !== 'overtime') continue;
-      if (!canDeclare(empId, ds, o.type)) continue;
-      out.push({ date: ds, type: o.type, minutes: Number(o.minutes) || 0,
-                 reason: o.reason || '', note: o.note || '', from: o.from || 'self' });
-    }
-  }
-  return out;
 }
 
 // 直近◯日で、まだ申告していない日を拾う
@@ -8175,110 +8048,26 @@ function renderOtRequest() {
 function renderOtDeclareList() {
   const emp = state.employees.find(e => e.id === state.current_employee_id);
   if (!emp) { state.screen = 'home'; return ''; }
-  const planned = listPlannedDeclarable(emp.id, DECLARE_BACK_DAYS);
+  const list = listDeclarable(emp.id, DECLARE_BACK_DAYS);
   const mine = (state.change_requests || []).filter(r =>
     r.emp_id === emp.id && (r.type === 'early' || r.type === 'overtime'));
-  const f = state._otAfterForm || {};
-
-  // さかのぼれる日付（今日から DECLARE_BACK_DAYS 日前まで）
-  const dates = [];
-  const t0 = todayStr();
-  const [ty, tm, td] = t0.split('-').map(Number);
-  for (let i = 0; i < DECLARE_BACK_DAYS; i++) {
-    const d = new Date(ty, tm - 1, td - i);
-    dates.push(isoDateOnly(d));
-  }
-  const wdOf = (ds) => ['日','月','火','水','木','金','土'][new Date(ds + 'T12:00:00').getDay()];
-
   let html = `
     <div class="nav-row"><button class="nav-btn" data-action="back-personal">← 戻る</button></div>
     <div class="card">
       <h2>📝 早出・延長を申告する</h2>
       <div class="form-hint">
-        早出・延長は<strong>前もって申請する</strong>のが基本です。<br>
-        前もって出したものは下の「計画済みの分」に並びます。<br>
-        当日その場で言われて働いた分は「あとから申告する」から出してください。
+        直近2週間で、まだ申告していない日を出しています。<br>
+        終業から<strong>5分まで</strong>は申告なしで賃金がつきます。それを超えた分と早出は申告が要ります。
       </div>
     </div>`;
-
-  // ① 計画済みの分
-  html += `<div class="card">
-    <h3 style="margin-top:0;">📋 計画済みの分を申告する</h3>`;
-  if (planned.length === 0) {
-    html += `<div class="empty-message" style="padding:20px;">
-      申告できる計画はありません<br>
-      <span style="font-size:0.85rem; color:#888;">前もって申請したものが承認されると、ここに出ます</span>
-    </div>`;
+  if (list.length === 0) {
+    html += `<div class="card"><div class="empty-message" style="padding:26px;">
+      申告できる日はありません<br>
+      <span style="font-size:0.85rem; color:#888;">予定どおりに働けています</span>
+    </div></div>`;
   } else {
-    html += `<div style="font-size:0.85rem; color:#666; margin-bottom:10px;">
-      承認された計画です。<strong>実際に働いた分だけ</strong>申告してください。</div>`;
-    for (const o of planned) {
-      const lbl = o.type === 'early' ? '🌅 早出' : '🌆 延長';
-      html += `
-        <div style="background:#f7f7f7; border-radius:8px; padding:12px; margin-bottom:10px;">
-          <div style="font-weight:bold;">${o.date}（${wdOf(o.date)}）　${lbl} ${o.minutes}分</div>
-          <div style="font-size:0.85rem; color:#666; margin:4px 0 10px;">
-            ${o.reason || ''}${o.note ? '　' + o.note : ''}
-            ／ ${o.from === 'admin' ? '上司の指示' : '本人の事前申請'}
-          </div>
-          <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
-            <input type="number" min="1" max="600" value="${o.minutes}"
-                   id="plan-min-${o.date}-${o.type}" style="width:90px; text-align:right;" />
-            <span>分</span>
-            <button class="primary-btn" data-action="decl-planned"
-                    data-date="${o.date}" data-kind="${o.type}" data-reason="${(o.reason || '').replace(/"/g, '&quot;')}"
-                    style="background:var(--green);">この分を申告する</button>
-          </div>
-        </div>`;
-    }
+    for (const f of list) html += renderDeclareCard(f, emp);
   }
-  html += `</div>`;
-
-  // ② あとから申告する（事後申告）
-  html += `
-    <div class="card">
-      <h3 style="margin-top:0;">🕐 あとから申告する</h3>
-      <div class="form-hint" style="margin-bottom:14px;">
-        計画に無かった分です。当日に上司から言われて、そのまま作業に入った場合などに使います。<br>
-        管理者が承認すると賃金に入ります。
-      </div>
-      <div class="form-row">
-        <label>日付</label>
-        <select id="otaf-date">
-          ${dates.map(d => `<option value="${d}"${f.date === d ? ' selected' : ''}>${d}（${wdOf(d)}）</option>`).join('')}
-        </select>
-      </div>
-      <div class="form-row">
-        <label>区分</label>
-        <select id="otaf-type">
-          <option value="overtime"${f.type === 'overtime' ? ' selected' : ''}>🌆 延長（終業のあと）</option>
-          <option value="early"${f.type === 'early' ? ' selected' : ''}>🌅 早出（始業の前）</option>
-        </select>
-      </div>
-      <div class="form-row">
-        <label>時間</label>
-        <div style="display:flex; align-items:center; gap:8px;">
-          <input type="number" id="otaf-min" min="1" max="600" value="${f.minutes || ''}" style="width:100px; text-align:right;" />
-          <span>分</span>
-        </div>
-      </div>
-      <div class="form-row">
-        <label>理由</label>
-        <select id="otaf-reason">
-          <option value="">-- 理由を選ぶ --</option>
-          ${OT_REASONS.map(r => `<option value="${r}"${f.reason === r ? ' selected' : ''}>${r}</option>`).join('')}
-        </select>
-      </div>
-      <div class="form-row">
-        <label>ひとこと（任意）</label>
-        <input type="text" id="otaf-note" value="${(f.note || '').replace(/"/g, '&quot;')}" placeholder="必要なら書いてください" />
-      </div>
-      <div style="text-align:center; margin-top:16px;">
-        <button class="primary-btn" data-action="submit-ot-after" style="background:var(--orange);">この内容で申告する</button>
-      </div>
-    </div>`;
-
-  // ③ これまでの申告
   if (mine.length > 0) {
     html += `<div class="card"><h3 style="margin-top:0;">これまでの申告</h3><table style="width:100%; font-size:0.9rem;">
       <thead><tr><th style="text-align:left;">日付</th><th style="text-align:left;">区分</th><th style="text-align:right;">分</th><th style="text-align:center;">状態</th></tr></thead><tbody>`;
@@ -8295,7 +8084,6 @@ function renderOtDeclareList() {
   }
   return html;
 }
-
 
 
 // =========================================================
@@ -11419,6 +11207,32 @@ function renderAppSettings() {
         </div>
       </div>
     </div>
+
+    <div class="card admin-section" style="border-left:4px solid var(--red);">
+      <h2 style="color:var(--red);">🆘 緊急リセット</h2>
+      <div class="form-hint" style="margin-bottom:14px;">
+        <strong style="color:var(--red);">この端末の幸采事務所のデータを、すべて消します。</strong><br>
+        打刻・作業記録・従業員・勤務計画・単価・設定、全部です。もとに戻せません。<br>
+        <span style="color:#888;">※ この端末の他のアプリのデータには触れません。</span>
+      </div>
+      <div style="padding:14px; background:#fff4f4; border-radius:8px; margin-bottom:14px;">
+        <strong style="font-size:0.95rem;">押す前に</strong>
+        <div class="form-hint" style="margin-top:8px;">
+          消す直前に、<strong>バックアップのファイルを自動で落とします。</strong><br>
+          ダウンロードのフォルダに入ったことを確かめてから、もう一度「OK」を押すと消えます。<br>
+          確かめられないときは、そこで止めてください。
+        </div>
+      </div>
+      <div class="form-hint" style="margin-bottom:14px; color:#888;">
+        【2026-10-08】それまでは打刻画面のいちばん下にありました。
+        従業員が立つ画面に全消去のリンクがあるのは危ないので、ここへ移しました。
+      </div>
+      <button class="nav-btn" data-action="emergency-reset"
+              style="color:var(--red); border-color:var(--red); font-weight:bold;">
+        🆘 全データを消す
+      </button>
+    </div>
+
 
     <div class="card admin-section" style="border-left:4px solid var(--purple, #7b1fa2);">
       <h2 style="color:#7b1fa2;">📦 古い打刻の退避（容量対策）</h2>
@@ -14770,14 +14584,12 @@ function getAdminTodoCount() {
 }
 
 // 【2026-09-04 幸采事務所版】本人の「やること」件数
-//   要申告  … 打刻もれ（出勤の押し忘れ）だけ。【2026-09-14 v2.1】早出・延長の未申告は数えない
+//   要申告  … まだ出していない早出・延長がある日の数
 //   申告中  … 出したが、まだ承認されていない件数（勤務計画の変更・早出延長・移動記録）
 //   要確認  … 承認や却下の通知で、まだ本人が確認していない件数
 function getEmployeeTodoCount(empId) {
   const ovd = startOverdue(empId);
-  // 【2026-09-14 v2.1】早出・延長の未申告は数えない。こちらから促さない（社長確定）。
-  //   残すアラームは 打刻もれ・出張報告・任意保険 の3つだけ。
-  const need = (ovd && !ovd.claimed) ? 1 : 0;
+  const need = listDeclarable(empId, DECLARE_BACK_DAYS).length + ((ovd && !ovd.claimed) ? 1 : 0);
   const waiting = (state.change_requests || []).filter(r => r.emp_id === empId && r.status === 'pending').length
                 + (state.trips || []).filter(t => t.emp_id === empId && t.status === 'pending').length
                 + (state.punch_claims || []).filter(c => c.emp_id === empId && c.status === 'pending').length
@@ -15970,9 +15782,22 @@ async function handleClick(e) {
     } else {
       await punch(type, null, null);
     }
-    // 【2026-09-14 v2.1】退勤したら、そこで終わり。
-    //   以前はここで「延長◯分ありますよ」と申告画面を出していた。
-    //   それは押させているのと同じ。申告は本人が自分で入っていくもの（社長確定）。
+    // 【2026-08-16 v2.1】退勤したら、その場で早出・延長を聞く。
+    // 予定どおりの日は何も出さない。「今はしない」を選べば、あとから自分の画面で出せる。
+    if (type === 'END') {
+      const f = findDeclarable(state.current_employee_id, new Date());
+      if (f) {
+        const canE = f.early_min > 0 && canDeclare(state.current_employee_id, f.date, 'early');
+        const canO = f.overtime_min > 0 && canDeclare(state.current_employee_id, f.date, 'overtime');
+        if (canE || canO) {
+          state._declTarget = { ...f, canEarly: canE, canOvertime: canO };
+          state._declReason = {};
+          state.screen = 'ot_declare';
+          render();
+          return;
+        }
+      }
+    }
     render();
   } else if (a === 'check-update-now') {
     await checkForUpdateNow();
@@ -16040,50 +15865,6 @@ async function handleClick(e) {
     // 理由の選択を覚えておく（日付＋区分ごと）
     state._declReason = state._declReason || {};
     state._declReason[e.currentTarget.dataset.date + '__' + e.currentTarget.dataset.kind] = e.currentTarget.value;
-  } else if (a === 'decl-planned') {
-    // 【2026-09-14 v2.1】計画済みの分の実績を出す。理由は事前申請のものを引き継ぐ。
-    const d = e.currentTarget.dataset;
-    const el = document.getElementById('plan-min-' + d.date + '-' + d.kind);
-    const min = Math.max(0, Math.floor(Number(el ? el.value : 0) || 0));
-    const label = d.kind === 'early' ? '早出' : '延長';
-    if (min <= 0) { alert('分数を入れてください'); return; }
-    if (!canDeclare(state.current_employee_id, d.date, d.kind)) {
-      alert('この日はすでに申告済みか、認定済みです'); render(); return;
-    }
-    if (!confirm(`${d.date} の ${label} ${min}分 を申告します。\n\nよろしいですか？`)) return;
-    const rp = await submitDeclaration(state.current_employee_id, d.date, d.kind, min,
-      { category: d.reason || '', note: '計画済みの分' }, 'self');
-    if (!rp) { alert('申告できませんでした'); render(); return; }
-    alert(`${label} ${min}分 を申告しました。\n管理者が承認すると賃金に反映されます。`);
-    render();
-  } else if (a === 'submit-ot-after') {
-    // 【2026-09-14 v2.1】事後申告。本人が日付と分数を入れて出す。
-    const dEl = document.getElementById('otaf-date');
-    const tEl = document.getElementById('otaf-type');
-    const mEl = document.getElementById('otaf-min');
-    const rEl = document.getElementById('otaf-reason');
-    const nEl = document.getElementById('otaf-note');
-    const date = dEl ? dEl.value : '';
-    const kind = tEl ? tEl.value : '';
-    const min  = Math.max(0, Math.floor(Number(mEl ? mEl.value : 0) || 0));
-    const cat  = rEl ? rEl.value : '';
-    const note = nEl ? nEl.value : '';
-    state._otAfterForm = { date, type: kind, minutes: min || '', reason: cat, note };
-    if (!date) { alert('日付を選んでください'); return; }
-    if (min <= 0) { alert('時間（分）を入れてください'); return; }
-    if (!cat) { alert('理由を選んでください'); return; }
-    if (isDateClosed(date)) { alert('この月はすでに締められています'); return; }
-    if (!canDeclare(state.current_employee_id, date, kind)) {
-      alert('この日はすでに申告済みか、認定済みです'); render(); return;
-    }
-    const label2 = kind === 'early' ? '早出' : '延長';
-    if (!confirm(`${date} の ${label2} ${min}分 を申告します。\n理由：${cat}\n\nよろしいですか？`)) return;
-    const ra = await submitDeclaration(state.current_employee_id, date, kind, min,
-      { category: cat, note }, 'self');
-    if (!ra) { alert('申告できませんでした'); render(); return; }
-    state._otAfterForm = {};
-    alert(`${label2} ${min}分 を申告しました。\n管理者が承認すると賃金に反映されます。`);
-    render();
   } else if (a === 'decl-submit') {
     const d = e.currentTarget.dataset;
     const key = d.date + '__' + d.kind;
@@ -16557,11 +16338,7 @@ async function handleClick(e) {
     state._sumMonth = state._sumMonth || todayStr().substring(0, 7);
     state.screen = 'month_sum';
     render();
-  } else if (a === 'sum-emp-all') {
-    state._sumAll = true;
-    render();
   } else if (a === 'sum-emp-select') {
-    state._sumAll = false;
     state._sumEmpId = e.currentTarget.dataset.empId;
     render();
   } else if (a === 'sum-prev' || a === 'sum-next') {
@@ -16572,44 +16349,6 @@ async function handleClick(e) {
   } else if (a === 'sum-today') {
     state._sumMonth = todayStr().substring(0, 7);
     render();
-  } else if (a === 'export-summary-csv' && state._sumAll && state._sumAdmin) {
-    // 【2026-09-14 v2.2】拠点全員の月別集計をCSVに出す
-    const ym = state._sumMonth || todayStr().substring(0, 7);
-    const [Y, M] = ym.split('-').map(Number);
-    const lastDay = new Date(Y, M, 0).getDate();
-    const rates = kmRates();
-    const emps = employeesActive();
-    const lines = [['日付', '曜日', '出勤(名)', '直行(名)', '退勤(名)', '直帰(名)', '実労働(分)', '移動km', '公共円', '通勤km'].join(',')];
-    let sw = 0, stk = 0, sck = 0, sf = 0, md = 0;
-    for (let d = 1; d <= lastDay; d++) {
-      const ds = `${Y}-${String(M).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-      let nS = 0, nE = 0, nG = 0, nB = 0, wk = 0, tk = 0, ck = 0, fr = 0;
-      for (const e2 of emps) {
-        const pcs = state.punches.filter(p => p.employee_id === e2.id && isOnDate(p.timestamp, ds))
-          .sort((a2, b2) => String(a2.timestamp).localeCompare(String(b2.timestamp)));
-        const st2 = pcs.find(p => p.type === 'START');
-        const en2 = [...pcs].reverse().find(p => p.type === 'END');
-        const tps = (state.trips || []).filter(t => t.emp_id === e2.id && t.date === ds && t.status !== 'rejected');
-        const shu2 = tps.find(t => t.kind === 'shucchou');
-        if (tps.some(t => t.kind === 'chokkou' || t.kind === 'both')) nG++;
-        if (tps.some(t => t.kind === 'chokki'  || t.kind === 'both')) nB++;
-        if (st2 || shu2) { nS++; md++; wk += dayTotals(e2.id, ds).workMinutes; }
-        if (en2 || shu2) nE++;
-        tk += tripKmOfDay(e2.id, ds); ck += commuteKmOfDay(e2.id, ds); fr += tripFareOfDay(e2.id, ds);
-      }
-      sw += wk; stk += tk; sck += ck; sf += fr;
-      lines.push([ds, WEEKDAYS[new Date(Y, M - 1, d).getDay()],
-        nS || '', nG || '', nE || '', nB || '',
-        nS > 0 ? wk : '', Math.round(tk * 10) / 10 || '', Math.round(fr) || '', Math.round(ck * 10) / 10 || ''].join(','));
-    }
-    stk = Math.round(stk * 10) / 10; sck = Math.round(sck * 10) / 10; sf = Math.round(sf);
-    lines.push(['合計', '延' + md + '日', '', '', '', '', sw, stk, sf, sck].join(','));
-    lines.push([]);
-    lines.push(['業務移動（車）', stk + 'km', rates.trip + '円/km', Math.ceil(stk * rates.trip) + '円'].join(','));
-    lines.push(['業務移動（公共）', '実費', '', sf + '円'].join(','));
-    lines.push(['通勤', sck + 'km', rates.commute + '円/km', Math.ceil(sck * rates.commute) + '円'].join(','));
-    lines.push(['合計', '', '', (Math.ceil(stk * rates.trip) + sf + Math.ceil(sck * rates.commute)) + '円'].join(','));
-    downloadTextFile(`集計_拠点全員_${ym}.csv`, '\uFEFF' + lines.join('\n'), 'text/csv');
   } else if (a === 'export-summary-csv') {
     const empId = state._sumEmpId || state.current_employee_id;
     const emp = state.employees.find(x => x.id === empId);
@@ -17621,6 +17360,8 @@ async function handleClick(e) {
     }
     await saveData(STORAGE_KEYS.SITES, state.sites);
     render();
+  } else if (a === 'emergency-reset') {
+    await resetAppData();
   } else if (a === 'export-backup') {
     const dump = {
       _format: 'kousai_office_backup',
@@ -19198,7 +18939,7 @@ async function handleClick(e) {
 // サーバー上のHTMLの先頭だけを読みに行き、版数が自分より新しければ画面上部に帯を出す。
 // 通信できないときは黙って何もしない。打刻の邪魔は一切しない。
 // =========================================================
-const APP_VERSION = 'v2.2';
+const APP_VERSION = 'v2.1';
 const UPDATE_CHECK_INTERVAL_MS = 5 * 60 * 1000;    // 5分おきに確認
 //   先頭4KBだけ読むので回線の負担は小さい。
 //   30分だと「上げたのに変わらない」時間が長すぎたため短くした（2026-08-16）。
@@ -19371,10 +19112,10 @@ function updateClock() {
 
 async function bootstrap() {
   // URLハッシュ #reset で味采の保存分だけリセット（他アプリには触れない）
+  // 【2026-10-08】#reset で確認なしに全消去されていた。確認を出すようにした。
   if (location.hash === '#reset') {
-    clearAppData();
     location.hash = '';
-    location.reload();
+    setTimeout(() => { resetAppData(); }, 300);
     return;
   }
   // 新年度スタートの一度きりの初期化。既定値を入れる前に実行する。

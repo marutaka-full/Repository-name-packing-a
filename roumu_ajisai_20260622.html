@@ -6,7 +6,7 @@
 
 <!-- 版数の目印。自動更新の確認でここだけを読みに行くので、必ず<head>の先頭付近に置くこと。
      版を上げるときは、この content と APP_VERSION と <title> と画面下のフッターの4か所を揃える。 -->
-<meta name="app-version" content="v3.3">
+<meta name="app-version" content="v3.4">
 <!-- ★GitHub Pages は HTML に「10分はキャッシュしてよい」を付けて返す。
      そのため上げ直しても10分は古い版が開く。ブラウザにも使わないよう伝えておく。
      （サーバーの指示が優先されることが多いので、決め手は「🔄 更新を確認」ボタン） -->
@@ -55,7 +55,7 @@
   } catch (e) {}
 })();
 </script>
-<title>味采 パッケージセンター 打刻システム v3.3</title>
+<title>味采 パッケージセンター 打刻システム v3.4</title>
 <style>
   :root {
     --green: #1d9e75;
@@ -1675,7 +1675,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
 
 <main id="app"></main>
 
-<div class="footer-note">味采版 v3.3（まる労務 v0.4 ベース）<span id="storage-mode-note"></span> ／ <a href="javascript:resetAppData()" style="color:#999; text-decoration:underline; font-size:0.85rem;">🆘 緊急リセット</a></div>
+<div class="footer-note">味采版 v3.4（まる労務 v0.4 ベース）<span id="storage-mode-note"></span></div>
 
 <script>
 // ストレージモードをフッターに表示
@@ -2323,8 +2323,71 @@ function clearAppData() {
     for (const key of Object.values(STORAGE_KEYS)) localStorage.removeItem(nsKey(key));
   } catch (e) {}
 }
-function resetAppData() {
-  if (!confirm('味采の全データを初期化してリロードします。よろしいですか？\n※ この端末の他のアプリのデータには触れません。')) return;
+// =========================================================
+// 【2026-10-08】緊急リセットを安全にした
+//
+//   これまでの問題
+//     ・打刻画面のいちばん下にあった。従業員が立つ画面に、
+//       全データを消すリンクが置いてあった
+//     ・URLの末尾に #reset が付いていると、確認なしで即座に全消去
+//     ・消す前のバックアップが無く、押したら戻せなかった
+//
+//   2026-10-01、味采の実機で9月の打刻・作業記録が全部消えました。
+//   原因は年度リセットでしたが、この緊急リセットも同じ危うさを持っています。
+//
+//   直したこと
+//     ① 打刻画面から消し、管理画面 → 設定 の奥へ移した
+//     ② #reset は確認を出すようにした
+//     ③ 消す前に、かならずバックアップのファイルを落とす
+// =========================================================
+
+// 消す前のバックアップ。resetAppData と #reset の両方から呼ぶ。
+async function dumpBeforeReset(why) {
+  try {
+    const dump = {
+      _format: 'ajisai_package_center_backup',
+      _version: 1,
+      _site: (typeof currentSite === 'function' ? currentSite() : ''),
+      _exported_at: new Date().toISOString(),
+      _reason: '消す直前の自動バックアップ（' + why + '）',
+      data: {},
+    };
+    for (const [k, key] of Object.entries(STORAGE_KEYS)) {
+      dump.data[key] = await loadData(key, null);
+    }
+    const name = '味采_消す前のバックアップ_'
+      + todayStr() + '_'
+      + String(new Date().getHours()).padStart(2, '0')
+      + String(new Date().getMinutes()).padStart(2, '0') + '.json';
+    downloadTextFile(name, JSON.stringify(dump, null, 2), 'application/json');
+    return name;
+  } catch (e) {
+    console.error('[味采] 消す前のバックアップに失敗', e);
+    return null;
+  }
+}
+
+async function resetAppData() {
+  if (!confirm(
+    '味采の全データを消して、まっさらにします。\n\n'
+    + '消えるもの：打刻・作業記録・従業員・勤務計画・単価・設定、すべて\n'
+    + '※ この端末の他のアプリのデータには触れません。\n\n'
+    + '先にバックアップのファイルを落とします。\n'
+    + 'よろしいですか？')) return;
+
+  const name = await dumpBeforeReset('緊急リセット');
+  if (name) {
+    if (!confirm(
+      'バックアップを落としました。\n　' + name + '\n\n'
+      + 'ダウンロードのフォルダに入っているか確かめてください。\n\n'
+      + '確かめたら「OK」を押すと、データを消します。\n'
+      + 'まだなら「キャンセル」で止まります。')) return;
+  } else {
+    if (!confirm(
+      '★ バックアップを落とせませんでした。\n\n'
+      + 'このまま消すと、データは戻せません。\n'
+      + 'それでも消しますか？')) return;
+  }
   clearAppData();
   location.hash = '';
   location.reload();
@@ -8359,6 +8422,32 @@ function renderAppSettings() {
       </div>
     </div>
 
+    <div class="card admin-section" style="border-left:4px solid var(--red);">
+      <h2 style="color:var(--red);">🆘 緊急リセット</h2>
+      <div class="form-hint" style="margin-bottom:14px;">
+        <strong style="color:var(--red);">この端末の味采のデータを、すべて消します。</strong><br>
+        打刻・作業記録・従業員・勤務計画・単価・設定、全部です。もとに戻せません。<br>
+        <span style="color:#888;">※ この端末の他のアプリのデータには触れません。</span>
+      </div>
+      <div style="padding:14px; background:#fff4f4; border-radius:8px; margin-bottom:14px;">
+        <strong style="font-size:0.95rem;">押す前に</strong>
+        <div class="form-hint" style="margin-top:8px;">
+          消す直前に、<strong>バックアップのファイルを自動で落とします。</strong><br>
+          ダウンロードのフォルダに入ったことを確かめてから、もう一度「OK」を押すと消えます。<br>
+          確かめられないときは、そこで止めてください。
+        </div>
+      </div>
+      <div class="form-hint" style="margin-bottom:14px; color:#888;">
+        【2026-10-08】それまでは打刻画面のいちばん下にありました。
+        従業員が立つ画面に全消去のリンクがあるのは危ないので、ここへ移しました。
+      </div>
+      <button class="nav-btn" data-action="emergency-reset"
+              style="color:var(--red); border-color:var(--red); font-weight:bold;">
+        🆘 全データを消す
+      </button>
+    </div>
+
+
     <div class="card admin-section" style="border-left:4px solid var(--purple, #7b1fa2);">
       <h2 style="color:#7b1fa2;">📦 古い打刻の退避（容量対策）</h2>
       <div class="form-hint" style="margin-bottom:14px;">
@@ -12972,6 +13061,8 @@ async function handleClick(e) {
     }
     await saveData(STORAGE_KEYS.SITES, state.sites);
     render();
+  } else if (a === 'emergency-reset') {
+    await resetAppData();
   } else if (a === 'export-backup') {
     const dump = {
       _format: 'ajisai_package_center_backup',
@@ -14469,7 +14560,7 @@ async function handleClick(e) {
 // サーバー上のHTMLの先頭だけを読みに行き、版数が自分より新しければ画面上部に帯を出す。
 // 通信できないときは黙って何もしない。打刻の邪魔は一切しない。
 // =========================================================
-const APP_VERSION = 'v3.3';
+const APP_VERSION = 'v3.4';
 const UPDATE_CHECK_INTERVAL_MS = 5 * 60 * 1000;    // 5分おきに確認
 //   先頭4KBだけ読むので回線の負担は小さい。
 //   30分だと「上げたのに変わらない」時間が長すぎたため短くした（2026-08-16）。
@@ -14642,10 +14733,10 @@ function updateClock() {
 
 async function bootstrap() {
   // URLハッシュ #reset で味采の保存分だけリセット（他アプリには触れない）
+  // 【2026-10-08】#reset で確認なしに全消去されていた。確認を出すようにした。
   if (location.hash === '#reset') {
-    clearAppData();
     location.hash = '';
-    location.reload();
+    setTimeout(() => { resetAppData(); }, 300);
     return;
   }
   // 新年度スタートの一度きりの初期化。既定値を入れる前に実行する。
