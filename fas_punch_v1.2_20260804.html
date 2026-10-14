@@ -6,7 +6,7 @@
 
 <!-- 版数の目印。自動更新の確認でここだけを読みに行くので、必ず<head>の先頭付近に置くこと。
      版を上げるときは、この content と APP_VERSION と <title> と画面下のフッターの4か所を揃える。 -->
-<meta name="app-version" content="v2.6">
+<meta name="app-version" content="v2.7">
 <!-- ★GitHub Pages は HTML に「10分はキャッシュしてよい」を付けて返す。
      そのため上げ直しても10分は古い版が開く。ブラウザにも使わないよう伝えておく。
      （サーバーの指示が優先されることが多いので、決め手は「🔄 更新を確認」ボタン） -->
@@ -55,7 +55,7 @@
   } catch (e) {}
 })();
 </script>
-<title>ファス パッケージセンター 打刻システム v2.6</title>
+<title>ファス パッケージセンター 打刻システム v2.7</title>
 <style>
   :root {
     --green: #1d9e75;
@@ -1677,7 +1677,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
 
 <main id="app"></main>
 
-<div class="footer-note">ファス版 v2.6<span id="storage-mode-note"></span></div>
+<div class="footer-note">ファス版 v2.7<span id="storage-mode-note"></span></div>
 
 <script>
 // ストレージモードをフッターに表示
@@ -3452,6 +3452,7 @@ function render() {
   else if (state.screen === 'day_edit') app.innerHTML = renderDayEdit();
   else if (state.screen === 'shift_overview') app.innerHTML = renderShiftOverview();
   else if (state.screen === 'punch_logs') app.innerHTML = renderPunchLogs();
+  else if (state.screen === 'ship_sort') app.innerHTML = renderShipSort();
   else if (state.screen === 'punch_fix') app.innerHTML = renderPunchFix();
   else if (state.screen === 'tasks_master') app.innerHTML = renderTasksMaster();
   else if (state.screen === 'prices_master') app.innerHTML = renderPricesMaster();
@@ -5411,6 +5412,27 @@ function round1(v) { return Math.round((Number(v) || 0) * 10) / 10; }
 function yen(v) { return Math.round(Number(v) || 0); }
 
 // その期間の作業記録（人ごとに割った明細つき）
+// =========================================================
+// 【2026-10-14 v2.7】出荷先の仕分け
+//   小牧はファスとCPフーズ（姉妹会社）の作業が混ざる。
+//   作業記録1件ずつに出荷先を持たせ、一日の終わりに仕分ける。
+//   打刻のときには選ばせない（社長のご判断）。
+// =========================================================
+const SHIP_FAS = 'FAS';
+const SHIP_CP  = 'CP';
+const SHIP_DEFS = [
+  { key: SHIP_FAS, name: 'ファス', color: '#1d6fb8', bg: '#e3f2fd' },
+  { key: SHIP_CP,  name: 'CP',     color: '#b85c00', bg: '#fff3e0' },
+];
+function shipName(v) {
+  const d = SHIP_DEFS.find(x => x.key === v);
+  return d ? d.name : '未設定';
+}
+// 1件の出来高（数量 × 単価）
+function recordRevenue(r) {
+  return (r.unit_price || 0) * (r.quantity || 0);
+}
+
 function recordsInRange(from, to) {
   const out = [];
   for (const r of state.work_records) {
@@ -5579,7 +5601,8 @@ function csvRecords(from, to, label) {
   L.push([]);
   L.push(['日付', '開始', '終了', '作業', '品目', '規格', '数量', '単位', '単価(円)',
           '出来高(円)', '人数', '延べ時間(分)', 'NO', '氏名', '個人時間(分)',
-          '個人時給(円)', '個人人件費(円)', '個人出来高(円)', '個人粗利(円)', 'ゼロの理由']);
+          '個人時給(円)', '個人人件費(円)', '個人出来高(円)', '個人粗利(円)', 'ゼロの理由',
+          '出荷先']);
   for (const x of recordsInRange(from, to)) {
     const r = x.record;
     const task = state.work_tasks.find(t => t.id === r.main_task_id);
@@ -5602,7 +5625,7 @@ function csvRecords(from, to, label) {
               x.parts.length, Math.round(totalMin),
               p.employee_id, empName(p.employee_id), Math.round(p.minutes),
               yen(p.hourlyRate), yen(p.laborCost), yen(p.revenue), yen(p.profit),
-              why2.join('・')]);
+              why2.join('・'), shipName(r.ship_to)]);
     }
   }
   return CSV_BOM + L.map(csvLine).join('\r\n') + '\r\n';
@@ -9941,6 +9964,112 @@ function renderPunchFix() {
     </div>`;
 }
 
+function renderShipSort() {
+  if (!state._shipDate) state._shipDate = new Date();
+  const dateStr = isoDateOnly(state._shipDate);
+  const rows = recordsInRange(dateStr, dateStr);
+
+  // その日の集計
+  const sum = { FAS: { n: 0, y: 0 }, CP: { n: 0, y: 0 }, NONE: { n: 0, y: 0 } };
+  for (const x of rows) {
+    const r = x.record;
+    const k = (r.ship_to === SHIP_FAS) ? 'FAS' : (r.ship_to === SHIP_CP ? 'CP' : 'NONE');
+    sum[k].n++;
+    sum[k].y += recordRevenue(r);
+  }
+
+  let html = `<div class="card admin-section"><h2>🚚 出荷先の仕分け</h2>`;
+  html += `<p style="font-size:0.9rem; color:#666; margin-bottom:10px;">
+    一日の終わりに、その日の作業を「ファス」か「CP」に分けてください。<br>
+    押したほうに色が付きます。もう一度同じほうを押すと未設定に戻ります。</p>`;
+
+  // 日付ナビ
+  html += `
+    <div class="shift-navbar">
+      <button class="nav-btn" data-action="ship-day-prev">← 前日</button>
+      <input type="date" id="ship-date-input" value="${dateStr}" data-action="ship-date-change" />
+      <div class="shift-date-label">${formatYMD(state._shipDate)}</div>
+      <button class="nav-btn" data-action="ship-day-today">今日</button>
+      <button class="nav-btn" data-action="ship-day-next">翌日 →</button>
+    </div>
+  `;
+
+  // その日の合計
+  html += `<div style="display:flex; gap:10px; flex-wrap:wrap; margin:12px 0;">`;
+  for (const d of SHIP_DEFS) {
+    const t = sum[d.key];
+    html += `<div style="flex:1; min-width:150px; background:${d.bg}; border:2px solid ${d.color};
+      border-radius:10px; padding:10px 14px;">
+      <div style="font-size:0.85rem; color:${d.color}; font-weight:bold;">${d.name}</div>
+      <div style="font-size:1.3rem; font-weight:bold; color:${d.color};">${t.n}件</div>
+      <div style="font-size:0.95rem; color:${d.color};">${t.y.toLocaleString()}円</div>
+    </div>`;
+  }
+  const un = sum.NONE;
+  const unColor = un.n > 0 ? '#c62828' : '#999';
+  const unBg = un.n > 0 ? '#ffebee' : '#fafafa';
+  html += `<div style="flex:1; min-width:150px; background:${unBg}; border:2px solid ${unColor};
+      border-radius:10px; padding:10px 14px;">
+      <div style="font-size:0.85rem; color:${unColor}; font-weight:bold;">${un.n > 0 ? '★ ' : ''}未設定</div>
+      <div style="font-size:1.3rem; font-weight:bold; color:${unColor};">${un.n}件</div>
+      <div style="font-size:0.95rem; color:${unColor};">${un.y.toLocaleString()}円</div>
+    </div>`;
+  html += `</div>`;
+
+  if (rows.length === 0) {
+    html += `<p style="padding:24px; text-align:center; color:#888;">この日の作業記録はありません。</p>`;
+    html += `<div class="nav-row"><button class="nav-btn" data-action="back-admin">← 管理画面へ戻る</button></div></div>`;
+    return html;
+  }
+
+  // まとめて仕分け
+  html += `<div style="margin-bottom:12px; display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+    <span style="font-size:0.9rem; color:#666;">まとめて：</span>`;
+  for (const d of SHIP_DEFS) {
+    html += `<button class="nav-btn" data-action="ship-bulk" data-ship="${d.key}"
+      style="background:${d.bg}; color:${d.color}; border-color:${d.color}; font-weight:bold;">
+      この日を全部 ${d.name} に</button>`;
+  }
+  html += `<button class="nav-btn" data-action="ship-bulk" data-ship=""
+      style="background:#fafafa; color:#777; border-color:#999;">全部もどす</button></div>`;
+
+  // 明細
+  html += `<table><thead><tr>
+    <th>時刻</th><th>氏名</th><th>品目</th><th>規格</th>
+    <th style="text-align:right;">数量</th><th style="text-align:right;">出来高</th>
+    <th style="text-align:center;">出荷先</th></tr></thead><tbody>`;
+  for (const x of rows) {
+    const r = x.record;
+    const prod = state.work_products.find(pp => pp.id === r.main_product_id);
+    const names = x.parts.map(pt => empName(pt.employee_id)).join('・');
+    const rev = recordRevenue(r);
+    const unset = (r.ship_to !== SHIP_FAS && r.ship_to !== SHIP_CP);
+    const rowBg = unset ? ' style="background:#fff5f5;"' : '';
+    let btns = '';
+    for (const d of SHIP_DEFS) {
+      const on = (r.ship_to === d.key);
+      btns += `<button class="nav-btn" data-action="ship-set" data-id="${r.id}" data-ship="${d.key}"
+        style="padding:5px 14px; margin:2px; font-weight:bold;
+        background:${on ? d.color : '#fff'}; color:${on ? '#fff' : d.color};
+        border-color:${d.color};">${d.name}</button>`;
+    }
+    html += `<tr${rowBg}>
+      <td style="white-space:nowrap;">${formatTime(r.work_started_at)}${r.work_ended_at ? '〜' + formatTime(r.work_ended_at) : ''}</td>
+      <td>${names}</td>
+      <td>${prod ? prod.name : '（品目なし）'}</td>
+      <td>${r.main_spec_id ? specLabel(r.main_product_id, r.main_spec_id) : '—'}</td>
+      <td style="text-align:right;">${round1(r.quantity)}${r.unit || ''}</td>
+      <td style="text-align:right;">${rev.toLocaleString()}円</td>
+      <td style="text-align:center; white-space:nowrap;">${btns}</td>
+    </tr>`;
+  }
+  html += `</tbody></table>`;
+  html += `<p style="font-size:0.85rem; color:#888; margin-top:10px;">
+    薄い赤の行はまだ仕分けていないものです。月次の「⑤作業記録明細」に出荷先の列が出ます。</p>`;
+  html += `<div class="nav-row"><button class="nav-btn" data-action="back-admin">← 管理画面へ戻る</button></div></div>`;
+  return html;
+}
+
 function renderPunchLogs() {
   if (!state._logsMode) state._logsMode = 'individual';
   if (!state._logsDate) state._logsDate = new Date();
@@ -12395,6 +12524,19 @@ function renderAdminLock() {
   `;
 }
 
+// 今月の未仕分けの件数（管理画面のバッジ用）
+function unsortedShipCount() {
+  const now = new Date();
+  const from = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-01`;
+  const to = isoDateOnly(now);
+  let n = 0;
+  for (const x of recordsInRange(from, to)) {
+    const v = x.record.ship_to;
+    if (v !== SHIP_FAS && v !== SHIP_CP) n++;
+  }
+  return n;
+}
+
 function renderAdmin() {
   const today = todayStr();
   const todayLogs = state.punches
@@ -12438,6 +12580,7 @@ function renderAdmin() {
         <button class="nav-btn" data-action="go-shift-overview" style="background:#fff3e0; color:var(--orange); border-color:var(--orange); font-weight:bold;">📊 シフト一覧</button>
         <button class="nav-btn" data-action="go-punch-logs" style="background:#f3e5f5; color:#7b1fa2; border-color:#7b1fa2; font-weight:bold;">📋 打刻ログ詳細</button>
         <button class="nav-btn" data-action="go-punch-fix" style="background:#fff3e0; color:#e65100; border-color:#e65100; font-weight:bold;">🛠 打刻もれ修正</button>
+        <button class="nav-btn" data-action="go-ship-sort" style="background:#e3f2fd; color:#1d6fb8; border-color:#1d6fb8; font-weight:bold;">🚚 出荷先の仕分け${(function(){const n=unsortedShipCount(); return n>0?` <span style="background:#c62828; color:#fff; border-radius:8px; padding:0 6px;">${n}</span>`:'';})()}</button>
         <button class="nav-btn" data-action="go-productivity" style="background:#e8eaf6; color:#3f51b5; border-color:#3f51b5; font-weight:bold;">📈 人時売上・人時生産性</button>
         <button class="nav-btn" data-action="go-spec-prices" style="background:#e0f7fa; color:#00838f; border-color:#00838f; font-weight:bold;">📏 規格別の単価</button>
         <button class="nav-btn" data-action="go-work-adjust" style="background:#fff8e1; color:#b87b00; border-color:#d9b347; font-weight:bold;">🕐 早出・延長の認定${(function(){const n=pendingDeclarations().length; return n>0?` <span style="background:var(--orange); color:#fff; border-radius:8px; padding:0 6px;">${n}</span>`:'';})()}</button>
@@ -13339,6 +13482,44 @@ async function handleClick(e) {
     });
     await saveData(STORAGE_KEYS.PUNCHES, state.punches);
     await pfixLog('add', state._fixEmpId, dateStr, ptype, null, val);
+    render();
+  } else if (a === 'go-ship-sort') {
+    state._shipDate = new Date();
+    state.screen = 'ship_sort';
+    render();
+  } else if (a === 'ship-day-prev') {
+    state._shipDate = addDays(state._shipDate, -1);
+    render();
+  } else if (a === 'ship-day-next') {
+    state._shipDate = addDays(state._shipDate, 1);
+    render();
+  } else if (a === 'ship-day-today') {
+    state._shipDate = new Date();
+    render();
+  } else if (a === 'ship-date-change') {
+    const val = e.currentTarget.value;
+    if (val) { state._shipDate = parseISODate(val); render(); }
+  } else if (a === 'ship-set') {
+    const id = e.currentTarget.dataset.id;
+    const to = e.currentTarget.dataset.ship;
+    const rec = state.work_records.find(r => r.id === id);
+    if (rec) {
+      // 同じほうをもう一度押したら未設定に戻す
+      rec.ship_to = (rec.ship_to === to) ? '' : to;
+      await saveData(STORAGE_KEYS.WORK_RECORDS, state.work_records);
+    }
+    render();
+  } else if (a === 'ship-bulk') {
+    const to = e.currentTarget.dataset.ship || '';
+    const dateStr = isoDateOnly(state._shipDate);
+    const rows = recordsInRange(dateStr, dateStr);
+    if (rows.length > 0) {
+      const what = to ? shipName(to) + ' に' : '未設定に';
+      if (confirm(`${formatYMD(state._shipDate)} の ${rows.length}件 を、すべて ${what} しますか？`)) {
+        for (const x of rows) x.record.ship_to = to;
+        await saveData(STORAGE_KEYS.WORK_RECORDS, state.work_records);
+      }
+    }
     render();
   } else if (a === 'logs-mode') {
     state._logsMode = e.currentTarget.dataset.mode;
@@ -14300,6 +14481,10 @@ async function handleClick(e) {
       total_person_minutes: totalPersonMinutes,
       registered_by: emp.id,
       location: emp.location,
+      // 【2026-10-14 v2.7】出荷先。'FAS' / 'CP' / ''（未設定）
+      //   小牧はファスとCPフーズ（姉妹会社）の作業が混ざるため、
+      //   一日の終わりに「出荷先の仕分け」画面でまとめて選ぶ。
+      ship_to: '',
     };
     state.work_records.push(record);
     await saveData(STORAGE_KEYS.WORK_RECORDS, state.work_records);
@@ -14638,7 +14823,7 @@ async function handleClick(e) {
 // サーバー上のHTMLの先頭だけを読みに行き、版数が自分より新しければ画面上部に帯を出す。
 // 通信できないときは黙って何もしない。打刻の邪魔は一切しない。
 // =========================================================
-const APP_VERSION = 'v2.6';
+const APP_VERSION = 'v2.7';
 const UPDATE_CHECK_INTERVAL_MS = 5 * 60 * 1000;    // 5分おきに確認
 //   先頭4KBだけ読むので回線の負担は小さい。
 //   30分だと「上げたのに変わらない」時間が長すぎたため短くした（2026-08-16）。
