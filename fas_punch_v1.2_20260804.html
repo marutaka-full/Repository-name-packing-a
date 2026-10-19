@@ -6,7 +6,7 @@
 
 <!-- 版数の目印。自動更新の確認でここだけを読みに行くので、必ず<head>の先頭付近に置くこと。
      版を上げるときは、この content と APP_VERSION と <title> と画面下のフッターの4か所を揃える。 -->
-<meta name="app-version" content="v2.7">
+<meta name="app-version" content="v3.0">
 <!-- ★GitHub Pages は HTML に「10分はキャッシュしてよい」を付けて返す。
      そのため上げ直しても10分は古い版が開く。ブラウザにも使わないよう伝えておく。
      （サーバーの指示が優先されることが多いので、決め手は「🔄 更新を確認」ボタン） -->
@@ -37,8 +37,14 @@
       name: 'ファス パッケージセンター 打刻',
       short_name: 'ファス打刻',
       lang: 'ja',
-      start_url: location.href.split('#')[0],
-      scope: location.href.split('#')[0],
+      // 【2026-10-19 v3.0】★ここが事故のもと
+      //   以前は location.href から # だけを落としていたので、?v=... が残った。
+      //   自動更新は location.replace(... + '?v=' + Date.now()) で開き直すため、
+      //   その状態で「ホーム画面に追加」すると、時刻つきのアドレスが焼き付いた。
+      //   そのアドレスは中身が変わらないので、更新が二度と届かなくなる。
+      //   scope に ? 以下が入るのも仕様から外れている。
+      start_url: location.href.split('#')[0].split('?')[0],
+      scope: location.href.split('#')[0].split('?')[0],
       display: 'standalone',
       orientation: 'any',
       background_color: '#14171c',
@@ -55,7 +61,7 @@
   } catch (e) {}
 })();
 </script>
-<title>ファス パッケージセンター 打刻システム v2.7</title>
+<title>ファス パッケージセンター 打刻システム v3.0</title>
 <style>
   :root {
     --green: #1d9e75;
@@ -1677,7 +1683,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
 
 <main id="app"></main>
 
-<div class="footer-note">ファス版 v2.7<span id="storage-mode-note"></span></div>
+<div class="footer-note">ファス版 v3.0<span id="storage-mode-note"></span></div>
 
 <script>
 // ストレージモードをフッターに表示
@@ -1708,6 +1714,8 @@ const STORAGE_KEYS = {
   WORK_MATERIALS: 'work_materials', // 包材費マスタ（作業×品目）
   AJISAI_PRICES: 'ajisai_prices', // 味采パッケージ確定単価（独立参照表・案C 2026-06-21）
   WORK_RECORDS: 'work_records',   // 作業記録（出来高付き・v0.6新規）
+  // 【2026-10-14 v2.8】出荷先の仕分けを「確定」した日
+  SHIP_CONFIRMS: 'ship_confirms',
   APP_SETTINGS: 'app_settings',   // アプリ設定（配賦率など）
   // v0.7 勤務計画変更
   CHANGE_REQUESTS: 'change_requests',         // 申請データ（承認待ち）
@@ -2654,24 +2662,108 @@ const HAS_WINDOW_STORAGE = (typeof window !== 'undefined')
   && (typeof window.storage !== 'undefined') 
   && (typeof window.storage.get === 'function');
 
-async function loadData(key, defaultValue) {
+// =========================================================
+// 【2026-10-19 v3.0】★ここが2026-10-19 の消失の原因
+//
+//   直す前の loadData は、読めなかったときも「無い」ときも、
+//   同じように既定値を返していた（catch (e) {} で理由を捨てていた）。
+//   その戻り値を initializeData が「無い」と受け取り、
+//   初期値を上書き保存していた。
+//   → 読み取りが一度でも失敗すると、本物のデータが空枠に置き換わる。
+//
+//   手元で再現した結果：
+//     入れた直後            山田太郎・鈴木花子／拠点 小牧支店
+//     読み取りが1回失敗した後  鳥栖01（未設定）…90名の空枠
+//
+//   これからは「読めなかった」をはっきり別物として扱う。
+//   読めなかったときは、絶対に書かない。
+// =========================================================
+let STORAGE_READ_FAILED = [];   // 起動中に読めなかった保存名
+
+// 控えを二重に持つ保存名（小さくて大事なものだけ。打刻や作業記録は量が多いので入れない）
+const MIRRORED_KEYS = ['employees', 'sites', 'device_site', 'work_tasks',
+                       'work_products', 'work_prices', 'work_materials',
+                       'work_patterns', 'admin_pin'];
+function bkKey(key) { return nsKey(key) + '__bk'; }
+
+// 生の文字列を読む。読めなければ例外を投げる（「無い」ときは null を返す）
+function rawGet(storeKey) {
+  if (HAS_WINDOW_STORAGE) return undefined;   // window.storage 側は下で扱う
+  return localStorage.getItem(storeKey);      // 無ければ null、読めなければ例外
+}
+
+// 戻り値：{ ok:true, found:true, value } / { ok:true, found:false } / { ok:false, error }
+async function readSlot(key) {
   try {
     if (HAS_WINDOW_STORAGE) {
       const r = await window.storage.get(nsKey(key));
-      if (r && r.value) return JSON.parse(r.value);
-    } else {
-      const v = localStorage.getItem(nsKey(key));
-      if (v) return JSON.parse(v);
+      if (r && r.value) return { ok: true, found: true, value: JSON.parse(r.value) };
+      return { ok: true, found: false };
     }
-  } catch (e) {}
-  return defaultValue;
+    const v = rawGet(nsKey(key));
+    if (v === null || v === undefined) {
+      // 本体が無い。控えが残っていないか見る
+      if (MIRRORED_KEYS.includes(key)) {
+        const b = rawGet(bkKey(key));
+        if (b !== null && b !== undefined) {
+          console.warn('[控えから復帰] ' + key);
+          return { ok: true, found: true, value: JSON.parse(b), fromBackup: true };
+        }
+      }
+      return { ok: true, found: false };
+    }
+    return { ok: true, found: true, value: JSON.parse(v) };
+  } catch (e) {
+    // 本体が読めなかった。控えを試す
+    if (!HAS_WINDOW_STORAGE && MIRRORED_KEYS.includes(key)) {
+      try {
+        const b = rawGet(bkKey(key));
+        if (b !== null && b !== undefined) {
+          console.warn('[控えから復帰] ' + key + '（本体が読めず）');
+          return { ok: true, found: true, value: JSON.parse(b), fromBackup: true };
+        }
+      } catch (e2) {}
+    }
+    if (!STORAGE_READ_FAILED.includes(key)) STORAGE_READ_FAILED.push(key);
+    console.error('[読み取り失敗] ' + key, e);
+    return { ok: false, error: e };
+  }
 }
+
+async function loadData(key, defaultValue) {
+  const r = await readSlot(key);
+  if (r.ok && r.found) return r.value;
+  return defaultValue;     // 「無い」ときも「読めなかった」ときも、ここは既定値
+                           // ただし STORAGE_READ_FAILED に印が残るので、書き戻しは止まる
+}
+
+// ★ 既定値を入れてよいのは「読めて、確かに無かった」ときだけ。
+//   読めなかったときは何もしない。これが今回の事故の止め方。
+async function seedIfTrulyEmpty(key, value, treatEmptyArrayAsMissing) {
+  const r = await readSlot(key);
+  if (!r.ok) return 'read-failed';           // 読めなかった → 絶対に書かない
+  if (r.found) {
+    if (!treatEmptyArrayAsMissing) return 'kept';
+    if (Array.isArray(r.value) && r.value.length === 0) {
+      await saveData(key, value); return 'seeded';
+    }
+    return 'kept';
+  }
+  await saveData(key, value);
+  return 'seeded';
+}
+
 async function saveData(key, value) {
   try {
+    const json = JSON.stringify(value);
     if (HAS_WINDOW_STORAGE) {
-      await window.storage.set(nsKey(key), JSON.stringify(value));
+      await window.storage.set(nsKey(key), json);
     } else {
-      localStorage.setItem(nsKey(key), JSON.stringify(value));
+      localStorage.setItem(nsKey(key), json);
+      // 控えを二重に持つ（小さくて大事なものだけ）
+      if (MIRRORED_KEYS.includes(key)) {
+        try { localStorage.setItem(bkKey(key), json); } catch (e2) {}
+      }
     }
   } catch (e) {
     console.error('保存エラー:', e);
@@ -2704,27 +2796,24 @@ async function topUpEmployeesOnce() {
 }
 
 async function initializeData() {
-  if (!(await loadData(STORAGE_KEYS.EMPLOYEES, null))) await saveData(STORAGE_KEYS.EMPLOYEES, DEFAULT_EMPLOYEES);
+  // 【2026-10-19 v3.0】読めなかったときは、絶対に書かない（seedIfTrulyEmpty）
+  await seedIfTrulyEmpty(STORAGE_KEYS.EMPLOYEES, DEFAULT_EMPLOYEES, false);
   await topUpEmployeesOnce();
-  if (!(await loadData(STORAGE_KEYS.WORK_ITEMS, null))) await saveData(STORAGE_KEYS.WORK_ITEMS, DEFAULT_WORK_ITEMS);
-  if (!(await loadData(STORAGE_KEYS.PUNCHES, null))) await saveData(STORAGE_KEYS.PUNCHES, []);
-  if (!(await loadData(STORAGE_KEYS.PENDING_SESSIONS, null))) await saveData(STORAGE_KEYS.PENDING_SESSIONS, []);
-  if (!(await loadData(STORAGE_KEYS.ACTIVE_SESSIONS, null))) await saveData(STORAGE_KEYS.ACTIVE_SESSIONS, []);
-  if (!(await loadData(STORAGE_KEYS.WORK_PLANS, null))) await saveData(STORAGE_KEYS.WORK_PLANS, []);
-  if (!(await loadData(STORAGE_KEYS.WORK_PATTERNS, null))) await saveData(STORAGE_KEYS.WORK_PATTERNS, []);
-  if (!(await loadData(STORAGE_KEYS.DAILY_PLANS, null))) await saveData(STORAGE_KEYS.DAILY_PLANS, []);
-  // v0.6 マスタ（空配列の場合もDEFAULTで初期化）
-  const tasks = await loadData(STORAGE_KEYS.WORK_TASKS, null);
-  if (!tasks || tasks.length === 0) await saveData(STORAGE_KEYS.WORK_TASKS, DEFAULT_WORK_TASKS);
-  const products = await loadData(STORAGE_KEYS.WORK_PRODUCTS, null);
-  if (!products || products.length === 0) await saveData(STORAGE_KEYS.WORK_PRODUCTS, DEFAULT_WORK_PRODUCTS);
-  const prices = await loadData(STORAGE_KEYS.WORK_PRICES, null);
-  if (!prices || prices.length === 0) await saveData(STORAGE_KEYS.WORK_PRICES, DEFAULT_WORK_PRICES);
-  const materials = await loadData(STORAGE_KEYS.WORK_MATERIALS, null);
-  if (!materials || materials.length === 0) await saveData(STORAGE_KEYS.WORK_MATERIALS, DEFAULT_WORK_MATERIALS);
-  const ajisaiPrices = await loadData(STORAGE_KEYS.AJISAI_PRICES, null);
-  if (!ajisaiPrices || ajisaiPrices.length === 0) await saveData(STORAGE_KEYS.AJISAI_PRICES, DEFAULT_AJISAI_PRICES);
-  if (!(await loadData(STORAGE_KEYS.WORK_RECORDS, null))) await saveData(STORAGE_KEYS.WORK_RECORDS, []);
+  await seedIfTrulyEmpty(STORAGE_KEYS.WORK_ITEMS, DEFAULT_WORK_ITEMS, false);
+  await seedIfTrulyEmpty(STORAGE_KEYS.PUNCHES, [], false);
+  await seedIfTrulyEmpty(STORAGE_KEYS.PENDING_SESSIONS, [], false);
+  await seedIfTrulyEmpty(STORAGE_KEYS.ACTIVE_SESSIONS, [], false);
+  await seedIfTrulyEmpty(STORAGE_KEYS.WORK_PLANS, [], false);
+  await seedIfTrulyEmpty(STORAGE_KEYS.WORK_PATTERNS, [], false);
+  await seedIfTrulyEmpty(STORAGE_KEYS.DAILY_PLANS, [], false);
+  // v0.6 マスタ（中身が空の配列なら入れ直してよい）
+  await seedIfTrulyEmpty(STORAGE_KEYS.WORK_TASKS, DEFAULT_WORK_TASKS, true);
+  await seedIfTrulyEmpty(STORAGE_KEYS.WORK_PRODUCTS, DEFAULT_WORK_PRODUCTS, true);
+  await seedIfTrulyEmpty(STORAGE_KEYS.WORK_PRICES, DEFAULT_WORK_PRICES, true);
+  await seedIfTrulyEmpty(STORAGE_KEYS.WORK_MATERIALS, DEFAULT_WORK_MATERIALS, true);
+  await seedIfTrulyEmpty(STORAGE_KEYS.AJISAI_PRICES, DEFAULT_AJISAI_PRICES, true);
+  await seedIfTrulyEmpty(STORAGE_KEYS.WORK_RECORDS, [], false);
+  await seedIfTrulyEmpty(STORAGE_KEYS.SHIP_CONFIRMS, [], false);
   if (!(await loadData(STORAGE_KEYS.APP_SETTINGS, null))) await saveData(STORAGE_KEYS.APP_SETTINGS, DEFAULT_APP_SETTINGS);
   // v0.7 勤務計画変更
   if (!(await loadData(STORAGE_KEYS.CHANGE_REQUESTS, null))) await saveData(STORAGE_KEYS.CHANGE_REQUESTS, []);
@@ -2771,6 +2860,7 @@ const state = {
   work_materials: [],
   ajisai_prices: [],
   work_records: [],
+  ship_confirms: [],   // 【v2.8】[{ date:'2026-10-14', at:'...ISO...' }]
   app_settings: {},
   // v0.7 勤務計画変更
   change_requests: [],
@@ -5631,6 +5721,47 @@ function csvRecords(from, to, label) {
   return CSV_BOM + L.map(csvLine).join('\r\n') + '\r\n';
 }
 
+// -------- ⑦ 出荷先別（v2.8） --------
+function csvShipTo(year, month, label) {
+  const S = calcShipToSummary(year, month);
+  const unconf = unconfirmedShipDays(year, month);
+  const L = [];
+  L.push(['出荷先別の集計']);
+  L.push(['対象', label]);
+  L.push([]);
+  L.push(['人件費は「作業記録のある時間」ぶんだけです。']);
+  L.push(['打刻だけで作業記録のない時間は、どちらの出荷先にも割り振れないので入っていません。']);
+  L.push([]);
+  L.push(['まだ確定していない日', unconf.length + '日', unconf.join(' ')]);
+  L.push([]);
+  L.push(['出荷先', '件数', '作業時間(h)', '数量', '出来高(円)', '人件費(円)', '差益(円)', '人時売上(円/h)']);
+  const defs = [['FAS','ファス'],['CP','CP'],['NONE','未設定']];
+  let T = { n:0, min:0, qty:0, revenue:0, wage:0 };
+  for (const [k, nm] of defs) {
+    const t = S[k];
+    T.n+=t.n; T.min+=t.min; T.qty+=t.qty; T.revenue+=t.revenue; T.wage+=t.wage;
+    const h = t.min/60;
+    L.push([nm, t.n, round1(h), Math.round(t.qty), yen(t.revenue), yen(t.wage),
+            yen(t.revenue-t.wage), h>0?yen(t.revenue/h):0]);
+  }
+  const TH = T.min/60;
+  L.push(['合計', T.n, round1(TH), Math.round(T.qty), yen(T.revenue), yen(T.wage),
+          yen(T.revenue-T.wage), TH>0?yen(T.revenue/TH):0]);
+  L.push([]);
+  L.push(['■ 出荷先 × 品目']);
+  L.push(['出荷先', '品目・規格', '件数', '時間(h)', '数量', '単位', '出来高(円)', '人件費(円)', '差引(円)', '人時売上(円/h)']);
+  for (const [k, nm] of defs) {
+    const t = S[k];
+    const list = [...t.byProduct.entries()].sort((a,b)=>b[1].revenue-a[1].revenue);
+    for (const [plabel, v] of list) {
+      const h = v.min/60;
+      L.push([nm, plabel, v.n, round1(h), Math.round(v.qty), v.unit,
+              yen(v.revenue), yen(v.wage), yen(v.revenue-v.wage), h>0?yen(v.revenue/h):0]);
+    }
+  }
+  return CSV_BOM + L.map(csvLine).join('\r\n') + '\r\n';
+}
+
 // -------- ⑥ ゼロの原因 --------
 function csvZeroReasons(kind, anchor, from, to, label) {
   const L = [];
@@ -5726,6 +5857,12 @@ function buildMonthlyZip(kind, anchor, from, to, label) {
   zip.file(`④打刻ログ_${tag}.csv`, csvPunchLog(from, to, label));
   zip.file(`⑤作業記録明細_${tag}.csv`, csvRecords(from, to, label));
   zip.file(`⑥ゼロの原因_${tag}.csv`, csvZeroReasons(kind, anchor, from, to, label));
+  // 【v2.8】出荷先別（ファス／CP）
+  {
+    const fy = parseInt(from.slice(0,4), 10);
+    const fm = parseInt(from.slice(5,7), 10);
+    zip.file(`⑦出荷先別_${tag}.csv`, csvShipTo(fy, fm, label));
+  }
   zip.file('はじめに.txt', CSV_BOM +
     `ファス パッケージセンター 月次一式\r\n` +
     `対象：${label}（${from} 〜 ${to}）\r\n` +
@@ -5735,8 +5872,10 @@ function buildMonthlyZip(kind, anchor, from, to, label) {
     `③ 稼働率         … 総労働時間を ①出来高作業 ②全体寄与 ③記録なし に分ける\r\n` +
     `④ 打刻ログ       … 日ごとの出勤・退勤・実労働\r\n` +
     `⑤ 作業記録明細   … 1件ずつ。人ごとに割った時間・人件費・出来高\r\n` +
-    `⑥ ゼロの原因     … 出来高や人件費が0になっている箇所と、その直し方\r\n\r\n` +
-    `数字が合わないときは、まず ⑥ を見てください。\r\n`);
+    `⑥ ゼロの原因     … 出来高や人件費が0になっている箇所と、その直し方\r\n` +
+    `⑦ 出荷先別       … ファス／CP の別に、件数・時間・出来高・人件費・差益。品目別もつき\r\n\r\n` +
+    `数字が合わないときは、まず ⑥ を見てください。\r\n` +
+    `⑦ に「まだ確定していない日」が出ていたら、その日はまだ仕分けが済んでいません。\r\n`);
   return zip;
 }
 
@@ -6320,6 +6459,7 @@ function renderReports() {
     { key: 'volume',  label: '📦 出来高',   desc: '日次・出来高×単価' },
     { key: 'charge',  label: '💴 本日の課金', desc: '商品別の作業賃＋包材費' },
     { key: 'ship',    label: '💹 出荷単価計算', desc: '原料＋作業賃＋包材＋値入' },
+    { key: 'shipto',  label: '🚚 出荷先別', desc: '月間・ファス／CP別' },
     { key: 'monthly', label: '📅 月度末',   desc: '月間積み上げ・本部提出' },
   ];
   let tabsHtml = `<div class="shift-tabs">`;
@@ -6341,6 +6481,7 @@ function renderReports() {
   else if (state._reportTab === 'volume') html += renderReportVolume();
   else if (state._reportTab === 'charge') html += renderReportCharge();
   else if (state._reportTab === 'ship') html += renderReportShip();
+  else if (state._reportTab === 'shipto') html += renderReportShipTo();
   else if (state._reportTab === 'monthly') html += renderReportMonthly();
   html += `</div>`;
   return html;
@@ -7405,6 +7546,133 @@ function splitRecordByMember(record) {
 
 
 // =========================================================
+
+// 【v2.8】その月の出荷先別の集計
+//   人件費は「作業記録のある時間」ぶんだけ。記録のない時間は出荷先に割り振れない。
+function calcShipToSummary(year, month) {
+  const from = `${year}-${String(month).padStart(2,'0')}-01`;
+  const last = new Date(year, month, 0).getDate();
+  const to = `${year}-${String(month).padStart(2,'0')}-${String(last).padStart(2,'0')}`;
+  const blank = () => ({ n: 0, min: 0, qty: 0, revenue: 0, wage: 0, byProduct: new Map() });
+  const out = { FAS: blank(), CP: blank(), NONE: blank() };
+  for (const x of recordsInRange(from, to)) {
+    const r = x.record;
+    const k = (r.ship_to === SHIP_FAS) ? 'FAS' : (r.ship_to === SHIP_CP ? 'CP' : 'NONE');
+    const t = out[k];
+    const min = x.parts.reduce((a, pp) => a + pp.minutes, 0);
+    const wage = x.parts.reduce((a, pp) => a + (pp.laborCost || 0), 0);
+    const rev = recordRevenue(r);
+    t.n++; t.min += min; t.qty += (r.quantity || 0); t.revenue += rev; t.wage += wage;
+    const prod = state.work_products.find(pp => pp.id === r.main_product_id);
+    const label = (prod ? prod.name : '（品目なし）') +
+      (r.main_spec_id ? ' ' + specLabel(r.main_product_id, r.main_spec_id) : '');
+    const cur = t.byProduct.get(label) || { n: 0, qty: 0, min: 0, revenue: 0, wage: 0, unit: r.unit || '' };
+    cur.n++; cur.qty += (r.quantity || 0); cur.min += min; cur.revenue += rev; cur.wage += wage;
+    t.byProduct.set(label, cur);
+  }
+  return out;
+}
+
+function renderReportShipTo() {
+  const ym = state._reportYM;
+  const S = calcShipToSummary(ym.year, ym.month);
+  const unconf = unconfirmedShipDays(ym.year, ym.month);
+
+  let html = `
+    <div class="shift-navbar no-print">
+      <button class="nav-btn" data-action="report-month-prev">← 前月</button>
+      <input type="month" id="report-month-input" value="${ym.year}-${String(ym.month).padStart(2,'0')}" data-action="report-month-change" />
+      <div class="shift-date-label">${ym.year}年${ym.month}月</div>
+      <button class="nav-btn" data-action="report-month-current">今月</button>
+      <button class="nav-btn" data-action="report-month-next">翌月 →</button>
+    </div>
+  `;
+
+  if (unconf.length > 0) {
+    html += `<div style="background:#ffebee; border:2px solid #c62828; border-radius:10px;
+      padding:12px 16px; margin-bottom:14px; color:#c62828;">
+      <div style="font-weight:bold; font-size:1.05rem;">★ まだ確定していない日が ${unconf.length}日 あります</div>
+      <div style="font-size:0.9rem; margin-top:4px;">${unconf.join('　')}</div>
+      <div style="font-size:0.9rem; margin-top:6px;">
+        「出荷先の仕分け」画面で、日ごとに確定してください。</div></div>`;
+  } else {
+    html += `<div style="background:#e8f5e9; border:2px solid #2e7d32; border-radius:10px;
+      padding:10px 16px; margin-bottom:14px; color:#1b5e20; font-weight:bold;">
+      ✔ この月は全部の日が確定済みです</div>`;
+  }
+
+  const rows = [
+    { key: 'FAS',  name: 'ファス', color: '#1d6fb8', bg: '#e3f2fd' },
+    { key: 'CP',   name: 'CP',     color: '#b85c00', bg: '#fff3e0' },
+    { key: 'NONE', name: '未設定', color: '#c62828', bg: '#ffebee' },
+  ];
+  html += `<table><thead><tr>
+    <th>出荷先</th><th style="text-align:right;">件数</th><th style="text-align:right;">作業時間</th>
+    <th style="text-align:right;">数量</th><th style="text-align:right;">出来高</th>
+    <th style="text-align:right;">人件費</th><th style="text-align:right;">差益</th>
+    <th style="text-align:right;">人時売上</th></tr></thead><tbody>`;
+  let T = { n: 0, min: 0, qty: 0, revenue: 0, wage: 0 };
+  for (const d of rows) {
+    const t = S[d.key];
+    if (d.key === 'NONE' && t.n === 0) continue;
+    T.n += t.n; T.min += t.min; T.qty += t.qty; T.revenue += t.revenue; T.wage += t.wage;
+    const h = t.min / 60;
+    const profit = t.revenue - t.wage;
+    html += `<tr style="background:${d.bg};">
+      <td style="font-weight:bold; color:${d.color};">${d.name}</td>
+      <td style="text-align:right;">${t.n}</td>
+      <td style="text-align:right;">${h.toFixed(1)}h</td>
+      <td style="text-align:right;">${Math.round(t.qty).toLocaleString()}</td>
+      <td style="text-align:right;">${Math.round(t.revenue).toLocaleString()}円</td>
+      <td style="text-align:right;">${Math.round(t.wage).toLocaleString()}円</td>
+      <td style="text-align:right; font-weight:bold; color:${profit < 0 ? '#c62828' : '#1b5e20'};">
+        ${Math.round(profit).toLocaleString()}円</td>
+      <td style="text-align:right;">${h > 0 ? Math.round(t.revenue / h).toLocaleString() : 0}円/h</td>
+    </tr>`;
+  }
+  const TH = T.min / 60;
+  html += `<tr style="font-weight:bold; background:#f5f5f5;">
+    <td>合計</td><td style="text-align:right;">${T.n}</td>
+    <td style="text-align:right;">${TH.toFixed(1)}h</td>
+    <td style="text-align:right;">${Math.round(T.qty).toLocaleString()}</td>
+    <td style="text-align:right;">${Math.round(T.revenue).toLocaleString()}円</td>
+    <td style="text-align:right;">${Math.round(T.wage).toLocaleString()}円</td>
+    <td style="text-align:right;">${Math.round(T.revenue - T.wage).toLocaleString()}円</td>
+    <td style="text-align:right;">${TH > 0 ? Math.round(T.revenue / TH).toLocaleString() : 0}円/h</td>
+  </tr></tbody></table>`;
+
+  html += `<p style="font-size:0.85rem; color:#888; margin:10px 0 18px;">
+    人件費は「作業記録のある時間」ぶんだけです。打刻だけで作業記録のない時間は、どちらの出荷先にも割り振れないので入っていません。</p>`;
+
+  // 出荷先 × 品目
+  for (const d of rows) {
+    const t = S[d.key];
+    if (t.n === 0) continue;
+    const list = [...t.byProduct.entries()].sort((a, b) => b[1].revenue - a[1].revenue);
+    html += `<h3 style="color:${d.color}; margin-top:18px;">${d.name}　品目別（${list.length}件）</h3>`;
+    html += `<table><thead><tr>
+      <th>品目・規格</th><th style="text-align:right;">件数</th><th style="text-align:right;">時間</th>
+      <th style="text-align:right;">数量</th><th style="text-align:right;">出来高</th>
+      <th style="text-align:right;">人件費</th><th style="text-align:right;">差引</th>
+      <th style="text-align:right;">人時売上</th></tr></thead><tbody>`;
+    for (const [label, v] of list) {
+      const h = v.min / 60;
+      const pf = v.revenue - v.wage;
+      html += `<tr>
+        <td>${label}</td>
+        <td style="text-align:right;">${v.n}</td>
+        <td style="text-align:right;">${h.toFixed(1)}h</td>
+        <td style="text-align:right;">${Math.round(v.qty).toLocaleString()}${v.unit}</td>
+        <td style="text-align:right;">${Math.round(v.revenue).toLocaleString()}円</td>
+        <td style="text-align:right;">${Math.round(v.wage).toLocaleString()}円</td>
+        <td style="text-align:right; color:${pf < 0 ? '#c62828' : '#1b5e20'};">${Math.round(pf).toLocaleString()}円</td>
+        <td style="text-align:right;">${h > 0 ? Math.round(v.revenue / h).toLocaleString() : 0}円/h</td>
+      </tr>`;
+    }
+    html += `</tbody></table>`;
+  }
+  return html;
+}
 
 function renderReportMonthly() {
   const ym = state._reportYM;
@@ -9984,6 +10252,13 @@ function renderShipSort() {
     押したほうに色が付きます。もう一度同じほうを押すと未設定に戻ります。</p>`;
 
   // 日付ナビ
+  const confirmed = isShipConfirmed(dateStr);
+  if (confirmed) {
+    html += `<div style="background:#e8f5e9; border:2px solid #2e7d32; border-radius:10px;
+      padding:10px 14px; margin-bottom:10px; color:#1b5e20; font-weight:bold;">
+      ✔ この日の仕分けは確定済みです（${formatTime(shipConfirmedAt(dateStr))} に確定）<br>
+      <span style="font-weight:normal; font-size:0.9rem;">直すと確定が外れます。直したら、もう一度確定してください。</span></div>`;
+  }
   html += `
     <div class="shift-navbar">
       <button class="nav-btn" data-action="ship-day-prev">← 前日</button>
@@ -10066,6 +10341,21 @@ function renderShipSort() {
   html += `</tbody></table>`;
   html += `<p style="font-size:0.85rem; color:#888; margin-top:10px;">
     薄い赤の行はまだ仕分けていないものです。月次の「⑤作業記録明細」に出荷先の列が出ます。</p>`;
+
+  // 確定ボタン
+  if (confirmed) {
+    html += `<div style="margin-top:14px; display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+      <span style="color:#2e7d32; font-weight:bold;">✔ 確定済み</span>
+      <button class="nav-btn" data-action="ship-unconfirm"
+        style="background:#fafafa; color:#777; border-color:#999;">確定を外す</button></div>`;
+  } else {
+    html += `<div style="margin-top:14px;">
+      <button class="primary-btn" data-action="ship-confirm"
+        style="font-size:1.05rem; padding:12px 28px;">✔ この日の仕分けを確定</button>
+      ${sum.NONE.n > 0 ? `<span style="margin-left:12px; color:#c62828; font-weight:bold;">
+        ★ まだ ${sum.NONE.n}件 が未設定です</span>` : ''}
+    </div>`;
+  }
   html += `<div class="nav-row"><button class="nav-btn" data-action="back-admin">← 管理画面へ戻る</button></div></div>`;
   return html;
 }
@@ -12524,6 +12814,30 @@ function renderAdminLock() {
   `;
 }
 
+// 【v2.8】その日の仕分けが確定済みか
+function isShipConfirmed(dateStr) {
+  return (state.ship_confirms || []).some(c => c.date === dateStr);
+}
+function shipConfirmedAt(dateStr) {
+  const c = (state.ship_confirms || []).find(x => x.date === dateStr);
+  return c ? c.at : null;
+}
+// 確定を外す（仕分けを直したとき）
+function dropShipConfirm(dateStr) {
+  const before = (state.ship_confirms || []).length;
+  state.ship_confirms = (state.ship_confirms || []).filter(c => c.date !== dateStr);
+  return before !== state.ship_confirms.length;
+}
+// その月で、作業記録があるのに確定していない日
+function unconfirmedShipDays(year, month) {
+  const from = `${year}-${String(month).padStart(2,'0')}-01`;
+  const last = new Date(year, month, 0).getDate();
+  const to = `${year}-${String(month).padStart(2,'0')}-${String(last).padStart(2,'0')}`;
+  const days = new Set();
+  for (const x of recordsInRange(from, to)) days.add(x.date);
+  return [...days].filter(d => !isShipConfirmed(d)).sort();
+}
+
 // 今月の未仕分けの件数（管理画面のバッジ用）
 function unsortedShipCount() {
   const now = new Date();
@@ -13507,6 +13821,10 @@ async function handleClick(e) {
       // 同じほうをもう一度押したら未設定に戻す
       rec.ship_to = (rec.ship_to === to) ? '' : to;
       await saveData(STORAGE_KEYS.WORK_RECORDS, state.work_records);
+      // 直したら、その日の確定を外す
+      if (dropShipConfirm(localDateStr(rec.work_started_at))) {
+        await saveData(STORAGE_KEYS.SHIP_CONFIRMS, state.ship_confirms);
+      }
     }
     render();
   } else if (a === 'ship-bulk') {
@@ -13518,7 +13836,35 @@ async function handleClick(e) {
       if (confirm(`${formatYMD(state._shipDate)} の ${rows.length}件 を、すべて ${what} しますか？`)) {
         for (const x of rows) x.record.ship_to = to;
         await saveData(STORAGE_KEYS.WORK_RECORDS, state.work_records);
+        if (dropShipConfirm(dateStr)) {
+          await saveData(STORAGE_KEYS.SHIP_CONFIRMS, state.ship_confirms);
+        }
       }
+    }
+    render();
+  } else if (a === 'ship-confirm') {
+    const dateStr = isoDateOnly(state._shipDate);
+    const rows = recordsInRange(dateStr, dateStr);
+    if (rows.length === 0) { alert('この日の作業記録はありません。'); return; }
+    const none = rows.filter(x => {
+      const v = x.record.ship_to;
+      return v !== SHIP_FAS && v !== SHIP_CP;
+    }).length;
+    let go = true;
+    if (none > 0) {
+      go = confirm(`まだ ${none}件 が未設定です。\n未設定のまま確定しますか？`);
+    }
+    if (go) {
+      dropShipConfirm(dateStr);
+      state.ship_confirms.push({ date: dateStr, at: new Date().toISOString() });
+      await saveData(STORAGE_KEYS.SHIP_CONFIRMS, state.ship_confirms);
+    }
+    render();
+  } else if (a === 'ship-unconfirm') {
+    const dateStr = isoDateOnly(state._shipDate);
+    if (confirm(`${formatYMD(state._shipDate)} の確定を外しますか？`)) {
+      dropShipConfirm(dateStr);
+      await saveData(STORAGE_KEYS.SHIP_CONFIRMS, state.ship_confirms);
     }
     render();
   } else if (a === 'logs-mode') {
@@ -14823,7 +15169,7 @@ async function handleClick(e) {
 // サーバー上のHTMLの先頭だけを読みに行き、版数が自分より新しければ画面上部に帯を出す。
 // 通信できないときは黙って何もしない。打刻の邪魔は一切しない。
 // =========================================================
-const APP_VERSION = 'v2.7';
+const APP_VERSION = 'v3.0';
 const UPDATE_CHECK_INTERVAL_MS = 5 * 60 * 1000;    // 5分おきに確認
 //   先頭4KBだけ読むので回線の負担は小さい。
 //   30分だと「上げたのに変わらない」時間が長すぎたため短くした（2026-08-16）。
@@ -14994,7 +15340,93 @@ function updateClock() {
 // 初期化
 // ===========================================
 
+// 【2026-10-19 v3.0】アドレスに ?v=... が付いていたら、履歴を汚さず綺麗なものに直す。
+//   こうしておけば、いつ「ホーム画面に追加」しても素のアドレスが焼き付く。
+function tidyUrlOnce() {
+  try {
+    if (!location.search) return;
+    if (typeof history === 'undefined' || !history.replaceState) return;
+    const clean = location.href.split('#')[0].split('?')[0];
+    history.replaceState(null, '', clean);
+  } catch (e) {}
+}
+
+// 【v3.0】読めなかったときに出す画面。データには一切触らない。
+function renderStorageStop() {
+  try { document.body.style.background = "#fff"; document.body.style.color = "#222"; } catch (e) {}
+  const names = STORAGE_READ_FAILED.join('、');
+  document.body.innerHTML = `
+    <div style="padding:32px 22px; max-width:640px; margin:0 auto; font-family:sans-serif; line-height:1.9; color:#222;">
+      <h2 style="color:#c62828; margin-bottom:6px;">⚠ データを読み取れませんでした</h2>
+      <p style="font-size:1.15rem; font-weight:bold; color:#1b5e20; background:#e8f5e9;
+         border:2px solid #2e7d32; border-radius:8px; padding:12px 16px;">
+        何も変更していません。データは消していません。</p>
+      <p>読み取れなかったもの：<br><code style="background:#f5f5f5; padding:3px 7px;">${names}</code></p>
+      <p><strong>まず、いちど開き直してください。</strong>それで直ることがほとんどです。</p>
+      <button onclick="location.replace(location.href.split('#')[0].split('?')[0]);"
+        style="padding:15px 30px; background:#1f4e79; color:#fff; border:none; border-radius:8px;
+        font-size:1.15rem; font-weight:bold;">🔄 開き直す</button>
+      <p style="margin-top:26px; color:#666; font-size:0.95rem;">
+        何度やっても同じときは、この画面のまま社長にご連絡ください。<br>
+        <strong>この画面で「消す」「初期化する」操作はしないでください。</strong></p>
+    </div>`;
+}
+
+// 【v3.0】前回の件数を覚えておき、大きく減っていたら止める
+const COUNT_WATCH_KEY = 'count_watch';
+async function currentCounts() {
+  return {
+    emp: (state.employees || []).filter(e => e && e.name && !/（未設定）$/.test(e.name)).length,
+    punch: (state.punches || []).length,
+    rec: (state.work_records || []).length,
+  };
+}
+async function checkShrink() {
+  try {
+    const prev = await loadData(COUNT_WATCH_KEY, null);
+    if (!prev) return null;
+    const now = await currentCounts();
+    // 名前の入った人が半分以下に減ったら止める（3名以上いた場合のみ見る）
+    if (prev.emp >= 3 && now.emp <= Math.floor(prev.emp / 2)) {
+      return { what: '登録した名前', before: prev.emp, after: now.emp };
+    }
+    if (prev.punch >= 20 && now.punch <= Math.floor(prev.punch / 2)) {
+      return { what: '打刻', before: prev.punch, after: now.punch };
+    }
+    if (prev.rec >= 10 && now.rec <= Math.floor(prev.rec / 2)) {
+      return { what: '作業記録', before: prev.rec, after: now.rec };
+    }
+    return null;
+  } catch (e) { return null; }
+}
+async function rememberCounts() {
+  try { await saveData(COUNT_WATCH_KEY, await currentCounts()); } catch (e) {}
+}
+function renderShrinkStop(sh) {
+  try { document.body.style.background = "#fff"; document.body.style.color = "#222"; } catch (e) {}
+  document.body.innerHTML = `
+    <div style="padding:32px 22px; max-width:640px; margin:0 auto; font-family:sans-serif; line-height:1.9; color:#222;">
+      <h2 style="color:#c62828; margin-bottom:6px;">⚠ データが大きく減っています</h2>
+      <p style="font-size:1.2rem;"><strong>${sh.what}</strong> が
+        <strong>${sh.before}</strong> → <strong style="color:#c62828;">${sh.after}</strong> に減りました。</p>
+      <p style="font-size:1.1rem; font-weight:bold; color:#1b5e20; background:#e8f5e9;
+         border:2px solid #2e7d32; border-radius:8px; padding:12px 16px;">
+        何も変更していません。</p>
+      <p><strong>開き方が違う（別のブラウザ・別のアイコン）</strong>ことが考えられます。<br>
+        いつも使っているアイコンから開き直してみてください。</p>
+      <button onclick="location.replace(location.href.split('#')[0].split('?')[0]);"
+        style="padding:15px 30px; background:#1f4e79; color:#fff; border:none; border-radius:8px;
+        font-size:1.15rem; font-weight:bold; margin-right:10px;">🔄 開き直す</button>
+      <button onclick="(async()=>{ await rememberCounts(); location.replace(location.href.split('#')[0].split('?')[0]); })();"
+        style="padding:15px 26px; background:#fff; color:#b71c1c; border:2px solid #b71c1c;
+        border-radius:8px; font-size:1rem; font-weight:bold;">これで正しい。このまま進む</button>
+      <p style="margin-top:26px; color:#666; font-size:0.95rem;">
+        <strong>この画面で「消す」「初期化する」操作はしないでください。</strong></p>
+    </div>`;
+}
+
 async function bootstrap() {
+  tidyUrlOnce();
   // URLハッシュ #reset で味采の保存分だけリセット（他アプリには触れない）
   // 【2026-10-08】#reset で確認なしに全消去されていた。確認を出すようにした。
   if (location.hash === '#reset') {
@@ -15034,6 +15466,7 @@ async function bootstrap() {
     state.work_prices = await loadData(STORAGE_KEYS.WORK_PRICES, []);
     state.work_materials = await loadData(STORAGE_KEYS.WORK_MATERIALS, []);
     state.work_records = await loadData(STORAGE_KEYS.WORK_RECORDS, []);
+    state.ship_confirms = await loadData(STORAGE_KEYS.SHIP_CONFIRMS, []);
     state.app_settings = await loadData(STORAGE_KEYS.APP_SETTINGS, DEFAULT_APP_SETTINGS);
     // v0.7 勤務計画変更
     state.change_requests = await loadData(STORAGE_KEYS.CHANGE_REQUESTS, []);
@@ -15049,22 +15482,26 @@ async function bootstrap() {
     state.ajisai_prices = await loadData(STORAGE_KEYS.AJISAI_PRICES, []);
     // 味采版：拠点マスタと、この端末の拠点
     state.sites = await loadData(STORAGE_KEYS.SITES, []);
-    if (!Array.isArray(state.sites) || state.sites.length === 0) {
+    if (STORAGE_READ_FAILED.length === 0 &&
+        (!Array.isArray(state.sites) || state.sites.length === 0)) {
       state.sites = JSON.parse(JSON.stringify(DEFAULT_SITES));
       await saveData(STORAGE_KEYS.SITES, state.sites);
     }
     state.device_site = await loadData(STORAGE_KEYS.DEVICE_SITE, null);
     state.admin_pin = await loadData(STORAGE_KEYS.ADMIN_PIN, DEFAULT_ADMIN_PIN);
     // データ整合性チェック：マスタが空または不正なら DEFAULT で再初期化
-    if (!Array.isArray(state.employees)) {
+    // 【v3.0】読めなかった保存名があるときは、ここで何も書かない
+    if (STORAGE_READ_FAILED.length === 0 && !Array.isArray(state.employees)) {
       state.employees = [];
       await saveData(STORAGE_KEYS.EMPLOYEES, state.employees);
     }
-    if (!Array.isArray(state.work_tasks) || state.work_tasks.length === 0) {
+    if (STORAGE_READ_FAILED.length === 0 &&
+        (!Array.isArray(state.work_tasks) || state.work_tasks.length === 0)) {
       state.work_tasks = JSON.parse(JSON.stringify(DEFAULT_WORK_TASKS));
       await saveData(STORAGE_KEYS.WORK_TASKS, state.work_tasks);
     }
-    if (!Array.isArray(state.work_products) || state.work_products.length === 0) {
+    if (STORAGE_READ_FAILED.length === 0 &&
+        (!Array.isArray(state.work_products) || state.work_products.length === 0)) {
       state.work_products = JSON.parse(JSON.stringify(DEFAULT_WORK_PRODUCTS));
       await saveData(STORAGE_KEYS.WORK_PRODUCTS, state.work_products);
     }
@@ -15121,21 +15558,38 @@ async function bootstrap() {
     // 【2026-08-08 追加】旧版で「作業終了しても作業中のまま」になった端末を、
     // 開いた時点で自動的に直す。閉じ損ねたペアのセッションをここで閉じる。
     await checkSessionEnding();
+
+    // 【2026-10-19 v3.0】読めなかった保存名があれば、ここで止める。
+    //   何も書き換えていないので、開き直せば元に戻る見込みがある。
+    if (STORAGE_READ_FAILED.length > 0) {
+      renderStorageStop();
+      return;
+    }
+    // 【2026-10-19 v3.0】前回より名前が大きく減っていたら止めて知らせる
+    const shrink = await checkShrink();
+    if (shrink) { renderShrinkStop(shrink); return; }
+    await rememberCounts();
+
     render();
   } catch (e) {
     console.error('Bootstrap error:', e);
     // エラー画面を表示してリセット案内
+    try { document.body.style.background = "#fff"; document.body.style.color = "#222"; } catch (e2) {}
     document.body.innerHTML = `
-      <div style="padding:40px; max-width:600px; margin:0 auto; font-family:sans-serif;">
+      <div style="padding:40px; max-width:600px; margin:0 auto; font-family:sans-serif; color:#222;">
         <h2 style="color:#c62828;">⚠️ データ読み込みエラー</h2>
         <p>保存データに問題があります。エラー内容：</p>
         <pre style="background:#ffebee; padding:14px; border-radius:6px; overflow:auto;">${(e && e.message) || e}</pre>
-        <p>下のボタンで全データをリセットして再起動できます。<br>
-        <strong>※ 従業員マスタや単価マスタなど全てのデータが初期値に戻ります。</strong></p>
-        <button onclick="clearAppData(); location.hash=''; location.reload();" 
-          style="padding:14px 28px; background:#c62828; color:white; border:none; border-radius:8px; font-size:1.1rem; cursor:pointer; font-weight:bold;">
-          🔄 リセットして再起動
-        </button>
+        <p style="font-size:1.1rem; font-weight:bold; color:#1b5e20; background:#e8f5e9;
+           border:2px solid #2e7d32; border-radius:8px; padding:12px 16px;">
+          データは消していません。</p>
+        <p><strong>まず、いちど開き直してください。</strong></p>
+        <button onclick="location.replace(location.href.split('#')[0].split('?')[0]);"
+          style="padding:15px 30px; background:#1f4e79; color:#fff; border:none; border-radius:8px;
+          font-size:1.15rem; font-weight:bold;">🔄 開き直す</button>
+        <p style="margin-top:24px; color:#666; font-size:0.95rem;">
+          【2026-10-19 v3.0】以前はここに「リセットして再起動」のボタンを置いていました。<br>
+          押すと全部消えてしまうため、外しました。消すときは管理画面から行ってください。</p>
       </div>
     `;
     return;
